@@ -64,14 +64,16 @@ export class FrontseatScene extends Phaser.Scene {
     frontseatHint.setOrigin(0.5);
 
     // Listen for camera movement events from GameScene
-    this.events.on('showOverlay', () => {
+    this.events.on('showOverlay', (velocity?: number) => {
       // Move camera down to show overlay content (affects both main and overlay)
-      this.cameras.main.pan(centerX, centerY + 320, 500);
+      const duration = velocity ? (320 / velocity) * 1000 : 500; // Calculate duration based on velocity
+      this.cameras.main.pan(centerX, centerY + 320, duration);
     });
 
-    this.events.on('hideOverlay', () => {
+    this.events.on('hideOverlay', (velocity?: number) => {
       // Move camera back up to show main content (affects both main and overlay)
-      this.cameras.main.pan(centerX, centerY, 500);
+      const duration = velocity ? (320 / velocity) * 1000 : 500; // Calculate duration based on velocity
+      this.cameras.main.pan(centerX, centerY, duration);
     });
   }
 }
