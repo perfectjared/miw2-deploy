@@ -4,6 +4,8 @@ export class AppScene extends Phaser.Scene {
   private step: number = 0;
   private stepText!: Phaser.GameObjects.Text;
   private gameStarted: boolean = false;
+  private isPaused: boolean = false;
+  private pauseDialog: any = null;
 
   constructor() {
     super({ key: 'AppScene' });
@@ -73,7 +75,7 @@ export class AppScene extends Phaser.Scene {
     });
 
     // Also try a different approach - add a clickable button to test
-    const testButton = this.add.text(10, 100, 'Click to open menu', {
+    const testButton = this.add.text(10, 100, 'PAUSE', {
       fontSize: '16px',
       color: '#ffffff',
       backgroundColor: '#0000ff',
@@ -83,9 +85,8 @@ export class AppScene extends Phaser.Scene {
     testButton.setDepth(10000);
     testButton.setInteractive();
     testButton.on('pointerdown', () => {
-      console.log('Test button clicked - launching MenuScene');
-      this.scene.launch('MenuScene');
-      this.scene.bringToTop('MenuScene'); // Ensure menu is on top
+      console.log('Pause button clicked');
+      this.togglePauseMenu();
     });
 
     // Start the step timer (every 1000ms = 1 second) - but only when game is started
@@ -112,7 +113,7 @@ export class AppScene extends Phaser.Scene {
   }
 
   private incrementStep() {
-    if (!this.gameStarted) return; // Don't increment if game hasn't started
+    if (!this.gameStarted || this.isPaused) return; // Don't increment if game hasn't started or is paused
     
     this.step++;
     this.stepText.setText(`Step: ${this.step}`);
@@ -122,6 +123,68 @@ export class AppScene extends Phaser.Scene {
     if (gameScene) {
       gameScene.events.emit('step', this.step);
     }
+  }
+
+  private togglePauseMenu() {
+    if (!this.gameStarted) return; // Can't pause if game hasn't started
+    
+    if (this.isPaused) {
+      // Resume game
+      this.isPaused = false;
+      if (this.pauseDialog) {
+        this.pauseDialog.background.destroy();
+        this.pauseDialog.title.destroy();
+        this.pauseDialog.resumeButton.destroy();
+        this.pauseDialog = null;
+      }
+      console.log('Game resumed');
+    } else {
+      // Pause game
+      this.isPaused = true;
+      this.createPauseDialog();
+      console.log('Game paused');
+    }
+  }
+
+  private createPauseDialog() {
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+    
+    // Create a smaller dialog (less wide)
+    const dialogWidth = 300;
+    const dialogHeight = 200;
+    
+    // Background
+    const background = this.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x000000, 0.9);
+    background.setStrokeStyle(2, 0xffffff);
+    background.setScrollFactor(0);
+    background.setDepth(10001);
+    
+    // Title
+    const title = this.add.text(centerX, centerY - 60, 'PAUSED', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    title.setScrollFactor(0);
+    title.setDepth(10002);
+    
+    // Resume button
+    const resumeButton = this.add.text(centerX, centerY + 20, 'Resume', {
+      fontSize: '18px',
+      color: '#ffffff',
+      backgroundColor: '#008800',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    resumeButton.setScrollFactor(0);
+    resumeButton.setDepth(10002);
+    resumeButton.setInteractive();
+    resumeButton.on('pointerdown', () => {
+      this.togglePauseMenu(); // This will resume the game
+    });
+    
+    // Store reference to dialog elements for cleanup
+    this.pauseDialog = { background, title, resumeButton };
   }
 
   // Method to start the game (called from MenuScene)

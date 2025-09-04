@@ -165,6 +165,31 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5);
       
+             // Map toggle button (small button at top of map overlay)
+       const mapToggleButton = this.add.graphics();
+       mapToggleButton.fillStyle(0x888888, 0.7);
+       mapToggleButton.fillRect(frontseatCenterX - 60, frontseatCenterY + 200, 120, 40);
+       mapToggleButton.lineStyle(2, 0xffffff, 1);
+       mapToggleButton.strokeRect(frontseatCenterX - 60, frontseatCenterY + 200, 120, 40);
+       mapToggleButton.setInteractive(new Phaser.Geom.Rectangle(frontseatCenterX - 60, frontseatCenterY + 200, 120, 40), Phaser.Geom.Rectangle.Contains);
+       mapToggleButton.on('pointerdown', () => {
+         if (this.gameStarted) {
+           if (this.currentView === 'main') {
+             this.showOverlay();
+           } else {
+             this.hideOverlay();
+           }
+         }
+       });
+       
+       // Map toggle button text
+       const mapToggleText = this.add.text(frontseatCenterX, frontseatCenterY + 220, 'LOOK DOWN', {
+         fontSize: '14px',
+         color: '#ffffff',
+         fontStyle: 'bold'
+       }).setOrigin(0.5);
+       mapToggleText.setName('mapToggleText');
+      
       // Inventory overlay (right side, positioned below backseat)
       const inventoryOverlay = this.add.text(backseatCenterX, backseatCenterY + 320, 'INVENTORY OVERLAY', {
         fontSize: '36px',
@@ -172,8 +197,33 @@ export class GameScene extends Phaser.Scene {
         fontStyle: 'bold'
       }).setOrigin(0.5);
       
+             // Inventory toggle button (small button at top of inventory overlay)
+       const inventoryToggleButton = this.add.graphics();
+       inventoryToggleButton.fillStyle(0x888888, 0.7);
+       inventoryToggleButton.fillRect(backseatCenterX - 60, backseatCenterY + 200, 120, 40);
+       inventoryToggleButton.lineStyle(2, 0xffffff, 1);
+       inventoryToggleButton.strokeRect(backseatCenterX - 60, backseatCenterY + 200, 120, 40);
+       inventoryToggleButton.setInteractive(new Phaser.Geom.Rectangle(backseatCenterX - 60, backseatCenterY + 200, 120, 40), Phaser.Geom.Rectangle.Contains);
+       inventoryToggleButton.on('pointerdown', () => {
+         if (this.gameStarted) {
+           if (this.currentView === 'main') {
+             this.showOverlay();
+           } else {
+             this.hideOverlay();
+           }
+         }
+       });
+       
+       // Inventory toggle button text
+       const inventoryToggleText = this.add.text(backseatCenterX, backseatCenterY + 220, 'LOOK DOWN', {
+         fontSize: '14px',
+         color: '#ffffff',
+         fontStyle: 'bold'
+       }).setOrigin(0.5);
+       inventoryToggleText.setName('inventoryToggleText');
+      
       // Add all content to the container
-      this.gameContentContainer.add([frontseatButton, frontseatTitle, backseatButton, backseatTitle, mapOverlay, inventoryOverlay]);
+      this.gameContentContainer.add([frontseatButton, frontseatTitle, backseatButton, backseatTitle, mapOverlay, mapToggleButton, mapToggleText, inventoryOverlay, inventoryToggleButton, inventoryToggleText]);
    }
 
   private setupSwipeControls() {
@@ -279,6 +329,7 @@ export class GameScene extends Phaser.Scene {
           ease: 'Power2'
         });
         this.currentView = 'overlay';
+        this.updateToggleButtonText();
         console.log('Showing overlay - content moved down by 320px');
       }
     }
@@ -294,7 +345,23 @@ export class GameScene extends Phaser.Scene {
           ease: 'Power2'
         });
         this.currentView = 'main';
+        this.updateToggleButtonText();
         console.log('Hiding overlay - content moved up to 0');
+      }
+    }
+
+    private updateToggleButtonText() {
+      // Find the toggle button texts and update them based on current view
+      const mapToggleText = this.gameContentContainer.getByName('mapToggleText') as Phaser.GameObjects.Text;
+      const inventoryToggleText = this.gameContentContainer.getByName('inventoryToggleText') as Phaser.GameObjects.Text;
+      
+      const buttonText = this.currentView === 'main' ? 'LOOK DOWN' : 'LOOK UP';
+      
+      if (mapToggleText) {
+        mapToggleText.setText(buttonText);
+      }
+      if (inventoryToggleText) {
+        inventoryToggleText.setText(buttonText);
       }
     }
 

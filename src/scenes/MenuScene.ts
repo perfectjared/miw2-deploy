@@ -16,6 +16,11 @@ export class MenuScene extends Phaser.Scene {
     const centerX = gameWidth / 2;
     const centerY = gameHeight / 2;
 
+    // Add a lightly opaque black background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.3);
+    background.setScrollFactor(0);
+    background.setDepth(9999); // Just below other menu elements
+
     console.log('Creating modal at:', centerX, centerY); // Debug log
 
     // Add a simple text to show the menu is working
@@ -39,19 +44,19 @@ export class MenuScene extends Phaser.Scene {
       const dialog = this.rexUI.add.label({
         x: centerX,
         y: centerY,
-        width: 300,
-        height: 200,
-        background: this.add.rectangle(0, 0, 300, 200, 0x2c3e50),
+        width: 250,
+        height: 180,
+        background: this.add.rectangle(0, 0, 250, 180, 0x2c3e50),
         text: this.add.text(0, 0, 'Start Game\n\nAre you ready to start the game?', {
-          fontSize: '20px',
+          fontSize: '18px',
           color: '#ffffff',
           align: 'center'
         }),
         space: {
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: 20
+          left: 15,
+          right: 15,
+          top: 15,
+          bottom: 15
         }
       })
       .setScrollFactor(0)
