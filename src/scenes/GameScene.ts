@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 export class GameScene extends Phaser.Scene {
    private currentPosition: string = 'frontseat'; // 'frontseat' or 'backseat'
    private currentView: string = 'main'; // 'main' or 'overlay'
-   private gameTime: number = 10; // Starting time
+   private gameTime: number = 99; // Starting time
    private gameStarted: boolean = false; // Track if game has started
    private cameraDebugText!: Phaser.GameObjects.Text;
    private gameContentContainer!: Phaser.GameObjects.Container;
@@ -565,62 +565,50 @@ export class GameScene extends Phaser.Scene {
      console.log('Test physics bodies added - Frontseat circle:', frontseatCircle, 'Backseat rectangle:', backseatRect);
    }
 
+    // ===== SWIPE CONTROLS =====
   private setupSwipeControls() {
-    // Create custom swipe detection using Phaser's input system
     let startX = 0;
     let startY = 0;
     let startTime = 0;
-    const minSwipeDistance = 30; // Reduced from 50 to make it less strict
-    const maxSwipeTime = 500; // Increased from 300ms to give more time
-
+    
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!this.gameStarted || this.isKnobActive) return; // Disable swipe until game starts or when knob is active
+      // Don't start swipe tracking if knob is being used
+      if (this.isKnobActive) return;
+      
       startX = pointer.x;
       startY = pointer.y;
       startTime = Date.now();
     });
-
+    
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (!this.gameStarted || this.isKnobActive) return; // Disable swipe until game starts or when knob is active
+      if (!this.gameStarted || this.isKnobActive) return;
       
       const endX = pointer.x;
       const endY = pointer.y;
       const endTime = Date.now();
-      const deltaX = Math.abs(endX - startX);
-      const deltaY = Math.abs(endY - startY);
-      const deltaTime = endTime - startTime;
-
-      // Check if it's a valid swipe
-      if (deltaTime <= maxSwipeTime) {
-        // Calculate swipe velocity (pixels per second)
-        const velocityX = deltaX / (deltaTime / 1000);
-        const velocityY = deltaY / (deltaTime / 1000);
-        const averageVelocity = (velocityX + velocityY) / 2;
-        
-        // Clamp velocity to reasonable bounds (100-2000 px/s)
-        const clampedVelocity = Math.max(100, Math.min(2000, averageVelocity));
-        
-        // Determine if it's a horizontal or vertical swipe
-        if (deltaX > deltaY && deltaX >= minSwipeDistance) {
-          // Horizontal swipe
-          const swipeDirection = endX > startX ? 'right' : 'left';
-          
-          // Inverted direction logic: left swipe = backseat, right swipe = frontseat
-          if (swipeDirection === 'left') {
-            this.switchToBackseat();
-          } else if (swipeDirection === 'right') {
-            this.switchToFrontseat();
-          }
-        } else if (deltaY > deltaX && deltaY >= minSwipeDistance) {
-          // Vertical swipe
-          const swipeDirection = endY > startY ? 'down' : 'up';
-          
-          // direction logic: up swipe = show overlay, down swipe = hide overlay
-          if (swipeDirection === 'up') {
-            this.showOverlay(clampedVelocity);
-          } else if (swipeDirection === 'down') {
-            this.hideOverlay(clampedVelocity);
-          }
+      const duration = endTime - startTime;
+      
+      if (duration > 500) return; // Ignore long presses
+      
+      const deltaX = endX - startX;
+      const deltaY = endY - startY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      if (distance < 50) return; // Ignore small movements
+      
+      const isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
+      
+      if (isHorizontal) {
+        if (deltaX > 0) {
+          this.switchToFrontseat();
+        } else {
+          this.switchToBackseat();
+        }
+      } else {
+        if (deltaY > 0) {
+          this.hideOverlay();
+        } else {
+          this.showOverlay();
         }
       }
     });
@@ -1038,17 +1026,17 @@ export class GameScene extends Phaser.Scene {
    // Public method to trigger a countdown step
    public stepCountdown() {
      this.updateCountdown();
-   }
-
-   private onStepEvent(stepNumber: number) {
-     console.log(`GameScene received step event: ${stepNumber}`);
-     this.stepCountdown();
      
      // Add progress if driving mode is active
      if (this.drivingMode) {
        this.updateProgress(this.progress + 1);
        console.log(`Progress increased to ${this.progress}% while driving`);
      }
+   }
+
+   private onStepEvent(stepNumber: number) {
+     console.log(`GameScene received step event: ${stepNumber}`);
+     this.stepCountdown();
    }
 
    private onGamePaused() {
