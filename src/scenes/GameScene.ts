@@ -774,17 +774,15 @@ export class GameScene extends Phaser.Scene {
    private updateRoadPosition() {
      if (!this.drivingBackground || !this.drivingMode) return;
      
-     // Calculate road offset based on position (0-100% maps to -200 to 200 pixels)
-     const maxOffset = 200;
-     const roadOffset = ((this.position - 50) / 50) * maxOffset; // Center at 50%
+     // Instead of moving the entire background, move the car within the view
+     // Calculate car position based on position (0-100% maps to car bounds)
+     const gameWidth = this.cameras.main.width;
+     const carBounds = 150; // How far left/right the car can move
+     const carX = (this.position / 100) * (gameWidth - 100) + 50; // Map 0-100% to car bounds
      
-     // Move the entire driving background horizontally
-     this.drivingBackground.setX(roadOffset);
-     
-     // Update car position to stay centered on screen
+     // Update car position
      if (this.drivingCar) {
-       const gameWidth = this.cameras.main.width;
-       this.drivingCar.setX(gameWidth / 2);
+       this.drivingCar.setX(carX);
      }
    }
 
@@ -807,23 +805,6 @@ export class GameScene extends Phaser.Scene {
      
      // Update the knob visual to match the reactive value
      this.updateKnobVisual();
-   }
-
-   private updateRoadPosition() {
-     if (!this.drivingBackground || !this.drivingMode) return;
-     
-     // Calculate road offset based on position (0-100% maps to -200 to 200 pixels)
-     const maxOffset = 200;
-     const roadOffset = ((this.position - 50) / 50) * maxOffset; // Center at 50%
-     
-     // Move the entire driving background horizontally
-     this.drivingBackground.setX(roadOffset);
-     
-     // Update car position to stay centered on screen
-     if (this.drivingCar) {
-       const gameWidth = this.cameras.main.width;
-       this.drivingCar.setX(gameWidth / 2);
-     }
    }
 
    private updateKnobVisual() {
@@ -1117,13 +1098,15 @@ export class GameScene extends Phaser.Scene {
      this.drivingRoad.setOrigin(0);
      this.drivingBackground.add(this.drivingRoad);
      
-     // Create road lines
-     const lineWidth = 8;
-     const lineHeight = 40;
-     const lineGap = 80;
+     // Create road lines - proper center lines like a real road
+     const lineWidth = 4;
+     const lineHeight = 30;
+     const lineGap = 40;
+     const centerLineY = gameHeight / 2 + 50;
      
-     for (let x = gameWidth / 2 - lineWidth / 2; x < gameWidth; x += lineGap) {
-       const line = this.add.rectangle(x, gameHeight / 2 + 50, lineWidth, lineHeight, 0xffffff);
+     // Create center line segments
+     for (let y = centerLineY; y < gameHeight; y += lineGap + lineHeight) {
+       const line = this.add.rectangle(gameWidth / 2, y, lineWidth, lineHeight, 0xffffff);
        this.drivingRoadLines.push(line);
        this.drivingBackground.add(line);
      }
