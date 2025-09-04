@@ -206,4 +206,12 @@ export class AppScene extends Phaser.Scene {
       (gameScene as any).startGame();
     }
   }
+
+  // Method to stop step events (called from GameScene when restarting)
+  public stopStepEvents() {
+    this.gameStarted = false;
+    this.step = 0; // Reset step counter
+    this.stepText.setText('App Layer; Step: 0'); // Reset display
+    console.log('Step events stopped and reset');
+  }
 }

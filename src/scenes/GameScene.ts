@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 export class GameScene extends Phaser.Scene {
    private currentPosition: string = 'frontseat'; // 'frontseat' or 'backseat'
    private currentView: string = 'main'; // 'main' or 'overlay'
-   private gameTime: number = 99; // Starting time
+   private gameTime: number = 10; // Starting time
    private gameStarted: boolean = false; // Track if game has started
    private cameraDebugText!: Phaser.GameObjects.Text;
    private gameContentContainer!: Phaser.GameObjects.Container;
@@ -11,9 +11,13 @@ export class GameScene extends Phaser.Scene {
    private stopsText!: Phaser.GameObjects.Text;
    private progressText!: Phaser.GameObjects.Text;
    private positionText!: Phaser.GameObjects.Text;
+   private moneyText!: Phaser.GameObjects.Text;
+   private healthText!: Phaser.GameObjects.Text;
    private stops: number = 0;
    private progress: number = 0;
    private position: number = 50; // Position from 0-100%, starts at center (50%)
+   private money: number = 108; // Starting money: $108
+   private health: number = 10; // Car health: 1-10, starts at max (10)
    private knobValue: number = 0; // Reactive knob value (-100 to 100), starts at neutral (0)
    private frontseatPhysicsContainer!: Phaser.GameObjects.Container;
    private backseatPhysicsContainer!: Phaser.GameObjects.Container;
@@ -31,6 +35,7 @@ export class GameScene extends Phaser.Scene {
    private drivingBackground!: Phaser.GameObjects.Container;
    private forwardMovementTimer!: Phaser.Time.TimerEvent | null;
    private neutralReturnTimer!: Phaser.Time.TimerEvent | null;
+   private gameOverDialogShown: boolean = false; // Track if game over dialog is already shown
 
   constructor() {
     super({ key: 'GameScene' });
@@ -269,9 +274,9 @@ export class GameScene extends Phaser.Scene {
        padding: { x: 10, y: 5 }
      }).setOrigin(0.5);
      
-     // Add countdown text to the container so it moves with the content
-     this.gameContentContainer.add(this.countdownText);
-     this.countdownText.setDepth(1000); // Ensure it's on top
+     // Make countdown text an overlay that doesn't move with camera
+     this.countdownText.setScrollFactor(0);
+     this.countdownText.setDepth(10000); // High depth to ensure it's always on top
    }
 
    private createFrontseatDragDial() {
@@ -313,6 +318,13 @@ export class GameScene extends Phaser.Scene {
        this.isKnobActive = false;
        this.startKnobReturnTimer();
        console.log('Knob interaction ended - swipe enabled');
+     });
+     
+     knob.on('pointerout', () => {
+       // Reset knob when mouse leaves the knob area
+       this.isKnobActive = false;
+       this.startKnobReturnTimer();
+       console.log('Knob interaction ended (pointer out) - swipe enabled');
      });
      
      knob.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -392,6 +404,46 @@ export class GameScene extends Phaser.Scene {
      this.stopsText.setDepth(1000);
      this.progressText.setDepth(1000);
      this.positionText.setDepth(1000);
+     
+     // Create money and health text in bottom left
+     this.createMoneyAndHealthText();
+   }
+
+   private createMoneyAndHealthText() {
+     const gameWidth = this.cameras.main.width;
+     const gameHeight = this.cameras.main.height;
+     
+     // Position money text in bottom left
+     const moneyX = 20;
+     const moneyY = gameHeight - 40;
+     
+     this.moneyText = this.add.text(moneyX, moneyY, `$${this.money}`, {
+       fontSize: '24px',
+       color: '#00ff00', // Green for money
+       fontStyle: 'bold',
+       backgroundColor: '#000000',
+       padding: { x: 8, y: 4 }
+     }).setOrigin(0, 0.5);
+     
+     // Position health text next to money
+     const healthX = moneyX + 120;
+     const healthY = moneyY;
+     
+     this.healthText = this.add.text(healthX, healthY, `Health: ${this.health * 10}%`, {
+       fontSize: '24px',
+       color: '#ff6600', // Orange for health
+       fontStyle: 'bold',
+       backgroundColor: '#000000',
+       padding: { x: 8, y: 4 }
+     }).setOrigin(0, 0.5);
+     
+     // Make money and health texts overlays that don't move with camera
+     this.moneyText.setScrollFactor(0);
+     this.healthText.setScrollFactor(0);
+     
+     // Set high depth to ensure they're always on top
+     this.moneyText.setDepth(10000);
+     this.healthText.setDepth(10000);
    }
 
    private createDrivingGameButton() {
@@ -704,7 +756,21 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-      private updatePosition() {
+      private updateMoney(amount: number) {
+     this.money = amount;
+     if (this.moneyText) {
+       this.moneyText.setText(`$${this.money}`);
+     }
+   }
+
+   private updateHealth(health: number) {
+     this.health = Phaser.Math.Clamp(health, 1, 10); // Clamp between 1-10
+     if (this.healthText) {
+       this.healthText.setText(`Health: ${this.health * 10}%`);
+     }
+   }
+
+   private updatePosition() {
      // Only update position if driving mode is active
      if (!this.drivingMode) return;
      
@@ -851,7 +917,39 @@ export class GameScene extends Phaser.Scene {
      console.log('Countdown timer ready for step-based updates');
    }
 
+   private stopCountdownTimer() {
+     // Reset the game over dialog flag
+     this.gameOverDialogShown = false;
+     console.log('Countdown timer stopped');
+   }
+
+   private resetGameState() {
+     // Reset all game state variables to their defaults
+     this.gameTime = 10; // Reset to starting time
+     this.gameStarted = false;
+     this.position = 50; // Reset to center
+     this.knobValue = 0; // Reset knob to neutral
+     this.money = 108; // Reset money
+     this.health = 10; // Reset health to max
+     this.stops = 0; // Reset stops
+     this.progress = 0; // Reset progress
+     this.drivingMode = false; // Reset driving mode
+     this.isKnobActive = false; // Reset knob state
+     this.currentSteeringValue = 0; // Reset steering
+     this.carSpeed = 0; // Reset car speed
+     this.carX = 0; // Reset car position
+     this.gameOverDialogShown = false; // Reset dialog flag
+     
+     console.log('Game state reset to defaults');
+   }
+
      private updateCountdown() {
+     // Check if scene is still active before proceeding
+     if (!this.scene.isActive()) {
+       console.log('Scene is no longer active, skipping countdown update');
+       return;
+     }
+     
      if (this.gameTime > 0) {
        this.gameTime--;
        console.log(`Countdown step: ${this.gameTime}, countdownText exists: ${!!this.countdownText}`);
@@ -862,9 +960,79 @@ export class GameScene extends Phaser.Scene {
          console.log('countdownText is null or undefined');
        }
      } else {
-       // Timer finished
-       console.log('Countdown finished!');
+       // Timer finished - Game Over!
+       console.log('Countdown finished! Game Over!');
+       this.showGameOverDialog();
      }
+   }
+
+   private showGameOverDialog() {
+     // Prevent multiple dialogs from being created
+     if (this.gameOverDialogShown) return;
+     this.gameOverDialogShown = true;
+     
+     // Check if scene is still active before accessing cameras
+     if (!this.scene.isActive() || !this.cameras.main) {
+       console.log('Scene is no longer active, skipping dialog creation');
+       return;
+     }
+     
+     const gameWidth = this.cameras.main.width;
+     const gameHeight = this.cameras.main.height;
+     const centerX = gameWidth / 2;
+     const centerY = gameHeight / 2;
+     
+     // Create semi-transparent background overlay
+     const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
+     background.setScrollFactor(0);
+     background.setDepth(20000);
+     
+     // Create dialog box
+     const dialogWidth = 300;
+     const dialogHeight = 200;
+     const dialog = this.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x333333);
+     dialog.setStrokeStyle(3, 0xffffff);
+     dialog.setScrollFactor(0);
+     dialog.setDepth(20001);
+     
+     // Create "You Lost!" text
+     const gameOverText = this.add.text(centerX, centerY - 40, 'YOU LOST!', {
+       fontSize: '32px',
+       color: '#ff0000',
+       fontStyle: 'bold'
+     }).setOrigin(0.5);
+     gameOverText.setScrollFactor(0);
+     gameOverText.setDepth(20002);
+     
+     // Create countdown text
+     const countdownText = this.add.text(centerX, centerY, 'Time ran out!', {
+       fontSize: '18px',
+       color: '#ffffff',
+       fontStyle: 'bold'
+     }).setOrigin(0.5);
+     countdownText.setScrollFactor(0);
+     countdownText.setDepth(20002);
+     
+     // Create restart button
+     const restartButton = this.add.text(centerX, centerY + 40, 'Restart Game', {
+       fontSize: '20px',
+       color: '#ffffff',
+       backgroundColor: '#27ae60',
+       padding: { x: 15, y: 8 }
+     }).setOrigin(0.5);
+     restartButton.setScrollFactor(0);
+     restartButton.setDepth(20002);
+     restartButton.setInteractive();
+     
+     // Add click handler for restart
+     restartButton.on('pointerdown', () => {
+       console.log('Restarting game via page reload...');
+       
+       // Simple page reload for complete reset
+       window.location.reload();
+     });
+     
+     console.log('Game Over dialog created');
    }
 
    // Public method to trigger a countdown step
