@@ -11,6 +11,9 @@ export class MenuScene extends Phaser.Scene {
     // Set up overlay camera for this scene
     this.setupOverlayCamera();
     
+    // Listen for obstacle menu events
+    this.events.on('showObstacleMenu', this.showObstacleMenu, this);
+    
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
     const centerX = gameWidth / 2;
@@ -173,5 +176,78 @@ export class MenuScene extends Phaser.Scene {
     this.cameras.main = overlayCamera;
     
     console.log('MenuScene: Overlay camera set up');
+  }
+
+  private showObstacleMenu(obstacleType: string) {
+    console.log(`MenuScene: Showing ${obstacleType} menu`);
+    
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Clear any existing menu content
+    this.children.removeAll();
+    
+    // Add background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
+    background.setScrollFactor(0);
+    background.setDepth(9999);
+    
+    // Create obstacle-specific dialog
+    let titleText = '';
+    let messageText = '';
+    let buttonText = '';
+    
+    if (obstacleType === 'pothole') {
+      titleText = 'POTHOLE HIT!';
+      messageText = 'You hit a pothole!\n\nYour car took damage.\nHealth decreased.\n\nBe more careful next time!';
+      buttonText = 'Continue';
+    } else if (obstacleType === 'exit') {
+      titleText = 'EXIT REACHED!';
+      messageText = 'You found an exit!\n\nGood job!\nYou earned rewards.\n\nKeep up the good driving!';
+      buttonText = 'Continue';
+    }
+    
+    // Create RexUI dialog
+    const dialog = this.rexUI.add.label({
+      x: centerX,
+      y: centerY,
+      width: 350,
+      height: 220,
+      background: this.add.rectangle(0, 0, 350, 220, 0x2c3e50),
+      text: this.add.text(0, 0, `${titleText}\n\n${messageText}`, {
+        fontSize: '18px',
+        color: '#ffffff',
+        align: 'center'
+      }),
+      space: {
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: 20
+      }
+    }).setOrigin(0.5);
+    
+    dialog.setScrollFactor(0);
+    dialog.setDepth(10000);
+    
+    // Add continue button
+    const continueButton = this.add.text(centerX, centerY + 80, buttonText, {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#27ae60',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    
+    continueButton.setScrollFactor(0);
+    continueButton.setDepth(10001);
+    continueButton.setInteractive();
+    
+    continueButton.on('pointerdown', () => {
+      // Close the menu and return to game
+      this.scene.stop('MenuScene');
+      console.log(`${obstacleType} menu closed`);
+    });
   }
 }

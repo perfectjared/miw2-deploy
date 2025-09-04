@@ -11,13 +11,19 @@ export class GameScene extends Phaser.Scene {
    private stopsText!: Phaser.GameObjects.Text;
    private progressText!: Phaser.GameObjects.Text;
    private positionText!: Phaser.GameObjects.Text;
-   private moneyText!: Phaser.GameObjects.Text;
-   private healthText!: Phaser.GameObjects.Text;
+     private moneyText!: Phaser.GameObjects.Text;
+  private healthText!: Phaser.GameObjects.Text;
+  private playerSkillText!: Phaser.GameObjects.Text;
+  private difficultyText!: Phaser.GameObjects.Text;
+  private momentumText!: Phaser.GameObjects.Text;
    private stops: number = 0;
    private progress: number = 0;
    private position: number = 50; // Position from 0-100%, starts at center (50%)
-   private money: number = 108; // Starting money: $108
-   private health: number = 10; // Car health: 1-10, starts at max (10)
+     private money: number = 108; // Starting money: $108
+  private health: number = 10; // Car health: 1-10, starts at max (10)
+  private playerSkill: number = 0; // Player skill percentage: 0-100%
+  private difficulty: number = 0; // Difficulty percentage: 0-100%
+  private momentum: number = 0; // Momentum percentage: 0-100%
    private knobValue: number = 0; // Reactive knob value (-100 to 100), starts at neutral (0)
    private frontseatPhysicsContainer!: Phaser.GameObjects.Container;
    private backseatPhysicsContainer!: Phaser.GameObjects.Container;
@@ -33,9 +39,18 @@ export class GameScene extends Phaser.Scene {
    private carSpeed: number = 0;
    private carX: number = 0;
    private drivingBackground!: Phaser.GameObjects.Container;
-   private forwardMovementTimer!: Phaser.Time.TimerEvent | null;
-   private neutralReturnTimer!: Phaser.Time.TimerEvent | null;
-   private gameOverDialogShown: boolean = false; // Track if game over dialog is already shown
+     private forwardMovementTimer!: Phaser.Time.TimerEvent | null;
+  private neutralReturnTimer!: Phaser.Time.TimerEvent | null;
+  private gameOverDialogShown: boolean = false; // Track if game over dialog is already shown
+  
+  // Obstacle system
+  private obstacles: Phaser.GameObjects.Rectangle[] = [];
+  private obstacleTypes = {
+    POTHOLE: 'pothole',
+    EXIT: 'exit'
+  };
+  private collisionTimer: Phaser.Time.TimerEvent | null = null;
+  private pendingCollisionType: string | null = null;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -88,6 +103,9 @@ export class GameScene extends Phaser.Scene {
     // Listen for pause/resume events from AppScene
     this.events.on('gamePaused', this.onGamePaused, this);
     this.events.on('gameResumed', this.onGameResumed, this);
+
+    // Set up automatic pause when window loses focus
+    this.setupAutoPause();
 
     // Set up swipe controls for camera movement
     this.setupSwipeControls();
@@ -405,8 +423,11 @@ export class GameScene extends Phaser.Scene {
      this.progressText.setDepth(1000);
      this.positionText.setDepth(1000);
      
-     // Create money and health text in bottom left
-     this.createMoneyAndHealthText();
+         // Create money and health text in bottom left
+    this.createMoneyAndHealthText();
+    
+    // Create player stats text in top right
+    this.createPlayerStatsText();
    }
 
    private createMoneyAndHealthText() {
@@ -441,10 +462,56 @@ export class GameScene extends Phaser.Scene {
      this.moneyText.setScrollFactor(0);
      this.healthText.setScrollFactor(0);
      
-     // Set high depth to ensure they're always on top
-     this.moneyText.setDepth(10000);
-     this.healthText.setDepth(10000);
-   }
+         // Set high depth to ensure they're always on top
+    this.moneyText.setDepth(10000);
+    this.healthText.setDepth(10000);
+  }
+
+  private createPlayerStatsText() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Position stats text in top right corner
+    const statsX = gameWidth - 20;
+    const statsY = 60;
+    
+    // Player Skill text
+    this.playerSkillText = this.add.text(statsX, statsY, `Skill: ${this.playerSkill}%`, {
+      fontSize: '18px',
+      color: '#00ffff', // Cyan for skill
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 6, y: 3 }
+    }).setOrigin(1, 0);
+    
+    // Difficulty text (below skill)
+    this.difficultyText = this.add.text(statsX, statsY + 30, `Difficulty: ${this.difficulty}%`, {
+      fontSize: '18px',
+      color: '#ff00ff', // Magenta for difficulty
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 6, y: 3 }
+    }).setOrigin(1, 0);
+    
+    // Momentum text (below difficulty)
+    this.momentumText = this.add.text(statsX, statsY + 60, `Momentum: ${this.momentum}%`, {
+      fontSize: '18px',
+      color: '#ffff00', // Yellow for momentum
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 6, y: 3 }
+    }).setOrigin(1, 0);
+    
+    // Make stats texts overlays that don't move with camera
+    this.playerSkillText.setScrollFactor(0);
+    this.difficultyText.setScrollFactor(0);
+    this.momentumText.setScrollFactor(0);
+    
+    // Set high depth to ensure they're always on top
+    this.playerSkillText.setDepth(10000);
+    this.difficultyText.setDepth(10000);
+    this.momentumText.setDepth(10000);
+  }
 
    private createDrivingGameButton() {
      const gameWidth = this.cameras.main.width;
@@ -570,7 +637,7 @@ export class GameScene extends Phaser.Scene {
     let startX = 0;
     let startY = 0;
     let startTime = 0;
-    
+
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       // Don't start swipe tracking if knob is being used
       if (this.isKnobActive) return;
@@ -579,7 +646,7 @@ export class GameScene extends Phaser.Scene {
       startY = pointer.y;
       startTime = Date.now();
     });
-    
+
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!this.gameStarted || this.isKnobActive) return;
       
@@ -600,7 +667,7 @@ export class GameScene extends Phaser.Scene {
       
       if (isHorizontal) {
         if (deltaX > 0) {
-          this.switchToFrontseat();
+            this.switchToFrontseat();
         } else {
           this.switchToBackseat();
         }
@@ -612,6 +679,47 @@ export class GameScene extends Phaser.Scene {
         }
       }
     });
+  }
+
+  private setupAutoPause() {
+    // Listen for window blur/focus events
+    window.addEventListener('blur', () => {
+      // Only auto-pause if the game has been started
+      if (this.gameStarted) {
+        console.log('GameScene: Window lost focus - auto-pausing game');
+        this.triggerAppScenePause();
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      // Only auto-resume if the game was started and we're not already paused
+      if (this.gameStarted) {
+        console.log('GameScene: Window regained focus - auto-resuming game');
+        this.triggerAppSceneResume();
+      }
+    });
+  }
+
+  private triggerAppScenePause() {
+    // Get the AppScene and trigger its pause method
+    const appScene = this.scene.get('AppScene');
+    if (appScene && appScene.scene.isActive()) {
+      // Call the togglePauseMenu method if not already paused
+      if (!(appScene as any).isPaused) {
+        (appScene as any).togglePauseMenu();
+      }
+    }
+  }
+
+  private triggerAppSceneResume() {
+    // Get the AppScene and trigger its resume method
+    const appScene = this.scene.get('AppScene');
+    if (appScene && appScene.scene.isActive()) {
+      // Call the togglePauseMenu method if currently paused
+      if ((appScene as any).isPaused) {
+        (appScene as any).togglePauseMenu();
+      }
+    }
   }
 
          private switchToBackseat() {
@@ -637,21 +745,21 @@ export class GameScene extends Phaser.Scene {
           });
         }
         
-               this.currentPosition = 'backseat';
-       this.currentView = 'main';
+        this.currentPosition = 'backseat';
+        this.currentView = 'main';
       }
     }
 
-       private switchToFrontseat() {
-     if (this.currentPosition === 'backseat') {
-       // Move the entire content container to the right to show frontseat
-       this.tweens.add({
-         targets: this.gameContentContainer,
-         x: 0,
-         y: 0, // Reset to main view
-         duration: 500,
-         ease: 'Power2'
-       });
+    private switchToFrontseat() {
+      if (this.currentPosition === 'backseat') {
+        // Move the entire content container to the right to show frontseat
+        this.tweens.add({
+          targets: this.gameContentContainer,
+          x: 0,
+          y: 0, // Reset to main view
+          duration: 500,
+          ease: 'Power2'
+        });
        
        // Also move the driving background with the same animation
        if (this.drivingBackground) {
@@ -664,21 +772,21 @@ export class GameScene extends Phaser.Scene {
          });
        }
        
-       this.currentPosition = 'frontseat';
-       this.currentView = 'main';
-     }
-   }
+        this.currentPosition = 'frontseat';
+        this.currentView = 'main';
+      }
+    }
 
-          private showOverlay(velocity?: number) {
-     if (this.currentView === 'main') {
-       // Move the entire content container down to show overlay
-       const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : 500;
-       this.tweens.add({
-         targets: this.gameContentContainer,
-         y: -320,
-         duration: duration,
-         ease: 'Power2'
-       });
+       private showOverlay(velocity?: number) {
+      if (this.currentView === 'main') {
+        // Move the entire content container down to show overlay
+        const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : 500;
+        this.tweens.add({
+          targets: this.gameContentContainer,
+          y: -320,
+          duration: duration,
+          ease: 'Power2'
+        });
        
        // Also move the driving background with the same animation
        if (this.drivingBackground) {
@@ -693,22 +801,22 @@ export class GameScene extends Phaser.Scene {
        // Keep physics containers in place - they don't move with the overlay
        this.keepPhysicsContainersInPlace();
        
-       this.currentView = 'overlay';
-       this.updateToggleButtonText();
+        this.currentView = 'overlay';
+        this.updateToggleButtonText();
        console.log('Showing overlay - content and driving background moved down by 320px');
-     }
-   }
+      }
+    }
 
-       private hideOverlay(velocity?: number) {
-     if (this.currentView === 'overlay') {
-       // Move the entire content container up to show main content
-       const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : 500;
-       this.tweens.add({
-         targets: this.gameContentContainer,
-         y: 0,
-         duration: duration,
-         ease: 'Power2'
-       });
+    private hideOverlay(velocity?: number) {
+      if (this.currentView === 'overlay') {
+        // Move the entire content container up to show main content
+        const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : 500;
+        this.tweens.add({
+          targets: this.gameContentContainer,
+          y: 0,
+          duration: duration,
+          ease: 'Power2'
+        });
        
        // Also move the driving background back with the same animation
        if (this.drivingBackground) {
@@ -723,26 +831,26 @@ export class GameScene extends Phaser.Scene {
        // Keep physics containers in place - they don't move with the overlay
        this.keepPhysicsContainersInPlace();
        
-       this.currentView = 'main';
-       this.updateToggleButtonText();
+        this.currentView = 'main';
+        this.updateToggleButtonText();
        console.log('Hiding overlay - content and driving background moved up to 0');
-     }
-   }
+      }
+    }
 
-             private updateToggleButtonText() {
-     // Find the toggle button texts and update them based on current view
-     const mapToggleText = this.gameContentContainer.getByName('mapToggleText') as Phaser.GameObjects.Text;
-     const inventoryToggleText = this.gameContentContainer.getByName('inventoryToggleText') as Phaser.GameObjects.Text;
-     
-     const buttonText = this.currentView === 'main' ? 'LOOK DOWN' : 'LOOK UP';
-     
-     if (mapToggleText) {
-       mapToggleText.setText(buttonText);
-     }
-     if (inventoryToggleText) {
-       inventoryToggleText.setText(buttonText);
-     }
-   }
+    private updateToggleButtonText() {
+      // Find the toggle button texts and update them based on current view
+      const mapToggleText = this.gameContentContainer.getByName('mapToggleText') as Phaser.GameObjects.Text;
+      const inventoryToggleText = this.gameContentContainer.getByName('inventoryToggleText') as Phaser.GameObjects.Text;
+      
+      const buttonText = this.currentView === 'main' ? 'LOOK DOWN' : 'LOOK UP';
+      
+      if (mapToggleText) {
+        mapToggleText.setText(buttonText);
+      }
+      if (inventoryToggleText) {
+        inventoryToggleText.setText(buttonText);
+      }
+    }
 
       private updateMoney(amount: number) {
      this.money = amount;
@@ -751,12 +859,33 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-   private updateHealth(health: number) {
-     this.health = Phaser.Math.Clamp(health, 1, 10); // Clamp between 1-10
-     if (this.healthText) {
-       this.healthText.setText(`Health: ${this.health * 10}%`);
-     }
-   }
+     private updateHealth(health: number) {
+    this.health = Phaser.Math.Clamp(health, 1, 10); // Clamp between 1-10
+    if (this.healthText) {
+      this.healthText.setText(`Health: ${this.health * 10}%`);
+    }
+  }
+
+  private updatePlayerSkill(skill: number) {
+    this.playerSkill = Phaser.Math.Clamp(skill, 0, 100); // Clamp between 0-100%
+    if (this.playerSkillText) {
+      this.playerSkillText.setText(`Skill: ${this.playerSkill}%`);
+    }
+  }
+
+  private updateDifficulty(difficulty: number) {
+    this.difficulty = Phaser.Math.Clamp(difficulty, 0, 100); // Clamp between 0-100%
+    if (this.difficultyText) {
+      this.difficultyText.setText(`Difficulty: ${this.difficulty}%`);
+    }
+  }
+
+  private updateMomentum(momentum: number) {
+    this.momentum = Phaser.Math.Clamp(momentum, 0, 100); // Clamp between 0-100%
+    if (this.momentumText) {
+      this.momentumText.setText(`Momentum: ${this.momentum}%`);
+    }
+  }
 
    private updatePosition() {
      // Only update position if driving mode is active
@@ -861,31 +990,8 @@ export class GameScene extends Phaser.Scene {
      this.updateKnobVisual();
    }
 
-   private updateKnobVisual() {
-     if (!this.frontseatDragDial) return;
-     
-     // Clear the knob graphics
-     this.frontseatDragDial.clear();
-     
-     const knobRadius = 60;
-     
-     // Draw the knob base
-     this.frontseatDragDial.fillStyle(0x666666);
-     this.frontseatDragDial.fillCircle(0, 0, knobRadius);
-     this.frontseatDragDial.lineStyle(3, 0xffffff, 1);
-     this.frontseatDragDial.strokeCircle(0, 0, knobRadius);
-     
-     // Draw the pointer rotated based on knobValue
-     const angle = (this.knobValue / 100) * Math.PI; // Convert to radians
-     
-     this.frontseatDragDial.fillStyle(0x00ff00);
-     this.frontseatDragDial.fillRect(-3, -knobRadius + 10, 6, 20);
-     
-     // Rotate the pointer
-     this.frontseatDragDial.setRotation(angle);
-   }
 
-   // Method to start the game (called from AppScene)
+  // Method to start the game (called from AppScene)
   public startGame() {
     this.gameStarted = true;
     console.log('GameScene: Game started! Controls are now enabled.');
@@ -1131,11 +1237,14 @@ export class GameScene extends Phaser.Scene {
      // Start forward movement timer
      this.startForwardMovementTimer();
      
-     // Start neutral return timer
-     this.startNeutralReturnTimer();
-     
-     // Update button text
-     this.updateDrivingButtonText();
+         // Start neutral return timer
+    this.startNeutralReturnTimer();
+    
+    // Start obstacle spawning
+    this.startObstacleSpawning();
+    
+    // Update button text
+    this.updateDrivingButtonText();
    }
 
    private stopDriving() {
@@ -1148,11 +1257,14 @@ export class GameScene extends Phaser.Scene {
      // Stop forward movement timer
      this.stopForwardMovementTimer();
      
-     // Stop neutral return timer
-     this.stopNeutralReturnTimer();
-     
-     // Update button text
-     this.updateDrivingButtonText();
+         // Stop neutral return timer
+    this.stopNeutralReturnTimer();
+    
+    // Stop obstacle spawning and clear obstacles
+    this.stopObstacleSpawning();
+    
+    // Update button text
+    this.updateDrivingButtonText();
    }
 
    private startNeutralReturnTimer() {
@@ -1211,11 +1323,14 @@ export class GameScene extends Phaser.Scene {
      // Gradually increase car speed
      this.carSpeed = Math.min(this.carSpeed + 0.1, 5); // Gradually accelerate to max speed
      
-     // Move road lines to create forward motion effect
-     this.updateRoadLines();
-     
-     // Update car position based on current steering value
-     this.updateCarPosition();
+         // Move road lines to create forward motion effect
+    this.updateRoadLines();
+    
+    // Update obstacles
+    this.updateObstacles();
+    
+    // Update car position based on current steering value
+    this.updateCarPosition();
    }
 
    private updateCarPosition() {
@@ -1320,13 +1435,234 @@ export class GameScene extends Phaser.Scene {
      });
    }
 
-   private updateDrivingButtonText() {
-     // Find the driving button text and update it
-     const drivingButtonText = this.gameContentContainer.getByName('drivingButtonText') as Phaser.GameObjects.Text;
-     if (drivingButtonText) {
-       const buttonText = this.drivingMode ? 'STOP DRIVING' : 'START DRIVING';
-       drivingButtonText.setText(buttonText);
-     }
-   }
+     private updateDrivingButtonText() {
+    // Find the driving button text and update it
+    const drivingButtonText = this.gameContentContainer.getByName('drivingButtonText') as Phaser.GameObjects.Text;
+    if (drivingButtonText) {
+      const buttonText = this.drivingMode ? 'STOP DRIVING' : 'START DRIVING';
+      drivingButtonText.setText(buttonText);
+    }
+  }
+
+  // ===== OBSTACLE SYSTEM =====
+  private createObstacle(type: string) {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    let obstacle: Phaser.GameObjects.Rectangle;
+    
+    if (type === this.obstacleTypes.POTHOLE) {
+      // Pothole: 15% width, 2% height, always on right side, slow speed
+      const width = gameWidth * 0.15;
+      const height = gameHeight * 0.02;
+      const x = gameWidth * 0.75; // Right side of road
+      const y = -height; // Start above screen
+      
+      obstacle = this.add.rectangle(x, y, width, height, 0x8B4513); // Brown color
+      obstacle.setOrigin(0.5, 0);
+      
+      // Add obstacle properties
+      (obstacle as any).type = type;
+      (obstacle as any).speed = 1; // Slow speed
+      (obstacle as any).isBad = true;
+      
+    } else if (type === this.obstacleTypes.EXIT) {
+      // Exit: smaller, always on right side, very slow speed
+      const width = 30;
+      const height = 40;
+      const x = gameWidth * 0.75; // Right side of road
+      const y = -height; // Start above screen
+      
+      obstacle = this.add.rectangle(x, y, width, height, 0x00ff00); // Green color
+      obstacle.setOrigin(0.5, 0);
+      
+      // Add obstacle properties
+      (obstacle as any).type = type;
+      (obstacle as any).speed = 0.5; // Very slow speed
+      (obstacle as any).isBad = false;
+      
+    } else {
+      return; // Unknown obstacle type
+    }
+    
+    // Add to driving background and obstacles array
+    this.drivingBackground.add(obstacle);
+    this.obstacles.push(obstacle);
+    
+    console.log(`Created ${type} obstacle at x:${obstacle.x}, y:${obstacle.y}`);
+  }
+
+  private updateObstacles() {
+    if (!this.drivingMode) return;
+    
+    this.obstacles.forEach((obstacle, index) => {
+      const speed = (obstacle as any).speed || 1;
+      obstacle.y += speed;
+      
+      // Check for collision with car
+      if (this.checkCollisionWithCar(obstacle)) {
+        this.handleObstacleCollision(obstacle);
+        obstacle.destroy();
+        this.obstacles.splice(index, 1);
+        return;
+      }
+      
+      // Remove obstacles that have moved off screen
+      if (obstacle.y > this.cameras.main.height) {
+        obstacle.destroy();
+        this.obstacles.splice(index, 1);
+      }
+    });
+  }
+
+  private startObstacleSpawning() {
+    // Create obstacle spawning timers
+    // Potholes every 6 seconds
+    this.time.addEvent({
+      delay: 6000,
+      callback: () => {
+        if (this.drivingMode) {
+          this.createObstacle(this.obstacleTypes.POTHOLE);
+        }
+      },
+      callbackScope: this,
+      loop: true
+    });
+    
+    // Exits every 12 seconds
+    this.time.addEvent({
+      delay: 12000,
+      callback: () => {
+        if (this.drivingMode) {
+          this.createObstacle(this.obstacleTypes.EXIT);
+        }
+      },
+      callbackScope: this,
+      loop: true
+    });
+  }
+
+  private stopObstacleSpawning() {
+    // For now, just remove all events to stop spawning
+    // In a more complex system, we'd track individual timers
+    this.time.removeAllEvents();
+    
+    console.log('Obstacle spawning stopped - obstacles remain on screen');
+  }
+
+  // ===== COLLISION DETECTION =====
+  private checkCollisionWithCar(obstacle: Phaser.GameObjects.Rectangle): boolean {
+    if (!this.drivingCar) return false;
+    
+    // Get car bounds
+    const carBounds = this.drivingCar.getBounds();
+    
+    // Get obstacle bounds
+    const obstacleBounds = obstacle.getBounds();
+    
+    // Check if bounds overlap
+    return Phaser.Geom.Rectangle.Overlaps(carBounds, obstacleBounds);
+  }
+
+  private handleObstacleCollision(obstacle: Phaser.GameObjects.Rectangle) {
+    const obstacleType = (obstacle as any).type;
+    console.log(`Car collided with ${obstacleType}!`);
+    
+    // Cancel any existing collision timer
+    if (this.collisionTimer) {
+      this.collisionTimer.remove();
+      this.collisionTimer = null;
+    }
+    
+    // Set pending collision type
+    this.pendingCollisionType = obstacleType;
+    
+    // Start 3-second timer before showing menu
+    this.collisionTimer = this.time.addEvent({
+      delay: 3000,
+      callback: () => {
+        this.showObstacleMenu(this.pendingCollisionType!);
+        this.pendingCollisionType = null;
+        this.collisionTimer = null;
+      },
+      callbackScope: this
+    });
+  }
+
+  private showObstacleMenu(obstacleType: string) {
+    // Stop driving when showing menu
+    this.stopDriving();
+    
+    console.log(`Showing ${obstacleType} menu`);
+    
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Add background overlay
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
+    background.setScrollFactor(0);
+    background.setDepth(20000);
+    
+    // Create obstacle-specific dialog
+    let titleText = '';
+    let messageText = '';
+    
+    if (obstacleType === 'pothole') {
+      titleText = 'POTHOLE HIT!';
+      messageText = 'You hit a pothole!\n\nYour car took damage.\nHealth decreased.\n\nBe more careful next time!';
+    } else if (obstacleType === 'exit') {
+      titleText = 'EXIT REACHED!';
+      messageText = 'You found an exit!\n\nGood job!\nYou earned rewards.\n\nKeep up the good driving!';
+    }
+    
+    // Create dialog box
+    const dialog = this.add.rectangle(centerX, centerY, 350, 220, 0x2c3e50);
+    dialog.setStrokeStyle(3, 0xffffff);
+    dialog.setScrollFactor(0);
+    dialog.setDepth(20001);
+    
+    // Add title text
+    const titleTextObj = this.add.text(centerX, centerY - 60, titleText, {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    titleTextObj.setScrollFactor(0);
+    titleTextObj.setDepth(20002);
+    
+    // Add message text
+    const messageTextObj = this.add.text(centerX, centerY, messageText, {
+      fontSize: '16px',
+      color: '#ffffff',
+      align: 'center'
+    }).setOrigin(0.5);
+    messageTextObj.setScrollFactor(0);
+    messageTextObj.setDepth(20002);
+    
+    // Add continue button
+    const continueButton = this.add.text(centerX, centerY + 80, 'Continue', {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#27ae60',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    
+    continueButton.setScrollFactor(0);
+    continueButton.setDepth(20002);
+    continueButton.setInteractive();
+    
+    continueButton.on('pointerdown', () => {
+      // Remove all menu elements
+      background.destroy();
+      dialog.destroy();
+      titleTextObj.destroy();
+      messageTextObj.destroy();
+      continueButton.destroy();
+      
+      console.log(`${obstacleType} menu closed`);
+    });
+  }
 }
 
