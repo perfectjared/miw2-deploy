@@ -16,20 +16,10 @@ export class AppScene extends Phaser.Scene {
     
     // Set up overlay camera for this scene
     this.setupOverlayCamera();
-    
-    // Add app overlay text (always visible on top)
-    const appText = this.add.text(10, 10, 'APP LAYER (TOP)', {
-      fontSize: '16px',
-      color: '#00ff00',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    appText.setScrollFactor(0);
-    appText.setDepth(10000);
+
 
     // Add step counter
-    this.stepText = this.add.text(10, 40, 'Step: 0', {
+    this.stepText = this.add.text(10, 10, 'App Layer; Step: 0', {
       fontSize: '16px',
       color: '#00ff00',
       fontStyle: 'bold',
@@ -138,11 +128,23 @@ export class AppScene extends Phaser.Scene {
         this.pauseDialog = null;
       }
       console.log('Game resumed');
+      
+      // Emit resume event to GameScene
+      const gameScene = this.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
+      }
     } else {
       // Pause game
       this.isPaused = true;
       this.createPauseDialog();
       console.log('Game paused');
+      
+      // Emit pause event to GameScene
+      const gameScene = this.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('gamePaused');
+      }
     }
   }
 
