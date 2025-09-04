@@ -2,6 +2,10 @@ import Phaser from 'phaser';
 
 export class FrontseatScene extends Phaser.Scene {
   private currentView: string = 'main'; // 'main' or 'overlay'
+  private timeText!: Phaser.GameObjects.Text;
+  private switchButton!: Phaser.GameObjects.Graphics;
+  private clickText!: Phaser.GameObjects.Text;
+  private gameStarted: boolean = false;
 
   constructor() {
     super({ key: 'FrontseatScene' });
@@ -10,7 +14,7 @@ export class FrontseatScene extends Phaser.Scene {
   create() {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
+    const centerX = gameWidth / 2; // Center within the left half
     const centerY = gameHeight / 2;
 
     // Create a large clickable sprite at the top (80% width, 20% height)
@@ -26,22 +30,38 @@ export class FrontseatScene extends Phaser.Scene {
     graphics.lineStyle(2, 0xffffff, 1);
     graphics.strokeRect(spriteX - spriteWidth / 2, spriteY - spriteHeight / 2, spriteWidth, spriteHeight);
 
-    // Make it interactive
+    // Store reference to the button
+    this.switchButton = graphics;
+
+    // Make it interactive (but disabled until game starts)
     graphics.setInteractive(new Phaser.Geom.Rectangle(spriteX - spriteWidth / 2, spriteY - spriteHeight / 2, spriteWidth, spriteHeight), Phaser.Geom.Rectangle.Contains);
 
     // Add click handler
     graphics.on('pointerdown', () => {
+      if (!this.gameStarted) return; // Disable until game starts
       // Emit event to GameScene to switch to backseat
       this.events.emit('switchToBackseat');
     });
 
     // Add text to indicate it's clickable
-    const clickText = this.add.text(spriteX, spriteY, 'Click to switch to backseat', {
+    const clickText = this.add.text(spriteX, spriteY, 'Click to switch to backseat (GAME NOT STARTED)', {
       fontSize: '16px',
       color: '#ffffff',
       fontStyle: 'bold'
     });
+    this.clickText = clickText;
+    clickText.setName('clickText');
     clickText.setOrigin(0.5);
+
+    // Add time display below the sprite
+    this.timeText = this.add.text(spriteX, spriteY + spriteHeight / 2 + 20, 'Time: 99', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 10, y: 5 }
+    });
+    this.timeText.setOrigin(0.5);
 
     // FRONT SEAT CONTENT (main view)
     const frontseatTitle = this.add.text(centerX, centerY - 30, 'FRONT SEAT', {
@@ -51,12 +71,6 @@ export class FrontseatScene extends Phaser.Scene {
     });
     frontseatTitle.setOrigin(0.5);
 
-    const frontseatSubtitle = this.add.text(centerX, centerY + 20, 'Driver position', {
-      fontSize: '18px',
-      color: '#cccccc'
-    });
-    frontseatSubtitle.setOrigin(0.5);
-
     const frontseatHint = this.add.text(centerX, gameHeight - 60, 'Right: Move to backseat | Down: View Map', {
       fontSize: '14px',
       color: '#888888'
@@ -64,16 +78,27 @@ export class FrontseatScene extends Phaser.Scene {
     frontseatHint.setOrigin(0.5);
 
     // Listen for camera movement events from GameScene
+    // Note: Camera movement is now handled by GameScene, so we don't need to do anything here
     this.events.on('showOverlay', (velocity?: number) => {
-      // Move camera down to show overlay content (affects both main and overlay)
-      const duration = velocity ? (320 / velocity) * 1000 : 500; // Calculate duration based on velocity
-      this.cameras.main.pan(centerX, centerY + 320, duration);
+      // Camera movement handled by GameScene
     });
 
     this.events.on('hideOverlay', (velocity?: number) => {
-      // Move camera back up to show main content (affects both main and overlay)
-      const duration = velocity ? (320 / velocity) * 1000 : 500; // Calculate duration based on velocity
-      this.cameras.main.pan(centerX, centerY, duration);
+      // Camera movement handled by GameScene
+    });
+
+    // Listen for time updates from GameScene
+    this.events.on('updateTime', (time: number) => {
+      this.timeText.setText(`Time: ${time}`);
+    });
+
+    // Listen for game start event
+    this.events.on('gameStarted', () => {
+      this.gameStarted = true;
+      console.log('FrontseatScene: Game started! Button is now enabled.');
+      
+      // Update the button text
+      this.clickText.setText('Click to switch to backseat');
     });
   }
 }

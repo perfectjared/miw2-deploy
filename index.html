@@ -21,6 +21,14 @@
   </head>
   <body>
     <div id="game"></div>
+    <script src="/node_modules/phaser/dist/phaser.min.js"></script>
+    <script src="/rexuiplugin.js"></script>
+    <script>
+      console.log('RexUI script loaded, rexuiplugin available:', window.rexuiplugin);
+      if (!window.rexuiplugin) {
+        console.error('rexuiplugin failed to load!');
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

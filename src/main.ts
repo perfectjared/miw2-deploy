@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+// Phaser is loaded globally via script tag
 import { PreloadScene } from './scenes/PreloadScene';
 import { BackgroundScene } from './scenes/BackgroundScene';
 import { AppScene } from './scenes/AppScene';
@@ -9,6 +9,9 @@ import { FrontseatScene } from './scenes/FrontseatScene';
 import { BackseatScene } from './scenes/BackseatScene';
 import { MapScene } from './scenes/MapScene';
 import { InventoryScene } from './scenes/InventoryScene';
+
+// Debug: Check if RexUI is available
+console.log('rexuiplugin available:', (window as any).rexuiplugin);
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -37,6 +40,15 @@ const config: Phaser.Types.Core.GameConfig = {
       gravity: { x: 0, y: 0 },
       debug: false
     }
+  },
+  plugins: {
+    scene: [
+      {
+        key: 'rexUI',
+        plugin: (window as any).rexuiplugin,
+        mapping: 'rexUI'
+      }
+    ]
   }
 };
 

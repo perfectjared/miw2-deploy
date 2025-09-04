@@ -8,7 +8,7 @@ export class MapScene extends Phaser.Scene {
   create() {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
+    const centerX = gameWidth / 2; // Center within the left half (with FrontseatScene)
     const centerY = gameHeight / 2;
 
     // MAP OVERLAY CONTENT (positioned 50% down the screen)
@@ -32,16 +32,13 @@ export class MapScene extends Phaser.Scene {
     mapHint.setOrigin(0.5);
 
     // Listen for camera movement events from GameScene
+    // Note: Camera movement is now handled by GameScene, so we don't need to do anything here
     this.events.on('showOverlay', (velocity?: number) => {
-      // Move camera down to show overlay content
-      const duration = velocity ? (320 / velocity) * 1000 : 500; // Calculate duration based on velocity
-      this.cameras.main.pan(centerX, centerY + 320, duration);
+      // Camera movement handled by GameScene
     });
 
     this.events.on('hideOverlay', (velocity?: number) => {
-      // Move camera back up to show main content
-      const duration = velocity ? (320 / velocity) * 1000 : 500; // Calculate duration based on velocity
-      this.cameras.main.pan(centerX, centerY, duration);
+      // Camera movement handled by GameScene
     });
   }
 }
