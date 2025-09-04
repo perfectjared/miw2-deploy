@@ -10,14 +10,18 @@ export class GameScene extends Phaser.Scene {
    private countdownText!: Phaser.GameObjects.Text;
    private stopsText!: Phaser.GameObjects.Text;
    private progressText!: Phaser.GameObjects.Text;
+   private positionText!: Phaser.GameObjects.Text;
    private stops: number = 0;
    private progress: number = 0;
+   private position: number = 50; // Position from 0-100%, starts at center (50%)
+   private knobValue: number = 0; // Reactive knob value (-100 to 100), starts at neutral (0)
    private frontseatPhysicsContainer!: Phaser.GameObjects.Container;
    private backseatPhysicsContainer!: Phaser.GameObjects.Container;
    private frontseatDragDial!: any; // RexUI drag dial
    private drivingMode: boolean = false; // Track if driving mode is active
    private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
    private isKnobActive: boolean = false; // Track if knob is being interacted with
+   private knobReturnTimer!: Phaser.Time.TimerEvent | null; // Timer for gradual return to center
    private currentSteeringValue: number = 0; // Current steering value for driving mode
    private drivingCar!: Phaser.GameObjects.Rectangle;
    private drivingRoad!: Phaser.GameObjects.Rectangle;
@@ -89,6 +93,9 @@ export class GameScene extends Phaser.Scene {
      if (this.cameraDebugText && this.gameContentContainer) {
        this.cameraDebugText.setText(`Container: X=${Math.round(this.gameContentContainer.x)}, Y=${Math.round(this.gameContentContainer.y)}`);
      }
+     
+     // Frame-by-frame updates
+     this.updatePosition();
    }
 
      private setupSharedGameCamera() {
@@ -275,51 +282,63 @@ export class GameScene extends Phaser.Scene {
      const dialX = gameWidth / 2;
      const dialY = gameHeight * 0.6; // Position it below the countdown timer
      
-     // Create the steering wheel using RexUI knob (which is the correct component name)
-     const steeringWheel = this.rexUI.add.knob({
-       x: dialX,
-       y: dialY,
-       radius: 60,
-       trackColor: 0x333333,
-       barColor: 0x00ff00,
-       centerColor: 0x666666,
-       textColor: '#ffffff',
-       textFontSize: '18px',
-       value: 0,
-       min: -100,
-       max: 100,
-       step: 1,
-       easeValue: {
-         duration: 100
-       }
-     });
+     // Create a simple custom knob using graphics
+     const knobRadius = 60;
+     const knob = this.add.graphics();
      
-     // Store reference to the steering wheel
-     this.frontseatDragDial = steeringWheel;
+     // Draw the knob
+     knob.fillStyle(0x666666);
+     knob.fillCircle(0, 0, knobRadius);
+     knob.lineStyle(3, 0xffffff, 1);
+     knob.strokeCircle(0, 0, knobRadius);
      
-     // Add event listeners for steering
-     steeringWheel.on('valuechange', (newValue: number, oldValue: number) => {
-       if (!this.drivingMode) return; // Only respond if driving mode is active
-       console.log('Steering wheel value changed from', oldValue, 'to', newValue);
-       this.handleSteeringInput(newValue);
-     });
+     // Add a pointer to show the value
+     knob.fillStyle(0x00ff00);
+     knob.fillRect(-3, -knobRadius + 10, 6, 20);
      
-     // Add event listeners for knob interaction
-     steeringWheel.on('dragstart', () => {
-       if (!this.drivingMode) return; // Only respond if driving mode is active
+     knob.setPosition(dialX, dialY);
+     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
+     
+     // Store reference to the knob
+     this.frontseatDragDial = knob;
+     
+     // Add drag functionality
+     knob.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
        this.isKnobActive = true;
+       this.stopKnobReturnTimer();
        console.log('Knob interaction started - swipe disabled');
      });
      
-     steeringWheel.on('dragend', () => {
-       if (!this.drivingMode) return; // Only respond if driving mode is active
+     knob.on('pointerup', () => {
        this.isKnobActive = false;
+       this.startKnobReturnTimer();
        console.log('Knob interaction ended - swipe enabled');
      });
      
-     // Add the steering wheel to the game content container so it moves with the content
-     this.gameContentContainer.add(steeringWheel);
-     steeringWheel.setDepth(1000); // Ensure it's on top
+     knob.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+       if (!this.isKnobActive) return;
+       
+       // Calculate angle from center to pointer
+       const dx = pointer.x - dialX;
+       const dy = pointer.y - dialY;
+       const angle = Math.atan2(dy, dx);
+       
+       // Convert angle to knob value (-100 to 100)
+       // Right = 0°, Up = 90°, Left = 180°, Down = 270°
+       let knobValue = (angle * 180 / Math.PI) + 90; // Adjust so right is 0
+       if (knobValue > 180) knobValue -= 360; // Wrap around
+       
+       // Map to -100 to 100 range
+       this.knobValue = (knobValue / 180) * 100;
+       this.knobValue = Phaser.Math.Clamp(this.knobValue, -100, 100);
+       
+       // Update knob visual
+       this.updateKnobVisual();
+     });
+     
+     // Add the knob to the game content container so it moves with the content
+     this.gameContentContainer.add(knob);
+     knob.setDepth(1000); // Ensure it's on top
      
      // Don't disable initially - we'll control it through event handlers
      
@@ -354,12 +373,25 @@ export class GameScene extends Phaser.Scene {
        padding: { x: 8, y: 4 }
      }).setOrigin(0.5);
      
-     // Add both texts to the container so they move with the content
-     this.gameContentContainer.add([this.stopsText, this.progressText]);
+     // Position text below progress
+     const positionX = gameWidth / 2;
+     const positionY = (gameHeight * 0.2) + (gameHeight * 0.32); // Below progress
+     
+     this.positionText = this.add.text(positionX, positionY, 'Position: 50%', {
+       fontSize: '24px',
+       color: '#ffffff',
+       fontStyle: 'bold',
+       backgroundColor: '#000000',
+       padding: { x: 8, y: 4 }
+     }).setOrigin(0.5);
+     
+     // Add all texts to the container so they move with the content
+     this.gameContentContainer.add([this.stopsText, this.progressText, this.positionText]);
      
      // Set depth to ensure they're on top
      this.stopsText.setDepth(1000);
      this.progressText.setDepth(1000);
+     this.positionText.setDepth(1000);
    }
 
    private createDrivingGameButton() {
@@ -565,8 +597,8 @@ export class GameScene extends Phaser.Scene {
           });
         }
         
-        this.currentPosition = 'backseat';
-        this.currentView = 'main';
+               this.currentPosition = 'backseat';
+       this.currentView = 'main';
       }
     }
 
@@ -657,22 +689,128 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-    private updateToggleButtonText() {
-      // Find the toggle button texts and update them based on current view
-      const mapToggleText = this.gameContentContainer.getByName('mapToggleText') as Phaser.GameObjects.Text;
-      const inventoryToggleText = this.gameContentContainer.getByName('inventoryToggleText') as Phaser.GameObjects.Text;
-      
-      const buttonText = this.currentView === 'main' ? 'LOOK DOWN' : 'LOOK UP';
-      
-      if (mapToggleText) {
-        mapToggleText.setText(buttonText);
-      }
-      if (inventoryToggleText) {
-        inventoryToggleText.setText(buttonText);
-      }
-    }
+             private updateToggleButtonText() {
+     // Find the toggle button texts and update them based on current view
+     const mapToggleText = this.gameContentContainer.getByName('mapToggleText') as Phaser.GameObjects.Text;
+     const inventoryToggleText = this.gameContentContainer.getByName('inventoryToggleText') as Phaser.GameObjects.Text;
+     
+     const buttonText = this.currentView === 'main' ? 'LOOK DOWN' : 'LOOK UP';
+     
+     if (mapToggleText) {
+       mapToggleText.setText(buttonText);
+     }
+     if (inventoryToggleText) {
+       inventoryToggleText.setText(buttonText);
+     }
+   }
 
-  // Method to start the game (called from AppScene)
+      private updatePosition() {
+     // Update position based on reactive knobValue (-100 to 100)
+     const changeRate = this.knobValue / 100; // -1 to 1
+     
+     // Apply change rate to position (frame by frame) - increased speed
+     const speed = 2.0; // Increased speed multiplier
+     this.position += changeRate * speed;
+     
+     // Clamp position to 0-100%
+     this.position = Phaser.Math.Clamp(this.position, 0, 100);
+     
+     // Update position text
+     if (this.positionText) {
+       this.positionText.setText(`Position: ${Math.round(this.position)}%`);
+     }
+   }
+
+   private startKnobReturnTimer() {
+     this.stopKnobReturnTimer(); // Stop any existing timer
+     this.knobReturnTimer = this.time.addEvent({
+       delay: 16, // Update every 16ms (60fps) for smooth return
+       callback: this.updateKnobReturn,
+       callbackScope: this,
+       loop: true
+     });
+   }
+
+   private stopKnobReturnTimer() {
+     if (this.knobReturnTimer) {
+       this.knobReturnTimer.remove();
+       this.knobReturnTimer = null;
+     }
+   }
+
+   private updateKnobVisual() {
+     if (!this.frontseatDragDial) return;
+     
+     // Clear the knob graphics
+     this.frontseatDragDial.clear();
+     
+     const knobRadius = 60;
+     
+     // Draw the knob base
+     this.frontseatDragDial.fillStyle(0x666666);
+     this.frontseatDragDial.fillCircle(0, 0, knobRadius);
+     this.frontseatDragDial.lineStyle(3, 0xffffff, 1);
+     this.frontseatDragDial.strokeCircle(0, 0, knobRadius);
+     
+     // Draw the pointer rotated based on knobValue
+     const angle = (this.knobValue / 100) * Math.PI; // Convert to radians
+     const pointerLength = 20;
+     const pointerX = Math.cos(angle) * pointerLength;
+     const pointerY = Math.sin(angle) * pointerLength;
+     
+     this.frontseatDragDial.fillStyle(0x00ff00);
+     this.frontseatDragDial.fillRect(-3, -knobRadius + 10, 6, pointerLength);
+     
+     // Rotate the pointer
+     this.frontseatDragDial.setRotation(angle);
+   }
+
+   private updateKnobReturn() {
+     if (this.isKnobActive) return;
+     
+     // Gradually return knobValue to neutral (0)
+     const returnSpeed = 3; // Speed of return
+     
+     if (Math.abs(this.knobValue) > 1) {
+       // Move toward neutral
+       this.knobValue = this.knobValue > 0 ? 
+         Math.max(0, this.knobValue - returnSpeed) : 
+         Math.min(0, this.knobValue + returnSpeed);
+     } else {
+       // Close enough to neutral, set to 0 and stop timer
+       this.knobValue = 0;
+       this.stopKnobReturnTimer();
+     }
+     
+     // Update the knob visual to match the reactive value
+     this.updateKnobVisual();
+   }
+
+   private updateKnobVisual() {
+     if (!this.frontseatDragDial) return;
+     
+     // Clear the knob graphics
+     this.frontseatDragDial.clear();
+     
+     const knobRadius = 60;
+     
+     // Draw the knob base
+     this.frontseatDragDial.fillStyle(0x666666);
+     this.frontseatDragDial.fillCircle(0, 0, knobRadius);
+     this.frontseatDragDial.lineStyle(3, 0xffffff, 1);
+     this.frontseatDragDial.strokeCircle(0, 0, knobRadius);
+     
+     // Draw the pointer rotated based on knobValue
+     const angle = (this.knobValue / 100) * Math.PI; // Convert to radians
+     
+     this.frontseatDragDial.fillStyle(0x00ff00);
+     this.frontseatDragDial.fillRect(-3, -knobRadius + 10, 6, 20);
+     
+     // Rotate the pointer
+     this.frontseatDragDial.setRotation(angle);
+   }
+
+   // Method to start the game (called from AppScene)
   public startGame() {
     this.gameStarted = true;
     console.log('GameScene: Game started! Controls are now enabled.');
