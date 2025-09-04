@@ -705,6 +705,9 @@ export class GameScene extends Phaser.Scene {
    }
 
       private updatePosition() {
+     // Only update position if driving mode is active
+     if (!this.drivingMode) return;
+     
      // Update position based on reactive knobValue (-100 to 100)
      const changeRate = this.knobValue / 100; // -1 to 1
      
@@ -719,6 +722,9 @@ export class GameScene extends Phaser.Scene {
      if (this.positionText) {
        this.positionText.setText(`Position: ${Math.round(this.position)}%`);
      }
+     
+     // Update road position for OutRun-style effect
+     this.updateRoadPosition();
    }
 
    private startKnobReturnTimer() {
@@ -765,6 +771,23 @@ export class GameScene extends Phaser.Scene {
      this.frontseatDragDial.setRotation(angle);
    }
 
+   private updateRoadPosition() {
+     if (!this.drivingBackground || !this.drivingMode) return;
+     
+     // Calculate road offset based on position (0-100% maps to -200 to 200 pixels)
+     const maxOffset = 200;
+     const roadOffset = ((this.position - 50) / 50) * maxOffset; // Center at 50%
+     
+     // Move the entire driving background horizontally
+     this.drivingBackground.setX(roadOffset);
+     
+     // Update car position to stay centered on screen
+     if (this.drivingCar) {
+       const gameWidth = this.cameras.main.width;
+       this.drivingCar.setX(gameWidth / 2);
+     }
+   }
+
    private updateKnobReturn() {
      if (this.isKnobActive) return;
      
@@ -784,6 +807,23 @@ export class GameScene extends Phaser.Scene {
      
      // Update the knob visual to match the reactive value
      this.updateKnobVisual();
+   }
+
+   private updateRoadPosition() {
+     if (!this.drivingBackground || !this.drivingMode) return;
+     
+     // Calculate road offset based on position (0-100% maps to -200 to 200 pixels)
+     const maxOffset = 200;
+     const roadOffset = ((this.position - 50) / 50) * maxOffset; // Center at 50%
+     
+     // Move the entire driving background horizontally
+     this.drivingBackground.setX(roadOffset);
+     
+     // Update car position to stay centered on screen
+     if (this.drivingCar) {
+       const gameWidth = this.cameras.main.width;
+       this.drivingCar.setX(gameWidth / 2);
+     }
    }
 
    private updateKnobVisual() {
