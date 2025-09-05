@@ -749,8 +749,11 @@ export class GameScene extends Phaser.Scene {
       density: circleConfig.density
     });
     
-    // Set the scroll factor to make it stay fixed during camera movement
-    this.frontseatGravityCircle.setScrollFactor(0);
+    // Add to frontseat physics container so it moves naturally with the container
+    this.frontseatPhysicsContainer.add(this.frontseatGravityCircle);
+    
+    // Set the scroll factor to move horizontally with physics containers but stay vertically fixed
+    this.frontseatGravityCircle.setScrollFactor(1, 0);
     
     // Set depth to be visible but not interfere with UI
     this.frontseatGravityCircle.setDepth(1000);
@@ -1446,7 +1449,7 @@ export class GameScene extends Phaser.Scene {
         // Position debug borders
         if (this.frontseatDebugBorder) this.frontseatDebugBorder.setPosition(0, 0);
         if (this.backseatDebugBorder) this.backseatDebugBorder.setPosition(gameWidth, 0);
-        // Note: gravity circle stays in its current position - not repositioned
+        // Note: gravity circle maintains its current position - not repositioned
       } else {
         // In backseat view: frontseat at (-gameWidth,0), backseat at (0,0)
         this.frontseatPhysicsContainer.setPosition(-gameWidth, 0);
@@ -1454,7 +1457,7 @@ export class GameScene extends Phaser.Scene {
         // Position debug borders
         if (this.frontseatDebugBorder) this.frontseatDebugBorder.setPosition(-gameWidth, 0);
         if (this.backseatDebugBorder) this.backseatDebugBorder.setPosition(0, 0);
-        // Note: gravity circle stays in its current position - not repositioned
+        // Note: gravity circle maintains its current position - not repositioned
       }
     }
   }
