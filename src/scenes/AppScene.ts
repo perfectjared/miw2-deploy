@@ -115,6 +115,21 @@ export class AppScene extends Phaser.Scene {
     }
   }
 
+  public getStep(): number {
+    return this.step;
+  }
+
+  public setStep(step: number): void {
+    this.step = step;
+    this.stepText.setText(`Step: ${this.step}`);
+    
+    // Emit step event to GameScene to update any dependent systems
+    const gameScene = this.scene.get('GameScene');
+    if (gameScene) {
+      gameScene.events.emit('step', this.step);
+    }
+  }
+
   private togglePauseMenu() {
     if (!this.gameStarted) return; // Can't pause if game hasn't started
     

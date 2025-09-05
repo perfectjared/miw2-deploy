@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ConfigLoader, GameConfig } from '../config/ConfigLoader';
+import { SaveManager } from '../utils/SaveManager';
 
 // Base interface for physics objects
 interface PhysicsObject {
@@ -72,7 +73,7 @@ class Trash implements PhysicsObject {
     
     this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
       // Convert screen coordinates to container-relative coordinates for Trash
-      const containerX = this.scene.frontseatPhysicsContainer.x;
+      const containerX = (this.scene as any).frontseatPhysicsContainer.x;
       const relativeX = pointer.x - containerX;
       this.gameObject.x = relativeX;
       this.gameObject.y = pointer.y;
@@ -154,7 +155,7 @@ class Item implements PhysicsObject {
     
     this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
       // Convert screen coordinates to container-relative coordinates for Item
-      const containerX = this.scene.backseatPhysicsContainer.x;
+      const containerX = (this.scene as any).backseatPhysicsContainer.x;
       const relativeX = pointer.x - containerX;
       this.gameObject.x = relativeX;
       this.gameObject.y = pointer.y;
@@ -173,7 +174,12 @@ class Item implements PhysicsObject {
 
 export class GameScene extends Phaser.Scene {
   // Configuration
-  private config!: GameConfig;
+  private config!: GameConfig
+  
+  // Save system
+  private saveManager!: SaveManager;
+  private saveMenuShown: boolean = false;
+  private saveMenuElements: any = null;
   
   // Game state
    private currentPosition: string = 'frontseat'; // 'frontseat' or 'backseat'
@@ -253,6 +259,9 @@ export class GameScene extends Phaser.Scene {
     const configLoader = ConfigLoader.getInstance();
     this.config = await configLoader.loadConfig(this);
     
+    // Initialize save manager
+    this.saveManager = SaveManager.getInstance();
+    
     // Initialize game state with config values
     this.gameTime = this.config.gameTime.initial;
     this.money = this.config.playerStats.initialMoney;
@@ -303,6 +312,9 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'KeyD':
           this.toggleDebugBorders();
+          break;
+        case 'KeyF':
+          this.showSaveMenu();
           break;
       }
     });
@@ -993,8 +1005,7 @@ export class GameScene extends Phaser.Scene {
         const hasInteractiveObject = hitObjects.some(obj => 
           obj.input?.enabled || 
           obj.body || // Matter.js objects have a body
-          obj === this.frontseatDragDial ||
-          obj === this.backseatDragDial
+          obj === this.frontseatDragDial
         );
         if (hasInteractiveObject) return;
       }
@@ -1013,8 +1024,7 @@ export class GameScene extends Phaser.Scene {
         const hasInteractiveObject = hitObjects.some(obj => 
           obj.input?.enabled || 
           obj.body || // Matter.js objects have a body
-          obj === this.frontseatDragDial ||
-          obj === this.backseatDragDial
+          obj === this.frontseatDragDial
         );
         if (hasInteractiveObject) return;
       }
@@ -1618,6 +1628,192 @@ export class GameScene extends Phaser.Scene {
 
    public getDragDialValue(): number {
      return this.frontseatDragDial ? this.frontseatDragDial.value : 0;
+   }
+
+   // ===== SAVE SYSTEM =====
+   private showSaveMenu() {
+     // Prevent multiple dialogs from being created
+     if (this.saveMenuShown) return;
+     this.saveMenuShown = true;
+     
+     // Check if scene is still active before accessing cameras
+     if (!this.scene.isActive() || !this.cameras.main) {
+       console.log('Scene is no longer active, skipping save menu creation');
+       return;
+     }
+     
+     const gameWidth = this.cameras.main.width;
+     const gameHeight = this.cameras.main.height;
+     const centerX = gameWidth / 2;
+     const centerY = gameHeight / 2;
+     
+     // Create semi-transparent background overlay
+     const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
+     background.setScrollFactor(0);
+     background.setDepth(20000);
+     
+     // Create dialog box
+     const dialogWidth = 400;
+     const dialogHeight = 300;
+     const dialog = this.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x333333);
+     dialog.setStrokeStyle(3, 0xffffff);
+     dialog.setScrollFactor(0);
+     dialog.setDepth(20001);
+     
+     // Create title text
+     const titleText = this.add.text(centerX, centerY - 100, 'SAVE MENU', {
+       fontSize: '28px',
+       color: '#ffffff',
+       fontStyle: 'bold'
+     }).setOrigin(0.5);
+     titleText.setScrollFactor(0);
+     titleText.setDepth(20002);
+     
+     // Show current save info
+     const saveInfo = this.saveManager.getSaveInfo();
+     let infoText = 'No save data found';
+     if (saveInfo.exists) {
+       const saveDate = new Date(saveInfo.timestamp!).toLocaleString();
+       infoText = `Last save: ${saveDate}\nSteps: ${saveInfo.steps}`;
+     }
+     
+     const infoDisplay = this.add.text(centerX, centerY - 40, infoText, {
+       fontSize: '16px',
+       color: '#cccccc',
+       align: 'center'
+     }).setOrigin(0.5);
+     infoDisplay.setScrollFactor(0);
+     infoDisplay.setDepth(20002);
+     
+     // Create save button
+     const saveButton = this.add.text(centerX, centerY + 20, 'Save Game', {
+       fontSize: '20px',
+       color: '#ffffff',
+       backgroundColor: '#27ae60',
+       padding: { x: 15, y: 8 }
+     }).setOrigin(0.5);
+     saveButton.setScrollFactor(0);
+     saveButton.setDepth(20002);
+     saveButton.setInteractive();
+     
+     // Create load button
+     const loadButton = this.add.text(centerX, centerY + 60, 'Load Game', {
+       fontSize: '20px',
+       color: '#ffffff',
+       backgroundColor: '#3498db',
+       padding: { x: 15, y: 8 }
+     }).setOrigin(0.5);
+     loadButton.setScrollFactor(0);
+     loadButton.setDepth(20002);
+     loadButton.setInteractive();
+     
+     // Create clear save button
+     const clearButton = this.add.text(centerX, centerY + 100, 'Clear Save', {
+       fontSize: '20px',
+       color: '#ffffff',
+       backgroundColor: '#e74c3c',
+       padding: { x: 15, y: 8 }
+     }).setOrigin(0.5);
+     clearButton.setScrollFactor(0);
+     clearButton.setDepth(20002);
+     clearButton.setInteractive();
+     
+     // Create close button
+     const closeButton = this.add.text(centerX, centerY + 140, 'Close', {
+       fontSize: '18px',
+       color: '#ffffff',
+       backgroundColor: '#7f8c8d',
+       padding: { x: 15, y: 8 }
+     }).setOrigin(0.5);
+     closeButton.setScrollFactor(0);
+     closeButton.setDepth(20002);
+     closeButton.setInteractive();
+     
+     // Add click handlers
+     saveButton.on('pointerdown', () => {
+       this.saveGame();
+       this.hideSaveMenu();
+     });
+     
+     loadButton.on('pointerdown', () => {
+       this.loadGame();
+       this.hideSaveMenu();
+     });
+     
+     clearButton.on('pointerdown', () => {
+       this.clearSave();
+       this.hideSaveMenu();
+     });
+     
+     closeButton.on('pointerdown', () => {
+       this.hideSaveMenu();
+     });
+     
+     // Store references for cleanup
+     this.saveMenuElements = {
+       background,
+       dialog,
+       titleText,
+       infoDisplay,
+       saveButton,
+       loadButton,
+       clearButton,
+       closeButton
+     };
+     
+     console.log('Save menu created');
+   }
+
+   private hideSaveMenu() {
+     if (!this.saveMenuShown) return;
+     
+     // Remove all save menu elements
+     if (this.saveMenuElements) {
+       Object.values(this.saveMenuElements).forEach((element: any) => {
+         element.destroy();
+       });
+       this.saveMenuElements = null;
+     }
+     
+     this.saveMenuShown = false;
+     console.log('Save menu hidden');
+   }
+
+   private saveGame() {
+     // Get current steps from AppScene
+     const appScene = this.scene.get('AppScene') as any;
+     const currentSteps = appScene ? appScene.getStep() : 0;
+     
+     const success = this.saveManager.save(currentSteps);
+     if (success) {
+       console.log(`Game saved successfully with ${currentSteps} steps`);
+     } else {
+       console.error('Failed to save game');
+     }
+   }
+
+   private loadGame() {
+     const saveData = this.saveManager.load();
+     if (saveData) {
+       // Restore steps to AppScene
+       const appScene = this.scene.get('AppScene') as any;
+       if (appScene && appScene.setStep) {
+         appScene.setStep(saveData.steps);
+       }
+       
+       console.log(`Game loaded successfully with ${saveData.steps} steps`);
+     } else {
+       console.log('No save data to load');
+     }
+   }
+
+   private clearSave() {
+     const success = this.saveManager.clearSave();
+     if (success) {
+       console.log('Save data cleared successfully');
+     } else {
+       console.error('Failed to clear save data');
+     }
    }
 
    public setDragDialValue(value: number): void {
