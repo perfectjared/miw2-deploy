@@ -1,6 +1,11 @@
 import Phaser from 'phaser';
+import { ConfigLoader, GameConfig } from '../config/ConfigLoader';
 
 export class GameScene extends Phaser.Scene {
+  // Configuration
+  private config!: GameConfig;
+  
+  // Game state
    private currentPosition: string = 'frontseat'; // 'frontseat' or 'backseat'
    private currentView: string = 'main'; // 'main' or 'overlay'
    private gameTime: number = 99; // Starting time
@@ -28,8 +33,9 @@ export class GameScene extends Phaser.Scene {
    private frontseatPhysicsContainer!: Phaser.GameObjects.Container;
    private backseatPhysicsContainer!: Phaser.GameObjects.Container;
    private frontseatDragDial!: any; // RexUI drag dial
-   private drivingMode: boolean = false; // Track if driving mode is active
-   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
+     private drivingMode: boolean = false; // Track if driving mode is active
+  private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
+  private drivingPaused: boolean = false; // Track if driving is paused (for collision menus)
    private isKnobActive: boolean = false; // Track if knob is being interacted with
    private knobReturnTimer!: Phaser.Time.TimerEvent | null; // Timer for gradual return to center
    private currentSteeringValue: number = 0; // Current steering value for driving mode
@@ -51,12 +57,25 @@ export class GameScene extends Phaser.Scene {
   };
   private collisionTimer: Phaser.Time.TimerEvent | null = null;
   private pendingCollisionType: string | null = null;
+  private shouldAutoResumeAfterCollision: boolean = false;
 
   constructor() {
     super({ key: 'GameScene' });
   }
 
-  create() {
+  async create() {
+    // Load configuration first
+    const configLoader = ConfigLoader.getInstance();
+    this.config = await configLoader.loadConfig(this);
+    
+    // Initialize game state with config values
+    this.gameTime = this.config.gameTime.initial;
+    this.money = this.config.playerStats.initialMoney;
+    this.health = this.config.playerStats.initialHealth;
+    this.playerSkill = this.config.playerStats.initialSkill;
+    this.difficulty = this.config.playerStats.initialDifficulty;
+    this.momentum = this.config.playerStats.initialMomentum;
+    
     // Add game overlay text (always visible on top)
     const gameText = this.add.text(10, 40, 'GAME LAYER', {
       fontSize: '16px',
@@ -284,13 +303,13 @@ export class GameScene extends Phaser.Scene {
      const countdownX = gameWidth / 2;
      const countdownY = (gameHeight * 0.2) + (gameHeight * 0.08); // 20% (button) + 15% below
      
-     this.countdownText = this.add.text(countdownX, countdownY, '99', {
-       fontSize: '36px',
-       color: '#ffffff',
-       fontStyle: 'bold',
-       backgroundColor: '#000000',
-       padding: { x: 10, y: 5 }
-     }).setOrigin(0.5);
+         this.countdownText = this.add.text(countdownX, countdownY, this.gameTime.toString(), {
+      fontSize: this.config.ui.countdown.fontSize,
+      color: this.config.ui.countdown.color,
+      fontStyle: 'bold',
+      backgroundColor: this.config.ui.countdown.backgroundColor,
+      padding: this.config.ui.countdown.padding
+    }).setOrigin(0.5);
      
      // Make countdown text an overlay that doesn't move with camera
      this.countdownText.setScrollFactor(0);
@@ -358,9 +377,10 @@ export class GameScene extends Phaser.Scene {
        let knobValue = (angle * 180 / Math.PI) + 90; // Adjust so right is 0
        if (knobValue > 180) knobValue -= 360; // Wrap around
        
-       // Map to -100 to 100 range
-       this.knobValue = (knobValue / 180) * 100;
-       this.knobValue = Phaser.Math.Clamp(this.knobValue, -100, 100);
+             // Map to configured range
+      const maxAngle = this.config.driving.knob.maxAngle;
+      this.knobValue = (knobValue / 180) * 100;
+      this.knobValue = Phaser.Math.Clamp(this.knobValue, -maxAngle, maxAngle);
        
        // Update knob visual
        this.updateKnobVisual();
@@ -438,25 +458,25 @@ export class GameScene extends Phaser.Scene {
      const moneyX = 20;
      const moneyY = gameHeight - 40;
      
-     this.moneyText = this.add.text(moneyX, moneyY, `$${this.money}`, {
-       fontSize: '24px',
-       color: '#00ff00', // Green for money
-       fontStyle: 'bold',
-       backgroundColor: '#000000',
-       padding: { x: 8, y: 4 }
-     }).setOrigin(0, 0.5);
-     
-     // Position health text next to money
-     const healthX = moneyX + 120;
-     const healthY = moneyY;
-     
-     this.healthText = this.add.text(healthX, healthY, `Health: ${this.health * 10}%`, {
-       fontSize: '24px',
-       color: '#ff6600', // Orange for health
-       fontStyle: 'bold',
-       backgroundColor: '#000000',
-       padding: { x: 8, y: 4 }
-     }).setOrigin(0, 0.5);
+         this.moneyText = this.add.text(moneyX, moneyY, `$${this.money}`, {
+      fontSize: this.config.ui.money.fontSize,
+      color: this.config.ui.money.color,
+      fontStyle: 'bold',
+      backgroundColor: this.config.ui.money.backgroundColor,
+      padding: this.config.ui.money.padding
+    }).setOrigin(0, 0.5);
+    
+    // Position health text next to money
+    const healthX = moneyX + 120;
+    const healthY = moneyY;
+    
+    this.healthText = this.add.text(healthX, healthY, `Health: ${this.health * 10}%`, {
+      fontSize: this.config.ui.health.fontSize,
+      color: this.config.ui.health.color,
+      fontStyle: 'bold',
+      backgroundColor: this.config.ui.health.backgroundColor,
+      padding: this.config.ui.health.padding
+    }).setOrigin(0, 0.5);
      
      // Make money and health texts overlays that don't move with camera
      this.moneyText.setScrollFactor(0);
@@ -477,29 +497,29 @@ export class GameScene extends Phaser.Scene {
     
     // Player Skill text
     this.playerSkillText = this.add.text(statsX, statsY, `Skill: ${this.playerSkill}%`, {
-      fontSize: '18px',
-      color: '#00ffff', // Cyan for skill
+      fontSize: this.config.ui.stats.fontSize,
+      color: this.config.ui.stats.colors.skill,
       fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 6, y: 3 }
+      backgroundColor: this.config.ui.stats.backgroundColor,
+      padding: this.config.ui.stats.padding
     }).setOrigin(1, 0);
     
     // Difficulty text (below skill)
     this.difficultyText = this.add.text(statsX, statsY + 30, `Difficulty: ${this.difficulty}%`, {
-      fontSize: '18px',
-      color: '#ff00ff', // Magenta for difficulty
+      fontSize: this.config.ui.stats.fontSize,
+      color: this.config.ui.stats.colors.difficulty,
       fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 6, y: 3 }
+      backgroundColor: this.config.ui.stats.backgroundColor,
+      padding: this.config.ui.stats.padding
     }).setOrigin(1, 0);
     
     // Momentum text (below difficulty)
     this.momentumText = this.add.text(statsX, statsY + 60, `Momentum: ${this.momentum}%`, {
-      fontSize: '18px',
-      color: '#ffff00', // Yellow for momentum
+      fontSize: this.config.ui.stats.fontSize,
+      color: this.config.ui.stats.colors.momentum,
       fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 6, y: 3 }
+      backgroundColor: this.config.ui.stats.backgroundColor,
+      padding: this.config.ui.stats.padding
     }).setOrigin(1, 0);
     
     // Make stats texts overlays that don't move with camera
@@ -730,7 +750,7 @@ export class GameScene extends Phaser.Scene {
           targets: this.gameContentContainer,
           x: -gameWidth,
           y: 0, // Reset to main view
-          duration: 500,
+          duration: this.config.navigation.animationDuration,
           ease: 'Power2'
         });
         
@@ -740,7 +760,7 @@ export class GameScene extends Phaser.Scene {
             targets: this.drivingBackground,
             x: -gameWidth,
             y: 0, // Reset to main view
-            duration: 500,
+            duration: this.config.navigation.animationDuration,
             ease: 'Power2'
           });
         }
@@ -757,7 +777,7 @@ export class GameScene extends Phaser.Scene {
           targets: this.gameContentContainer,
           x: 0,
           y: 0, // Reset to main view
-          duration: 500,
+          duration: this.config.navigation.animationDuration,
           ease: 'Power2'
         });
        
@@ -767,7 +787,7 @@ export class GameScene extends Phaser.Scene {
            targets: this.drivingBackground,
            x: 0,
            y: 0, // Reset to main view
-           duration: 500,
+           duration: this.config.navigation.animationDuration,
            ease: 'Power2'
          });
        }
@@ -780,10 +800,10 @@ export class GameScene extends Phaser.Scene {
        private showOverlay(velocity?: number) {
       if (this.currentView === 'main') {
         // Move the entire content container down to show overlay
-        const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : 500;
+        const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : this.config.navigation.animationDuration;
         this.tweens.add({
           targets: this.gameContentContainer,
-          y: -320,
+          y: -this.config.navigation.overlayOffset,
           duration: duration,
           ease: 'Power2'
         });
@@ -792,7 +812,7 @@ export class GameScene extends Phaser.Scene {
        if (this.drivingBackground) {
          this.tweens.add({
            targets: this.drivingBackground,
-           y: -320,
+           y: -this.config.navigation.overlayOffset,
            duration: duration,
            ease: 'Power2'
          });
@@ -810,7 +830,7 @@ export class GameScene extends Phaser.Scene {
     private hideOverlay(velocity?: number) {
       if (this.currentView === 'overlay') {
         // Move the entire content container up to show main content
-        const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : 500;
+        const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : this.config.navigation.animationDuration;
         this.tweens.add({
           targets: this.gameContentContainer,
           y: 0,
@@ -887,9 +907,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-   private updatePosition() {
-     // Only update position if driving mode is active
-     if (!this.drivingMode) return;
+     private updatePosition() {
+    // Only update position if driving mode is active and not paused
+    if (!this.drivingMode || this.drivingPaused) return;
      
      // Update position based on reactive knobValue (-100 to 100)
      const changeRate = this.knobValue / 100; // -1 to 1
@@ -954,8 +974,8 @@ export class GameScene extends Phaser.Scene {
      this.frontseatDragDial.setRotation(angle);
    }
 
-   private updateRoadPosition() {
-     if (!this.drivingBackground || !this.drivingMode) return;
+     private updateRoadPosition() {
+    if (!this.drivingBackground || !this.drivingMode || this.drivingPaused) return;
      
      // Instead of moving the entire background, move the car within the view
      // Calculate car position based on position (0-100% maps to car bounds)
@@ -972,8 +992,8 @@ export class GameScene extends Phaser.Scene {
    private updateKnobReturn() {
      if (this.isKnobActive) return;
      
-     // Gradually return knobValue to neutral (0)
-     const returnSpeed = 3; // Speed of return
+         // Gradually return knobValue to neutral (0)
+    const returnSpeed = this.config.driving.knob.returnSpeed;
      
      if (Math.abs(this.knobValue) > 1) {
        // Move toward neutral
@@ -1140,10 +1160,16 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-   private onStepEvent(stepNumber: number) {
-     console.log(`GameScene received step event: ${stepNumber}`);
-     this.stepCountdown();
-   }
+     private onStepEvent(stepNumber: number) {
+    console.log(`GameScene received step event: ${stepNumber}`);
+    this.stepCountdown();
+    
+    // Check if we should auto-resume driving after collision
+    if (this.shouldAutoResumeAfterCollision && !this.drivingMode) {
+      console.log('Auto-resuming driving after collision...');
+      this.startDriving();
+    }
+  }
 
    private onGamePaused() {
      console.log('GameScene: Game paused - stopping driving visualization');
@@ -1265,9 +1291,29 @@ export class GameScene extends Phaser.Scene {
     
     // Update button text
     this.updateDrivingButtonText();
-   }
+     }
 
-   private startNeutralReturnTimer() {
+  private pauseDriving() {
+    console.log('Pausing driving...');
+    
+    // Set paused flag
+    this.drivingPaused = true;
+    
+    // Keep driving mode active but paused
+    // Don't update button text - we're just pausing
+  }
+
+  private resumeDriving() {
+    console.log('Resuming driving...');
+    
+    // Clear paused flag
+    this.drivingPaused = false;
+    
+    // Reset auto-resume flag
+    this.shouldAutoResumeAfterCollision = false;
+  }
+
+  private startNeutralReturnTimer() {
      // Create a timer that gradually returns knob to neutral position
      this.neutralReturnTimer = this.time.addEvent({
        delay: 50, // Update every 50ms for smooth return
@@ -1284,8 +1330,8 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-   private updateNeutralReturn() {
-     if (!this.drivingMode || !this.frontseatDragDial || this.isKnobActive) return;
+     private updateNeutralReturn() {
+    if (!this.drivingMode || !this.frontseatDragDial || this.isKnobActive || this.drivingPaused) return;
      
      // Gradually return to neutral position (0)
      const currentValue = this.frontseatDragDial.value;
@@ -1317,11 +1363,11 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-   private updateForwardMovement() {
-     if (!this.drivingMode) return;
+     private updateForwardMovement() {
+    if (!this.drivingMode || this.drivingPaused) return;
      
-     // Gradually increase car speed
-     this.carSpeed = Math.min(this.carSpeed + 0.1, 5); // Gradually accelerate to max speed
+         // Gradually increase car speed
+    this.carSpeed = Math.min(this.carSpeed + this.config.driving.carSpeed.acceleration, this.config.driving.carSpeed.maxSpeed);
      
          // Move road lines to create forward motion effect
     this.updateRoadLines();
@@ -1333,12 +1379,12 @@ export class GameScene extends Phaser.Scene {
     this.updateCarPosition();
    }
 
-   private updateCarPosition() {
-     if (!this.drivingMode || !this.drivingCar) return;
+     private updateCarPosition() {
+    if (!this.drivingMode || !this.drivingCar || this.drivingPaused) return;
      
-     // Use the current steering value to update car position
-     const normalizedValue = this.currentSteeringValue / 100;
-     const steeringSensitivity = 2; // Reduced sensitivity for smoother movement
+         // Use the current steering value to update car position
+    const normalizedValue = this.currentSteeringValue / 100;
+    const steeringSensitivity = this.config.driving.steering.sensitivity;
      
      // Update car position based on steering
      this.carX += normalizedValue * steeringSensitivity;
@@ -1452,33 +1498,33 @@ export class GameScene extends Phaser.Scene {
     let obstacle: Phaser.GameObjects.Rectangle;
     
     if (type === this.obstacleTypes.POTHOLE) {
-      // Pothole: 15% width, 2% height, always on right side, slow speed
-      const width = gameWidth * 0.15;
-      const height = gameHeight * 0.02;
-      const x = gameWidth * 0.75; // Right side of road
+      // Pothole: configured width/height percentages, always on right side, slow speed
+      const width = gameWidth * this.config.obstacles.pothole.width;
+      const height = gameHeight * this.config.obstacles.pothole.height;
+      const x = gameWidth * this.config.obstacles.pothole.position; // Right side of road
       const y = -height; // Start above screen
       
-      obstacle = this.add.rectangle(x, y, width, height, 0x8B4513); // Brown color
+      obstacle = this.add.rectangle(x, y, width, height, parseInt(this.config.obstacles.pothole.color));
       obstacle.setOrigin(0.5, 0);
       
       // Add obstacle properties
       (obstacle as any).type = type;
-      (obstacle as any).speed = 1; // Slow speed
+      (obstacle as any).speed = this.config.obstacles.pothole.speed;
       (obstacle as any).isBad = true;
       
     } else if (type === this.obstacleTypes.EXIT) {
-      // Exit: smaller, always on right side, very slow speed
-      const width = 30;
-      const height = 40;
-      const x = gameWidth * 0.75; // Right side of road
+      // Exit: configured size, always on right side, very slow speed
+      const width = this.config.obstacles.exit.width;
+      const height = this.config.obstacles.exit.height;
+      const x = gameWidth * this.config.obstacles.exit.position; // Right side of road
       const y = -height; // Start above screen
       
-      obstacle = this.add.rectangle(x, y, width, height, 0x00ff00); // Green color
+      obstacle = this.add.rectangle(x, y, width, height, parseInt(this.config.obstacles.exit.color));
       obstacle.setOrigin(0.5, 0);
       
       // Add obstacle properties
       (obstacle as any).type = type;
-      (obstacle as any).speed = 0.5; // Very slow speed
+      (obstacle as any).speed = this.config.obstacles.exit.speed;
       (obstacle as any).isBad = false;
       
     } else {
@@ -1493,7 +1539,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateObstacles() {
-    if (!this.drivingMode) return;
+    if (!this.drivingMode || this.drivingPaused) return;
     
     this.obstacles.forEach((obstacle, index) => {
       const speed = (obstacle as any).speed || 1;
@@ -1517,11 +1563,11 @@ export class GameScene extends Phaser.Scene {
 
   private startObstacleSpawning() {
     // Create obstacle spawning timers
-    // Potholes every 6 seconds
+    // Potholes at configured interval
     this.time.addEvent({
-      delay: 6000,
+      delay: this.config.obstacles.pothole.spawnInterval,
       callback: () => {
-        if (this.drivingMode) {
+        if (this.drivingMode && !this.drivingPaused) {
           this.createObstacle(this.obstacleTypes.POTHOLE);
         }
       },
@@ -1529,11 +1575,11 @@ export class GameScene extends Phaser.Scene {
       loop: true
     });
     
-    // Exits every 12 seconds
+    // Exits at configured interval
     this.time.addEvent({
-      delay: 12000,
+      delay: this.config.obstacles.exit.spawnInterval,
       callback: () => {
-        if (this.drivingMode) {
+        if (this.drivingMode && !this.drivingPaused) {
           this.createObstacle(this.obstacleTypes.EXIT);
         }
       },
@@ -1574,12 +1620,13 @@ export class GameScene extends Phaser.Scene {
       this.collisionTimer = null;
     }
     
-    // Set pending collision type
+    // Set pending collision type and auto-resume flag
     this.pendingCollisionType = obstacleType;
+    this.shouldAutoResumeAfterCollision = true;
     
-    // Start 3-second timer before showing menu
+    // Start configured delay timer before showing menu
     this.collisionTimer = this.time.addEvent({
-      delay: 3000,
+      delay: this.config.collision.menuDelay,
       callback: () => {
         this.showObstacleMenu(this.pendingCollisionType!);
         this.pendingCollisionType = null;
@@ -1590,8 +1637,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showObstacleMenu(obstacleType: string) {
-    // Stop driving when showing menu
-    this.stopDriving();
+    // Pause driving when showing menu (don't stop completely)
+    this.pauseDriving();
     
     console.log(`Showing ${obstacleType} menu`);
     
@@ -1660,6 +1707,11 @@ export class GameScene extends Phaser.Scene {
       titleTextObj.destroy();
       messageTextObj.destroy();
       continueButton.destroy();
+      
+      // Resume driving if auto-resume flag is set
+      if (this.shouldAutoResumeAfterCollision) {
+        this.resumeDriving();
+      }
       
       console.log(`${obstacleType} menu closed`);
     });

@@ -1,0 +1,82 @@
+{
+  "gameTime": {
+    "initial": 99,
+    "stepInterval": 1000
+  },
+  "playerStats": {
+    "initialMoney": 108,
+    "initialHealth": 10,
+    "initialSkill": 0,
+    "initialDifficulty": 0,
+    "initialMomentum": 0
+  },
+  "driving": {
+    "carSpeed": {
+      "acceleration": 0.1,
+      "maxSpeed": 5
+    },
+    "steering": {
+      "sensitivity": 2.0,
+      "returnSpeed": 2
+    },
+    "knob": {
+      "maxAngle": 45,
+      "returnSpeed": 3
+    }
+  },
+  "obstacles": {
+    "pothole": {
+      "spawnInterval": 6000,
+      "speed": 1,
+      "width": 0.15,
+      "height": 0.02,
+      "position": 0.75,
+      "color": "0x8B4513"
+    },
+    "exit": {
+      "spawnInterval": 12000,
+      "speed": 0.5,
+      "width": 30,
+      "height": 40,
+      "position": 0.75,
+      "color": "0x00ff00"
+    }
+  },
+  "ui": {
+    "countdown": {
+      "fontSize": "36px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 10, "y": 5 }
+    },
+    "stats": {
+      "fontSize": "18px",
+      "colors": {
+        "skill": "#00ffff",
+        "difficulty": "#ff00ff",
+        "momentum": "#ffff00"
+      },
+      "backgroundColor": "#000000",
+      "padding": { "x": 6, "y": 3 }
+    },
+    "money": {
+      "fontSize": "24px",
+      "color": "#00ff00",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 }
+    },
+    "health": {
+      "fontSize": "24px",
+      "color": "#ff6600",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 }
+    }
+  },
+  "collision": {
+    "menuDelay": 3000
+  },
+  "navigation": {
+    "animationDuration": 500,
+    "overlayOffset": 320
+  }
+}
