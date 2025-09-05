@@ -123,17 +123,28 @@ export interface GameConfig {
       x: number;
       y: number;
     };
-    frontseatCircle: {
-      radius: number;
-      x: number;
-      y: number;
-      restitution: number;
-      friction: number;
-      density: number;
-      color: string;
-      hoverColor: string;
-      dragColor: string;
-    };
+            frontseatCircle: {
+          radius: number;
+          x: number;
+          y: number;
+          restitution: number;
+          friction: number;
+          density: number;
+          color: string;
+          hoverColor: string;
+          dragColor: string;
+        };
+        backseatCircle: {
+          radius: number;
+          x: number;
+          y: number;
+          restitution: number;
+          friction: number;
+          density: number;
+          color: string;
+          hoverColor: string;
+          dragColor: string;
+        };
   };
 }
 
@@ -307,6 +318,17 @@ export class ConfigLoader {
           color: data.physics?.frontseatCircle?.color ?? '0xff6b6b',
           hoverColor: data.physics?.frontseatCircle?.hoverColor ?? '0xff9999',
           dragColor: data.physics?.frontseatCircle?.dragColor ?? '0xff3333',
+        },
+        backseatCircle: {
+          radius: data.physics?.backseatCircle?.radius ?? 20,
+          x: data.physics?.backseatCircle?.x ?? 200,
+          y: data.physics?.backseatCircle?.y ?? 120,
+          restitution: data.physics?.backseatCircle?.restitution ?? 0.6,
+          friction: data.physics?.backseatCircle?.friction ?? 0.2,
+          density: data.physics?.backseatCircle?.density ?? 0.002,
+          color: data.physics?.backseatCircle?.color ?? '0x6b6bff',
+          hoverColor: data.physics?.backseatCircle?.hoverColor ?? '0x9999ff',
+          dragColor: data.physics?.backseatCircle?.dragColor ?? '0x3333ff',
         },
       },
     };

@@ -106,16 +106,27 @@
       "x": 0,
       "y": 0.5
     },
-    "frontseatCircle": {
-      "radius": 25,
-      "x": 180,
-      "y": 100,
-      "restitution": 0.8,
-      "friction": 0.1,
-      "density": 0.001,
-      "color": "0xff6b6b",
-      "hoverColor": "0xff9999",
-      "dragColor": "0xff3333"
-    }
+            "frontseatCircle": {
+          "radius": 25,
+          "x": 180,
+          "y": 100,
+          "restitution": 0.8,
+          "friction": 0.1,
+          "density": 0.001,
+          "color": "0xff6b6b",
+          "hoverColor": "0xff9999",
+          "dragColor": "0xff3333"
+        },
+        "backseatCircle": {
+          "radius": 20,
+          "x": 200,
+          "y": 120,
+          "restitution": 0.6,
+          "friction": 0.2,
+          "density": 0.002,
+          "color": "0x6b6bff",
+          "hoverColor": "0x9999ff",
+          "dragColor": "0x3333ff"
+        }
   }
 }

@@ -1,6 +1,170 @@
 import Phaser from 'phaser';
 import { ConfigLoader, GameConfig } from '../config/ConfigLoader';
 
+// Base interface for physics objects
+interface PhysicsObject {
+  gameObject: Phaser.GameObjects.Arc;
+  setupDragInteraction(): void;
+}
+
+// Trash data type for frontseat
+class Trash implements PhysicsObject {
+  public gameObject!: Phaser.GameObjects.Arc;
+  private scene: Phaser.Scene;
+  private config: any;
+
+  constructor(scene: Phaser.Scene, config: any) {
+    this.scene = scene;
+    this.config = config;
+    this.createGameObject();
+    this.setupPhysics();
+    this.setupDragInteraction();
+  }
+
+  private createGameObject() {
+    this.gameObject = this.scene.add.circle(
+      this.config.x,
+      this.config.y,
+      this.config.radius,
+      parseInt(this.config.color.replace('0x', ''), 16)
+    );
+  }
+
+  private setupPhysics() {
+    this.scene.matter.add.gameObject(this.gameObject, {
+      shape: 'circle',
+      restitution: this.config.restitution,
+      friction: this.config.friction,
+      density: this.config.density
+    });
+  }
+
+  public setupDragInteraction() {
+    // Make the circle interactive
+    this.gameObject.setInteractive();
+    
+    // Store original color for reference
+    const originalColor = parseInt(this.config.color.replace('0x', ''), 16);
+    const hoverColor = parseInt(this.config.hoverColor.replace('0x', ''), 16);
+    const dragColor = parseInt(this.config.dragColor.replace('0x', ''), 16);
+    
+    // Hover effects
+    this.gameObject.on('pointerover', () => {
+      this.gameObject.setFillStyle(hoverColor);
+    });
+    
+    this.gameObject.on('pointerout', () => {
+      this.gameObject.setFillStyle(originalColor);
+    });
+    
+    // Drag functionality
+    this.gameObject.on('pointerdown', () => {
+      this.gameObject.setFillStyle(dragColor);
+      this.scene.input.setDraggable(this.gameObject);
+    });
+    
+    this.gameObject.on('dragstart', () => {
+      // Disable physics during drag
+      if (this.gameObject.body) {
+        (this.gameObject.body as any).isStatic = true;
+      }
+    });
+    
+    this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
+      this.gameObject.x = pointer.x;
+      this.gameObject.y = pointer.y;
+    });
+    
+    this.gameObject.on('dragend', () => {
+      // Re-enable physics and restore color
+      if (this.gameObject.body) {
+        (this.gameObject.body as any).isStatic = false;
+      }
+      this.gameObject.setFillStyle(originalColor);
+      this.scene.input.setDraggable(this.gameObject, false);
+    });
+  }
+}
+
+// Item data type for backseat
+class Item implements PhysicsObject {
+  public gameObject!: Phaser.GameObjects.Arc;
+  private scene: Phaser.Scene;
+  private config: any;
+
+  constructor(scene: Phaser.Scene, config: any) {
+    this.scene = scene;
+    this.config = config;
+    this.createGameObject();
+    this.setupPhysics();
+    this.setupDragInteraction();
+  }
+
+  private createGameObject() {
+    this.gameObject = this.scene.add.circle(
+      this.config.x,
+      this.config.y,
+      this.config.radius,
+      parseInt(this.config.color.replace('0x', ''), 16)
+    );
+  }
+
+  private setupPhysics() {
+    this.scene.matter.add.gameObject(this.gameObject, {
+      shape: 'circle',
+      restitution: this.config.restitution,
+      friction: this.config.friction,
+      density: this.config.density
+    });
+  }
+
+  public setupDragInteraction() {
+    // Make the circle interactive
+    this.gameObject.setInteractive();
+    
+    // Store original color for reference
+    const originalColor = parseInt(this.config.color.replace('0x', ''), 16);
+    const hoverColor = parseInt(this.config.hoverColor.replace('0x', ''), 16);
+    const dragColor = parseInt(this.config.dragColor.replace('0x', ''), 16);
+    
+    // Hover effects
+    this.gameObject.on('pointerover', () => {
+      this.gameObject.setFillStyle(hoverColor);
+    });
+    
+    this.gameObject.on('pointerout', () => {
+      this.gameObject.setFillStyle(originalColor);
+    });
+    
+    // Drag functionality
+    this.gameObject.on('pointerdown', () => {
+      this.gameObject.setFillStyle(dragColor);
+      this.scene.input.setDraggable(this.gameObject);
+    });
+    
+    this.gameObject.on('dragstart', () => {
+      // Disable physics during drag
+      if (this.gameObject.body) {
+        (this.gameObject.body as any).isStatic = true;
+      }
+    });
+    
+    this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
+      this.gameObject.x = pointer.x;
+      this.gameObject.y = pointer.y;
+    });
+    
+    this.gameObject.on('dragend', () => {
+      // Re-enable physics and restore color
+      if (this.gameObject.body) {
+        (this.gameObject.body as any).isStatic = false;
+      }
+      this.gameObject.setFillStyle(originalColor);
+      this.scene.input.setDraggable(this.gameObject, false);
+    });
+  }
+}
+
 export class GameScene extends Phaser.Scene {
   // Configuration
   private config!: GameConfig;
@@ -43,7 +207,10 @@ export class GameScene extends Phaser.Scene {
   private backseatPhysicsContainer!: Phaser.GameObjects.Container;
   private frontseatDebugBorder!: Phaser.GameObjects.Graphics;
   private backseatDebugBorder!: Phaser.GameObjects.Graphics;
-  private frontseatGravityCircle!: Phaser.GameObjects.Arc;
+  
+  // Physics object data types
+  private frontseatTrash!: Trash;
+  private backseatItem!: Item;
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -696,8 +863,11 @@ export class GameScene extends Phaser.Scene {
     // Add a test physics body to demonstrate the physics worlds
     this.addTestPhysicsBodies();
     
-    // Add gravity circle to frontseat physics world
-    this.addFrontseatGravityCircle();
+    // Add Trash object to frontseat physics world
+    this.addFrontseatTrash();
+    
+    // Add Item object to backseat physics world
+    this.addBackseatItem();
     
     // Create debug borders for physics worlds
     this.createDebugBorders();
@@ -730,88 +900,43 @@ export class GameScene extends Phaser.Scene {
          console.log('Test physics bodies added - Frontseat circle:', frontseatCircle, 'Backseat rectangle:', backseatRect);
   }
 
-  private addFrontseatGravityCircle() {
-    const circleConfig = this.config.physics.frontseatCircle;
+  private addFrontseatTrash() {
+    const trashConfig = this.config.physics.frontseatCircle;
     
-    // Create a Phaser GameObject with Matter.js physics body
-    this.frontseatGravityCircle = this.add.circle(
-      circleConfig.x, 
-      circleConfig.y, 
-      circleConfig.radius, 
-      parseInt(circleConfig.color.replace('0x', ''), 16)
-    );
-    
-    // Add Matter.js physics body to the circle
-    this.matter.add.gameObject(this.frontseatGravityCircle, {
-      shape: 'circle',
-      restitution: circleConfig.restitution,
-      friction: circleConfig.friction,
-      density: circleConfig.density
-    });
+    // Create Trash object
+    this.frontseatTrash = new Trash(this, trashConfig);
     
     // Add to frontseat physics container so it moves naturally with the container
-    this.frontseatPhysicsContainer.add(this.frontseatGravityCircle);
+    this.frontseatPhysicsContainer.add(this.frontseatTrash.gameObject);
     
     // Set the scroll factor to move horizontally with physics containers but stay vertically fixed
-    this.frontseatGravityCircle.setScrollFactor(1, 0);
+    this.frontseatTrash.gameObject.setScrollFactor(1, 0);
     
     // Set depth to be visible but not interfere with UI
-    this.frontseatGravityCircle.setDepth(1000);
+    this.frontseatTrash.gameObject.setDepth(1000);
     
-    // Add drag functionality
-    this.setupCircleDragInteraction();
-    
-    console.log('Frontseat gravity circle added:', this.frontseatGravityCircle);
+    console.log('Frontseat Trash added:', this.frontseatTrash);
   }
 
-  private setupCircleDragInteraction() {
-    const circleConfig = this.config.physics.frontseatCircle;
+  private addBackseatItem() {
+    const itemConfig = this.config.physics.backseatCircle;
     
-    // Make the circle interactive
-    this.frontseatGravityCircle.setInteractive();
+    // Create Item object
+    this.backseatItem = new Item(this, itemConfig);
     
-    // Store original color for reference
-    const originalColor = parseInt(circleConfig.color.replace('0x', ''), 16);
-    const hoverColor = parseInt(circleConfig.hoverColor.replace('0x', ''), 16);
-    const dragColor = parseInt(circleConfig.dragColor.replace('0x', ''), 16);
+    // Add to backseat physics container so it moves naturally with the container
+    this.backseatPhysicsContainer.add(this.backseatItem.gameObject);
     
-    // Hover events
-    this.frontseatGravityCircle.on('pointerover', () => {
-      this.frontseatGravityCircle.setFillStyle(hoverColor);
-    });
+    // Set the scroll factor to move horizontally with physics containers but stay vertically fixed
+    this.backseatItem.gameObject.setScrollFactor(1, 0);
     
-    this.frontseatGravityCircle.on('pointerout', () => {
-      this.frontseatGravityCircle.setFillStyle(originalColor);
-    });
+    // Set depth to be visible but not interfere with UI
+    this.backseatItem.gameObject.setDepth(1000);
     
-    // Drag events
-    this.frontseatGravityCircle.on('pointerdown', () => {
-      this.frontseatGravityCircle.setFillStyle(dragColor);
-      this.input.setDraggable(this.frontseatGravityCircle);
-    });
-    
-    this.frontseatGravityCircle.on('dragstart', () => {
-      // Disable physics during drag for smooth movement
-      if (this.frontseatGravityCircle.body) {
-        (this.frontseatGravityCircle.body as any).isStatic = true;
-      }
-    });
-    
-    this.frontseatGravityCircle.on('drag', (pointer: Phaser.Input.Pointer) => {
-      // Update position during drag
-      this.frontseatGravityCircle.x = pointer.x;
-      this.frontseatGravityCircle.y = pointer.y;
-    });
-    
-    this.frontseatGravityCircle.on('dragend', () => {
-      // Re-enable physics and restore color
-      if (this.frontseatGravityCircle.body) {
-        (this.frontseatGravityCircle.body as any).isStatic = false;
-      }
-      this.frontseatGravityCircle.setFillStyle(originalColor);
-      this.input.setDraggable(this.frontseatGravityCircle, false);
-    });
+    console.log('Backseat Item added:', this.backseatItem);
   }
+
+
 
   private createDebugBorders() {
     const gameWidth = this.cameras.main.width;
