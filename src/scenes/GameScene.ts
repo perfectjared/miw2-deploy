@@ -21,6 +21,9 @@ export class GameScene extends Phaser.Scene {
   private playerSkillText!: Phaser.GameObjects.Text;
   private difficultyText!: Phaser.GameObjects.Text;
   private momentumText!: Phaser.GameObjects.Text;
+  private plotAText!: Phaser.GameObjects.Text;
+  private plotBText!: Phaser.GameObjects.Text;
+  private plotCText!: Phaser.GameObjects.Text;
    private stops: number = 0;
    private progress: number = 0;
    private position: number = 50; // Position from 0-100%, starts at center (50%)
@@ -29,9 +32,18 @@ export class GameScene extends Phaser.Scene {
   private playerSkill: number = 0; // Player skill percentage: 0-100%
   private difficulty: number = 0; // Difficulty percentage: 0-100%
   private momentum: number = 0; // Momentum percentage: 0-100%
+  private plotA: number = 0; // Plot A percentage: 0-100%
+  private plotB: number = 0; // Plot B percentage: 0-100%
+  private plotC: number = 0; // Plot C percentage: 0-100%
+  private plotAEnum: string = 'intro'; // Plot A enumeration
+  private plotBEnum: string = 'intro'; // Plot B enumeration
+  private plotCEnum: string = 'intro'; // Plot C enumeration
    private knobValue: number = 0; // Reactive knob value (-100 to 100), starts at neutral (0)
-   private frontseatPhysicsContainer!: Phaser.GameObjects.Container;
-   private backseatPhysicsContainer!: Phaser.GameObjects.Container;
+     private frontseatPhysicsContainer!: Phaser.GameObjects.Container;
+  private backseatPhysicsContainer!: Phaser.GameObjects.Container;
+  private frontseatDebugBorder!: Phaser.GameObjects.Graphics;
+  private backseatDebugBorder!: Phaser.GameObjects.Graphics;
+  private frontseatGravityCircle!: Phaser.GameObjects.Arc;
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -75,6 +87,9 @@ export class GameScene extends Phaser.Scene {
     this.playerSkill = this.config.playerStats.initialSkill;
     this.difficulty = this.config.playerStats.initialDifficulty;
     this.momentum = this.config.playerStats.initialMomentum;
+    this.plotA = this.config.playerStats.initialPlotA;
+    this.plotB = this.config.playerStats.initialPlotB;
+    this.plotC = this.config.playerStats.initialPlotC;
     
     // Add game overlay text (always visible on top)
     const gameText = this.add.text(10, 40, 'GAME LAYER', {
@@ -112,6 +127,9 @@ export class GameScene extends Phaser.Scene {
           break;
         case 'ArrowUp':
           this.hideOverlay();
+          break;
+        case 'KeyD':
+          this.toggleDebugBorders();
           break;
       }
     });
@@ -443,11 +461,11 @@ export class GameScene extends Phaser.Scene {
      this.progressText.setDepth(1000);
      this.positionText.setDepth(1000);
      
-         // Create money and health text in bottom left
+         // Create player values text in bottom left (visible to player)
     this.createMoneyAndHealthText();
     
-    // Create player stats text in top right
-    this.createPlayerStatsText();
+    // Create manager values text in top right (hidden/internal values for game management)
+    this.createManagerValuesText();
    }
 
    private createMoneyAndHealthText() {
@@ -487,50 +505,96 @@ export class GameScene extends Phaser.Scene {
     this.healthText.setDepth(10000);
   }
 
-  private createPlayerStatsText() {
+  private createManagerValuesText() {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
     
-    // Position stats text in top right corner
+    // Manager values are internal game state values used for game logic
+    // These include: Skill, Difficulty, Momentum, Plot A/B/C
+    // They are displayed with smaller font and half opacity to indicate they're "hidden"
+    // Player values (Money, Health, Countdown) are displayed prominently for the player
+    
+    // Position manager values text in top right corner
     const statsX = gameWidth - 20;
     const statsY = 60;
     
     // Player Skill text
     this.playerSkillText = this.add.text(statsX, statsY, `Skill: ${this.playerSkill}%`, {
-      fontSize: this.config.ui.stats.fontSize,
-      color: this.config.ui.stats.colors.skill,
+      fontSize: this.config.ui.managerValues.fontSize,
+      color: this.config.ui.managerValues.colors.skill,
       fontStyle: 'bold',
-      backgroundColor: this.config.ui.stats.backgroundColor,
-      padding: this.config.ui.stats.padding
+      backgroundColor: this.config.ui.managerValues.backgroundColor,
+      padding: this.config.ui.managerValues.padding
     }).setOrigin(1, 0);
     
     // Difficulty text (below skill)
-    this.difficultyText = this.add.text(statsX, statsY + 30, `Difficulty: ${this.difficulty}%`, {
-      fontSize: this.config.ui.stats.fontSize,
-      color: this.config.ui.stats.colors.difficulty,
+    this.difficultyText = this.add.text(statsX, statsY + 25, `Difficulty: ${this.difficulty}%`, {
+      fontSize: this.config.ui.managerValues.fontSize,
+      color: this.config.ui.managerValues.colors.difficulty,
       fontStyle: 'bold',
-      backgroundColor: this.config.ui.stats.backgroundColor,
-      padding: this.config.ui.stats.padding
+      backgroundColor: this.config.ui.managerValues.backgroundColor,
+      padding: this.config.ui.managerValues.padding
     }).setOrigin(1, 0);
     
     // Momentum text (below difficulty)
-    this.momentumText = this.add.text(statsX, statsY + 60, `Momentum: ${this.momentum}%`, {
-      fontSize: this.config.ui.stats.fontSize,
-      color: this.config.ui.stats.colors.momentum,
+    this.momentumText = this.add.text(statsX, statsY + 50, `Momentum: ${this.momentum}%`, {
+      fontSize: this.config.ui.managerValues.fontSize,
+      color: this.config.ui.managerValues.colors.momentum,
       fontStyle: 'bold',
-      backgroundColor: this.config.ui.stats.backgroundColor,
-      padding: this.config.ui.stats.padding
+      backgroundColor: this.config.ui.managerValues.backgroundColor,
+      padding: this.config.ui.managerValues.padding
     }).setOrigin(1, 0);
     
-    // Make stats texts overlays that don't move with camera
+    // Plot A text (below momentum)
+    this.plotAText = this.add.text(statsX, statsY + 75, `Plot A (${this.plotAEnum}): ${this.plotA}%`, {
+      fontSize: this.config.ui.managerValues.fontSize,
+      color: this.config.ui.managerValues.colors.plotA,
+      fontStyle: 'bold',
+      backgroundColor: this.config.ui.managerValues.backgroundColor,
+      padding: this.config.ui.managerValues.padding
+    }).setOrigin(1, 0);
+    
+    // Plot B text (below plot A)
+    this.plotBText = this.add.text(statsX, statsY + 100, `Plot B (${this.plotBEnum}): ${this.plotB}%`, {
+      fontSize: this.config.ui.managerValues.fontSize,
+      color: this.config.ui.managerValues.colors.plotB,
+      fontStyle: 'bold',
+      backgroundColor: this.config.ui.managerValues.backgroundColor,
+      padding: this.config.ui.managerValues.padding
+    }).setOrigin(1, 0);
+    
+    // Plot C text (below plot B)
+    this.plotCText = this.add.text(statsX, statsY + 125, `Plot C (${this.plotCEnum}): ${this.plotC}%`, {
+      fontSize: this.config.ui.managerValues.fontSize,
+      color: this.config.ui.managerValues.colors.plotC,
+      fontStyle: 'bold',
+      backgroundColor: this.config.ui.managerValues.backgroundColor,
+      padding: this.config.ui.managerValues.padding
+    }).setOrigin(1, 0);
+    
+    // Make manager values texts overlays that don't move with camera
     this.playerSkillText.setScrollFactor(0);
     this.difficultyText.setScrollFactor(0);
     this.momentumText.setScrollFactor(0);
+    this.plotAText.setScrollFactor(0);
+    this.plotBText.setScrollFactor(0);
+    this.plotCText.setScrollFactor(0);
     
     // Set high depth to ensure they're always on top
     this.playerSkillText.setDepth(10000);
     this.difficultyText.setDepth(10000);
     this.momentumText.setDepth(10000);
+    this.plotAText.setDepth(10000);
+    this.plotBText.setDepth(10000);
+    this.plotCText.setDepth(10000);
+    
+    // Set half opacity for manager values
+    this.playerSkillText.setAlpha(this.config.ui.managerValues.opacity);
+    this.difficultyText.setAlpha(this.config.ui.managerValues.opacity);
+    this.momentumText.setAlpha(this.config.ui.managerValues.opacity);
+    this.plotAText.setAlpha(this.config.ui.managerValues.opacity);
+    this.plotBText.setAlpha(this.config.ui.managerValues.opacity);
+    this.plotCText.setAlpha(this.config.ui.managerValues.opacity);
   }
 
    private createDrivingGameButton() {
@@ -602,30 +666,44 @@ export class GameScene extends Phaser.Scene {
      }
    }
 
-   private setupPhysicsWorlds() {
-     const gameWidth = this.cameras.main.width;
-     const gameHeight = this.cameras.main.height;
-     
-     // Ensure Matter.js is properly initialized
-     if (!this.matter || !this.matter.world) {
-       console.error('Matter.js physics system not initialized');
-       return;
-     }
-     
-     // Create frontseat physics container (left side)
-     this.frontseatPhysicsContainer = this.add.container(0, 0);
-     
-     // Create backseat physics container (right side)
-     this.backseatPhysicsContainer = this.add.container(gameWidth, 0);
-     
-     // Set up the main Matter.js world bounds to accommodate both containers
-     this.matter.world.setBounds(0, 0, gameWidth * 2, gameHeight);
-     
-     // Add a test physics body to demonstrate the physics worlds
-     this.addTestPhysicsBodies();
-     
-     console.log('Physics containers created - Frontseat:', this.frontseatPhysicsContainer, 'Backseat:', this.backseatPhysicsContainer);
-   }
+     private setupPhysicsWorlds() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Ensure Matter.js is properly initialized
+    if (!this.matter || !this.matter.world) {
+      console.error('Matter.js physics system not initialized');
+      return;
+    }
+    
+    // Create frontseat physics container (left side)
+    this.frontseatPhysicsContainer = this.add.container(0, 0);
+    
+    // Create backseat physics container (right side)
+    this.backseatPhysicsContainer = this.add.container(gameWidth, 0);
+    
+    // Set physics containers to not move vertically with camera (only horizontally)
+    // This ensures they stay fixed vertically but can move horizontally when switching seats
+    this.frontseatPhysicsContainer.setScrollFactor(1, 0); // x=1 (normal horizontal scroll), y=0 (no vertical scroll)
+    this.backseatPhysicsContainer.setScrollFactor(1, 0); // x=1 (normal horizontal scroll), y=0 (no vertical scroll)
+    
+    // Set up the main Matter.js world bounds to accommodate both containers
+    this.matter.world.setBounds(0, 0, gameWidth * 2, gameHeight);
+    
+    // Set gravity from config
+    this.matter.world.setGravity(this.config.physics.gravity.x, this.config.physics.gravity.y);
+    
+    // Add a test physics body to demonstrate the physics worlds
+    this.addTestPhysicsBodies();
+    
+    // Add gravity circle to frontseat physics world
+    this.addFrontseatGravityCircle();
+    
+    // Create debug borders for physics worlds
+    this.createDebugBorders();
+    
+    console.log('Physics containers created - Frontseat:', this.frontseatPhysicsContainer, 'Backseat:', this.backseatPhysicsContainer);
+  }
 
    private addTestPhysicsBodies() {
      const gameWidth = this.cameras.main.width;
@@ -649,8 +727,120 @@ export class GameScene extends Phaser.Scene {
        friction: 0.2
      });
      
-     console.log('Test physics bodies added - Frontseat circle:', frontseatCircle, 'Backseat rectangle:', backseatRect);
-   }
+         console.log('Test physics bodies added - Frontseat circle:', frontseatCircle, 'Backseat rectangle:', backseatRect);
+  }
+
+  private addFrontseatGravityCircle() {
+    const circleConfig = this.config.physics.frontseatCircle;
+    
+    // Create a Phaser GameObject with Matter.js physics body
+    this.frontseatGravityCircle = this.add.circle(
+      circleConfig.x, 
+      circleConfig.y, 
+      circleConfig.radius, 
+      parseInt(circleConfig.color.replace('0x', ''), 16)
+    );
+    
+    // Add Matter.js physics body to the circle
+    this.matter.add.gameObject(this.frontseatGravityCircle, {
+      shape: 'circle',
+      restitution: circleConfig.restitution,
+      friction: circleConfig.friction,
+      density: circleConfig.density
+    });
+    
+    // Set the scroll factor to make it stay fixed during camera movement
+    this.frontseatGravityCircle.setScrollFactor(0);
+    
+    // Set depth to be visible but not interfere with UI
+    this.frontseatGravityCircle.setDepth(1000);
+    
+    // Add drag functionality
+    this.setupCircleDragInteraction();
+    
+    console.log('Frontseat gravity circle added:', this.frontseatGravityCircle);
+  }
+
+  private setupCircleDragInteraction() {
+    const circleConfig = this.config.physics.frontseatCircle;
+    
+    // Make the circle interactive
+    this.frontseatGravityCircle.setInteractive();
+    
+    // Store original color for reference
+    const originalColor = parseInt(circleConfig.color.replace('0x', ''), 16);
+    const hoverColor = parseInt(circleConfig.hoverColor.replace('0x', ''), 16);
+    const dragColor = parseInt(circleConfig.dragColor.replace('0x', ''), 16);
+    
+    // Hover events
+    this.frontseatGravityCircle.on('pointerover', () => {
+      this.frontseatGravityCircle.setFillStyle(hoverColor);
+    });
+    
+    this.frontseatGravityCircle.on('pointerout', () => {
+      this.frontseatGravityCircle.setFillStyle(originalColor);
+    });
+    
+    // Drag events
+    this.frontseatGravityCircle.on('pointerdown', () => {
+      this.frontseatGravityCircle.setFillStyle(dragColor);
+      this.input.setDraggable(this.frontseatGravityCircle);
+    });
+    
+    this.frontseatGravityCircle.on('dragstart', () => {
+      // Disable physics during drag for smooth movement
+      if (this.frontseatGravityCircle.body) {
+        (this.frontseatGravityCircle.body as any).isStatic = true;
+      }
+    });
+    
+    this.frontseatGravityCircle.on('drag', (pointer: Phaser.Input.Pointer) => {
+      // Update position during drag
+      this.frontseatGravityCircle.x = pointer.x;
+      this.frontseatGravityCircle.y = pointer.y;
+    });
+    
+    this.frontseatGravityCircle.on('dragend', () => {
+      // Re-enable physics and restore color
+      if (this.frontseatGravityCircle.body) {
+        (this.frontseatGravityCircle.body as any).isStatic = false;
+      }
+      this.frontseatGravityCircle.setFillStyle(originalColor);
+      this.input.setDraggable(this.frontseatGravityCircle, false);
+    });
+  }
+
+  private createDebugBorders() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Create red debug border for frontseat physics world
+    this.frontseatDebugBorder = this.add.graphics();
+    this.frontseatDebugBorder.lineStyle(3, 0xff0000, 1); // Red border, 3px thick
+    this.frontseatDebugBorder.strokeRect(0, 0, gameWidth, gameHeight);
+    this.frontseatDebugBorder.setScrollFactor(1, 0); // Same scroll factor as physics container
+    
+    // Create green debug border for backseat physics world
+    this.backseatDebugBorder = this.add.graphics();
+    this.backseatDebugBorder.lineStyle(3, 0x00ff00, 1); // Green border, 3px thick
+    this.backseatDebugBorder.strokeRect(gameWidth, 0, gameWidth, gameHeight);
+    this.backseatDebugBorder.setScrollFactor(1, 0); // Same scroll factor as physics container
+    
+    // Set high depth to ensure borders are visible
+    this.frontseatDebugBorder.setDepth(5000);
+    this.backseatDebugBorder.setDepth(5000);
+    
+    console.log('Debug borders created - Red (frontseat), Green (backseat)');
+  }
+
+  private toggleDebugBorders() {
+    if (this.frontseatDebugBorder && this.backseatDebugBorder) {
+      const visible = this.frontseatDebugBorder.visible;
+      this.frontseatDebugBorder.setVisible(!visible);
+      this.backseatDebugBorder.setVisible(!visible);
+      console.log(`Debug borders ${!visible ? 'shown' : 'hidden'}`);
+    }
+  }
 
     // ===== SWIPE CONTROLS =====
   private setupSwipeControls() {
@@ -765,6 +955,14 @@ export class GameScene extends Phaser.Scene {
           });
         }
         
+        // Move physics containers horizontally (not vertically)
+        this.tweens.add({
+          targets: [this.frontseatPhysicsContainer, this.backseatPhysicsContainer, this.frontseatDebugBorder, this.backseatDebugBorder],
+          x: -gameWidth, // Move both containers left
+          duration: this.config.navigation.animationDuration,
+          ease: 'Power2'
+        });
+        
         this.currentPosition = 'backseat';
         this.currentView = 'main';
       }
@@ -791,6 +989,14 @@ export class GameScene extends Phaser.Scene {
            ease: 'Power2'
          });
        }
+       
+       // Move physics containers horizontally (not vertically)
+       this.tweens.add({
+         targets: [this.frontseatPhysicsContainer, this.backseatPhysicsContainer, this.frontseatDebugBorder, this.backseatDebugBorder],
+         x: 0, // Move both containers back to original position
+         duration: this.config.navigation.animationDuration,
+         ease: 'Power2'
+       });
        
         this.currentPosition = 'frontseat';
         this.currentView = 'main';
@@ -904,6 +1110,30 @@ export class GameScene extends Phaser.Scene {
     this.momentum = Phaser.Math.Clamp(momentum, 0, 100); // Clamp between 0-100%
     if (this.momentumText) {
       this.momentumText.setText(`Momentum: ${this.momentum}%`);
+    }
+  }
+
+  private updatePlotA(plotA: number, plotAEnum?: string) {
+    this.plotA = Phaser.Math.Clamp(plotA, 0, 100);
+    if (plotAEnum) this.plotAEnum = plotAEnum;
+    if (this.plotAText) {
+      this.plotAText.setText(`Plot A (${this.plotAEnum}): ${this.plotA}%`);
+    }
+  }
+
+  private updatePlotB(plotB: number, plotBEnum?: string) {
+    this.plotB = Phaser.Math.Clamp(plotB, 0, 100);
+    if (plotBEnum) this.plotBEnum = plotBEnum;
+    if (this.plotBText) {
+      this.plotBText.setText(`Plot B (${this.plotBEnum}): ${this.plotB}%`);
+    }
+  }
+
+  private updatePlotC(plotC: number, plotCEnum?: string) {
+    this.plotC = Phaser.Math.Clamp(plotC, 0, 100);
+    if (plotCEnum) this.plotCEnum = plotCEnum;
+    if (this.plotCText) {
+      this.plotCText.setText(`Plot C (${this.plotCEnum}): ${this.plotC}%`);
     }
   }
 
@@ -1202,19 +1432,32 @@ export class GameScene extends Phaser.Scene {
           }
    }
 
-   private keepPhysicsContainersInPlace() {
-     // Ensure physics containers stay at their original positions
-     // Frontseat container should stay at (0, 0)
-     // Backseat container should stay at (gameWidth, 0)
-     const gameWidth = this.cameras.main.width;
-     
-     if (this.frontseatPhysicsContainer) {
-       this.frontseatPhysicsContainer.setPosition(0, 0);
-     }
-     if (this.backseatPhysicsContainer) {
-       this.backseatPhysicsContainer.setPosition(gameWidth, 0);
-     }
-   }
+     private keepPhysicsContainersInPlace() {
+    // Ensure physics containers stay at their original positions relative to current seat
+    // Frontseat container should stay at (0, 0) when in frontseat, (-gameWidth, 0) when in backseat
+    // Backseat container should stay at (gameWidth, 0) when in frontseat, (0, 0) when in backseat
+    const gameWidth = this.cameras.main.width;
+    
+    if (this.frontseatPhysicsContainer && this.backseatPhysicsContainer) {
+      if (this.currentPosition === 'frontseat') {
+        // In frontseat view: frontseat at (0,0), backseat at (gameWidth,0)
+        this.frontseatPhysicsContainer.setPosition(0, 0);
+        this.backseatPhysicsContainer.setPosition(gameWidth, 0);
+        // Position debug borders
+        if (this.frontseatDebugBorder) this.frontseatDebugBorder.setPosition(0, 0);
+        if (this.backseatDebugBorder) this.backseatDebugBorder.setPosition(gameWidth, 0);
+        // Note: gravity circle stays in its current position - not repositioned
+      } else {
+        // In backseat view: frontseat at (-gameWidth,0), backseat at (0,0)
+        this.frontseatPhysicsContainer.setPosition(-gameWidth, 0);
+        this.backseatPhysicsContainer.setPosition(0, 0);
+        // Position debug borders
+        if (this.frontseatDebugBorder) this.frontseatDebugBorder.setPosition(-gameWidth, 0);
+        if (this.backseatDebugBorder) this.backseatDebugBorder.setPosition(0, 0);
+        // Note: gravity circle stays in its current position - not repositioned
+      }
+    }
+  }
 
    public getDragDialValue(): number {
      return this.frontseatDragDial ? this.frontseatDragDial.value : 0;
@@ -1502,7 +1745,7 @@ export class GameScene extends Phaser.Scene {
       const width = gameWidth * this.config.obstacles.pothole.width;
       const height = gameHeight * this.config.obstacles.pothole.height;
       const x = gameWidth * this.config.obstacles.pothole.position; // Right side of road
-      const y = -height; // Start above screen
+      const y = gameHeight * this.config.obstacles.pothole.spawnY; // Spawn lower on screen
       
       obstacle = this.add.rectangle(x, y, width, height, parseInt(this.config.obstacles.pothole.color));
       obstacle.setOrigin(0.5, 0);
@@ -1517,7 +1760,7 @@ export class GameScene extends Phaser.Scene {
       const width = this.config.obstacles.exit.width;
       const height = this.config.obstacles.exit.height;
       const x = gameWidth * this.config.obstacles.exit.position; // Right side of road
-      const y = -height; // Start above screen
+      const y = gameHeight * this.config.obstacles.exit.spawnY; // Spawn lower on screen
       
       obstacle = this.add.rectangle(x, y, width, height, parseInt(this.config.obstacles.exit.color));
       obstacle.setOrigin(0.5, 0);
@@ -1534,6 +1777,9 @@ export class GameScene extends Phaser.Scene {
     // Add to driving background and obstacles array
     this.drivingBackground.add(obstacle);
     this.obstacles.push(obstacle);
+    
+    // Make obstacles persist during camera movement (don't move with camera)
+    obstacle.setScrollFactor(0);
     
     console.log(`Created ${type} obstacle at x:${obstacle.x}, y:${obstacle.y}`);
   }
@@ -1589,11 +1835,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private stopObstacleSpawning() {
-    // For now, just remove all events to stop spawning
-    // In a more complex system, we'd track individual timers
+    // Stop spawning new obstacles but keep existing ones on screen
     this.time.removeAllEvents();
     
-    console.log('Obstacle spawning stopped - obstacles remain on screen');
+    console.log('Obstacle spawning stopped - existing obstacles remain on screen');
   }
 
   // ===== COLLISION DETECTION =====
