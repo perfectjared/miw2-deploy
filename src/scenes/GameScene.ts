@@ -71,7 +71,10 @@ class Trash implements PhysicsObject {
     });
     
     this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
-      this.gameObject.x = pointer.x;
+      // Convert screen coordinates to container-relative coordinates for Trash
+      const containerX = this.scene.frontseatPhysicsContainer.x;
+      const relativeX = pointer.x - containerX;
+      this.gameObject.x = relativeX;
       this.gameObject.y = pointer.y;
     });
     
@@ -150,7 +153,10 @@ class Item implements PhysicsObject {
     });
     
     this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
-      this.gameObject.x = pointer.x;
+      // Convert screen coordinates to container-relative coordinates for Item
+      const containerX = this.scene.backseatPhysicsContainer.x;
+      const relativeX = pointer.x - containerX;
+      this.gameObject.x = relativeX;
       this.gameObject.y = pointer.y;
     });
     
@@ -980,6 +986,19 @@ export class GameScene extends Phaser.Scene {
       // Don't start swipe tracking if knob is being used
       if (this.isKnobActive) return;
       
+      // Don't start swipe tracking if clicking on an interactive object
+      const hitObjects = this.input.hitTestPointer(pointer);
+      if (hitObjects.length > 0) {
+        // Check if any hit object is interactive (Matter.js sprites, knob, etc.)
+        const hasInteractiveObject = hitObjects.some(obj => 
+          obj.input?.enabled || 
+          obj.body || // Matter.js objects have a body
+          obj === this.frontseatDragDial ||
+          obj === this.backseatDragDial
+        );
+        if (hasInteractiveObject) return;
+      }
+      
       startX = pointer.x;
       startY = pointer.y;
       startTime = Date.now();
@@ -987,6 +1006,18 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!this.gameStarted || this.isKnobActive) return;
+      
+      // Don't process swipe if clicking on an interactive object
+      const hitObjects = this.input.hitTestPointer(pointer);
+      if (hitObjects.length > 0) {
+        const hasInteractiveObject = hitObjects.some(obj => 
+          obj.input?.enabled || 
+          obj.body || // Matter.js objects have a body
+          obj === this.frontseatDragDial ||
+          obj === this.backseatDragDial
+        );
+        if (hasInteractiveObject) return;
+      }
       
       const endX = pointer.x;
       const endY = pointer.y;
@@ -1152,8 +1183,7 @@ export class GameScene extends Phaser.Scene {
          });
        }
        
-       // Keep physics containers in place - they don't move with the overlay
-       this.keepPhysicsContainersInPlace();
+       // Physics containers should NOT move with overlays - they stay in place
        
         this.currentView = 'overlay';
         this.updateToggleButtonText();
@@ -1182,8 +1212,7 @@ export class GameScene extends Phaser.Scene {
          });
        }
        
-       // Keep physics containers in place - they don't move with the overlay
-       this.keepPhysicsContainersInPlace();
+       // Physics containers should NOT move with overlays - they stay in place
        
         this.currentView = 'main';
         this.updateToggleButtonText();
