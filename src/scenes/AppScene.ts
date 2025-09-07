@@ -50,8 +50,10 @@ export class AppScene extends Phaser.Scene {
       }
     });
     
-    // Don't bring AppScene to top initially - let MenuScene show first
-    // this.scene.bringToTop('AppScene');
+    // Bring AppScene to top after a delay to ensure buttons are above driving background
+    this.time.delayedCall(200, () => {
+      this.scene.bringToTop('AppScene');
+    });
     
     // Note: Story scene will be launched on demand and brought to top
 
@@ -74,19 +76,25 @@ export class AppScene extends Phaser.Scene {
       }
     });
 
-    // Also try a different approach - add a clickable button to test
-    const testButton = this.add.text(10, 100, 'PAUSE', {
+    // Note: Pause and save buttons are now created in GameScene for proper layering
+
+    // Add pause button - positioned above driving view
+    const pauseButton = this.add.text(10, 100, 'PAUSE', {
       fontSize: '16px',
       color: '#ffffff',
       backgroundColor: '#0000ff',
       padding: { x: 10, y: 5 }
     });
-    testButton.setScrollFactor(0);
-    testButton.setDepth(25000);
-    testButton.setInteractive();
-    testButton.on('pointerdown', () => {
-      console.log('Pause button clicked');
+    pauseButton.setScrollFactor(0);
+    pauseButton.setDepth(30000); // High depth but not extreme
+    pauseButton.setInteractive({ useHandCursor: true });
+    pauseButton.on('pointerdown', () => {
+      pauseButton.setStyle({ backgroundColor: '#ff0000' }); // Visual feedback
       this.togglePauseMenu();
+    });
+    
+    pauseButton.on('pointerup', () => {
+      pauseButton.setStyle({ backgroundColor: '#0000ff' }); // Reset color
     });
 
     // Add save menu button next to pause button
@@ -97,11 +105,15 @@ export class AppScene extends Phaser.Scene {
       padding: { x: 10, y: 5 }
     });
     saveButton.setScrollFactor(0);
-    saveButton.setDepth(25000);
-    saveButton.setInteractive();
+    saveButton.setDepth(30000); // High depth but not extreme
+    saveButton.setInteractive({ useHandCursor: true });
     saveButton.on('pointerdown', () => {
-      console.log('Save button clicked');
+      saveButton.setStyle({ backgroundColor: '#ff0000' }); // Visual feedback
       this.showSaveMenu();
+    });
+    
+    saveButton.on('pointerup', () => {
+      saveButton.setStyle({ backgroundColor: '#27ae60' }); // Reset color
     });
 
     // Start the step timer (every 1000ms = 1 second) - but only when game is started
@@ -156,7 +168,8 @@ export class AppScene extends Phaser.Scene {
   }
 
   private togglePauseMenu() {
-    if (!this.gameStarted) return; // Can't pause if game hasn't started
+    console.log('togglePauseMenu called - gameStarted:', this.gameStarted, 'isPaused:', this.isPaused);
+    // Allow pause menu even if game hasn't started yet
     
     if (this.isPaused) {
       // Resume game
@@ -174,11 +187,15 @@ export class AppScene extends Phaser.Scene {
       console.log('Game paused');
       
       // Show pause menu via MenuScene
-      const menuScene = this.scene.get('MenuScene');
-      if (menuScene) {
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      // Add a small delay to ensure MenuScene is fully ready
+      this.time.delayedCall(50, () => {
         menuScene.events.emit('showPauseMenu');
+        // Bring MenuScene to top to ensure it's visible
         this.scene.bringToTop('MenuScene');
-      }
+      });
+    }
       
       // Emit pause event to GameScene
       const gameScene = this.scene.get('GameScene');
@@ -205,16 +222,24 @@ export class AppScene extends Phaser.Scene {
     if (gameScene) {
       (gameScene as any).startGame();
     }
+    
+    // Don't bring AppScene to top - let MenuScene be visible
+    // this.scene.bringToTop('AppScene');
   }
 
   // Method to show save menu (communicates with MenuScene)
   private showSaveMenu() {
-    if (!this.gameStarted) return; // Can't save if game hasn't started
+    console.log('showSaveMenu called - gameStarted:', this.gameStarted);
+    // Allow save menu even if game hasn't started yet
     
     const menuScene = this.scene.get('MenuScene');
     if (menuScene) {
-      menuScene.events.emit('showSaveMenu');
-      this.scene.bringToTop('MenuScene');
+      // Add a small delay to ensure MenuScene is fully ready
+      this.time.delayedCall(50, () => {
+        menuScene.events.emit('showSaveMenu');
+        // Bring MenuScene to top to ensure it's visible
+        this.scene.bringToTop('MenuScene');
+      });
     }
   }
 

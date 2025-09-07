@@ -97,6 +97,56 @@
   "collision": {
     "menuDelay": 3000
   },
+  "menus": {
+    "background": {
+      "color": "0x000000",
+      "alpha": 0.8
+    },
+    "depths": {
+      "background": 20000,
+      "content": 20001
+    },
+    "styles": {
+      "layerText": {
+        "fontSize": "16px",
+        "color": "#ff00ff",
+        "fontStyle": "bold",
+        "backgroundColor": "#000000",
+        "padding": { "x": 8, "y": 4 }
+      },
+      "title": {
+        "fontSize": "24px",
+        "color": "#ffffff",
+        "fontStyle": "bold"
+      },
+      "button": {
+        "fontSize": "18px",
+        "color": "#ffffff",
+        "fontStyle": "bold",
+        "backgroundColor": "#333333",
+        "padding": { "x": 20, "y": 10 }
+      },
+      "buttonHover": {
+        "backgroundColor": "#555555"
+      },
+      "bodyText": {
+        "fontSize": "16px",
+        "color": "#ffffff",
+        "align": "center"
+      },
+      "infoText": {
+        "fontSize": "14px",
+        "color": "#cccccc",
+        "align": "center"
+      }
+    },
+    "positions": {
+      "layerText": { "x": 10, "y": 190 },
+      "titleOffset": { "x": 0, "y": -60 },
+      "buttonSpacing": 60,
+      "buttonStartOffset": 20
+    }
+  },
   "navigation": {
     "animationDuration": 500,
     "overlayOffsetPercent": 0.33

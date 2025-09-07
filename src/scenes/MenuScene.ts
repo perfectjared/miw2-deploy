@@ -1,22 +1,32 @@
 import Phaser from 'phaser';
 import { SaveManager } from '../utils/SaveManager';
+import { MenuBuilder, MenuConfig } from '../utils/MenuBuilder';
+import { ConfigLoader, GameConfig } from '../config/ConfigLoader';
 
 export class MenuScene extends Phaser.Scene {
   private saveManager!: SaveManager;
-  private currentMenuElements: any = null;
+  private menuBuilder!: MenuBuilder;
+  private config!: GameConfig;
 
   constructor() {
     super({ key: 'MenuScene' });
   }
 
-  create() {
+  async create() {
     console.log('MenuScene create() called'); // Debug log
+    
+    // Load configuration
+    const configLoader = ConfigLoader.getInstance();
+    this.config = await configLoader.loadConfig(this);
     
     // Set up overlay camera for this scene
     this.setupOverlayCamera();
     
     // Initialize save manager
     this.saveManager = SaveManager.getInstance();
+    
+    // Initialize menu builder
+    this.menuBuilder = new MenuBuilder(this, this.config);
     
     // Listen for different menu events
     this.events.on('showObstacleMenu', this.showObstacleMenu, this);
@@ -43,13 +53,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private clearCurrentMenu() {
-    if (this.currentMenuElements) {
-      Object.values(this.currentMenuElements).forEach((element: any) => {
-        if (element && element.destroy) {
-          element.destroy();
-        }
-      });
-      this.currentMenuElements = null;
+    if (this.menuBuilder) {
+      this.menuBuilder.clearElements();
     }
   }
 
@@ -57,168 +62,92 @@ export class MenuScene extends Phaser.Scene {
     console.log('MenuScene: showStartMenu called');
     this.clearCurrentMenu();
     
+    const menuConfig: MenuConfig = {
+      layerText: 'MENU LAYER',
+      title: 'START GAME',
+      buttons: [
+        {
+          text: 'Start Game',
+          onClick: () => {
+            console.log('Start Game clicked!');
+            
+            // Start the game by calling AppScene's startGame method
+            const appScene = this.scene.get('AppScene');
+            if (appScene) {
+              (appScene as any).startGame();
+            }
+            
+            this.clearCurrentMenu();
+            // Don't sleep MenuScene - keep it active but empty
+            // this.scene.sleep('MenuScene');
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#27ae60'
+          }
+        }
+      ]
+    };
+
+    this.menuBuilder.createMenu(menuConfig);
+  }
+
+  private showPauseMenu() {
+    console.log('MenuScene: showPauseMenu called - received event!');
+    this.clearCurrentMenu();
+    
+    // Create a simple test menu to see if it's visible
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
     const centerX = gameWidth / 2;
     const centerY = gameHeight / 2;
 
-    // Add 80% transparent black background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
-    background.setScrollFactor(0);
-    background.setDepth(20000);
+    // Create a bright test background
+    const testBackground = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0xff0000, 0.8);
+    testBackground.setScrollFactor(0);
+    testBackground.setDepth(60000); // Very high depth
 
-    // Add menu layer text
-    const menuLayerText = this.add.text(10, 130, 'MENU LAYER', {
-      fontSize: '16px',
-      color: '#ff00ff',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    menuLayerText.setScrollFactor(0);
-    menuLayerText.setDepth(20001);
-
-    // Add title text
-    const titleText = this.add.text(centerX, centerY - 50, 'START GAME', {
+    // Create test text
+    const testText = this.add.text(centerX, centerY, 'PAUSE MENU TEST', {
       fontSize: '32px',
       color: '#ffffff',
       fontStyle: 'bold'
     });
-    titleText.setOrigin(0.5);
-    titleText.setScrollFactor(0);
-    titleText.setDepth(20001);
+    testText.setOrigin(0.5);
+    testText.setScrollFactor(0);
+    testText.setDepth(60001);
 
-    // Add start button
-    const startButton = this.add.text(centerX, centerY + 50, 'Start Game', {
+    // Create test button
+    const testButton = this.add.text(centerX, centerY + 50, 'RESUME', {
       fontSize: '24px',
-      color: '#ffffff',
-      backgroundColor: '#27ae60',
-      padding: { x: 15, y: 8 }
-    });
-    startButton.setOrigin(0.5);
-    startButton.setScrollFactor(0);
-    startButton.setDepth(20001);
-    startButton.setInteractive();
-    startButton.on('pointerdown', () => {
-      console.log('Start Game clicked!');
-      
-      // Start the game by calling AppScene's startGame method
-      const appScene = this.scene.get('AppScene');
-      if (appScene) {
-        (appScene as any).startGame();
-      }
-      
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
-    });
-
-    this.currentMenuElements = {
-      background,
-      menuLayerText,
-      titleText,
-      startButton
-    };
-  }
-
-  private showPauseMenu() {
-    console.log('MenuScene: showPauseMenu called');
-    this.clearCurrentMenu();
-    
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Add 80% transparent black background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
-    background.setScrollFactor(0);
-    background.setDepth(20000);
-
-    // Add pause menu layer text
-    const pauseLayerText = this.add.text(10, 160, 'PAUSE MENU LAYER', {
-      fontSize: '16px',
-      color: '#ff00ff',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    pauseLayerText.setScrollFactor(0);
-    pauseLayerText.setDepth(20001);
-
-    // Add title text
-    const titleText = this.add.text(centerX, centerY - 60, 'PAUSED', {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    titleText.setScrollFactor(0);
-    titleText.setDepth(20001);
-
-    // Add resume button
-    const resumeButton = this.add.text(centerX, centerY + 20, 'Resume', {
-      fontSize: '18px',
       color: '#ffffff',
       backgroundColor: '#008800',
       padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    resumeButton.setScrollFactor(0);
-    resumeButton.setDepth(20001);
-    resumeButton.setInteractive();
-    resumeButton.on('pointerdown', () => {
-      console.log('Resume clicked!');
+    });
+    testButton.setOrigin(0.5);
+    testButton.setScrollFactor(0);
+    testButton.setDepth(60001);
+    testButton.setInteractive();
+    testButton.on('pointerdown', () => {
+      console.log('Test Resume clicked!');
+      testBackground.destroy();
+      testText.destroy();
+      testButton.destroy();
       
-      // Resume the game by calling AppScene's togglePauseMenu method
+      // Resume the game
       const appScene = this.scene.get('AppScene');
       if (appScene) {
         (appScene as any).togglePauseMenu();
       }
-      
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
     });
 
-    this.currentMenuElements = {
-      background,
-      pauseLayerText,
-      titleText,
-      resumeButton
-    };
+    console.log('Test pause menu created with bright red background');
   }
 
   private showSaveMenu() {
-    console.log('MenuScene: showSaveMenu called');
+    console.log('MenuScene: showSaveMenu called - received event!');
     this.clearCurrentMenu();
     
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Add 80% transparent black background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
-    background.setScrollFactor(0);
-    background.setDepth(20000);
-
-    // Add save menu layer text
-    const saveLayerText = this.add.text(10, 190, 'SAVE MENU LAYER', {
-      fontSize: '16px',
-      color: '#ff00ff',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    saveLayerText.setScrollFactor(0);
-    saveLayerText.setDepth(20001);
-
-    // Add title text
-    const titleText = this.add.text(centerX, centerY - 100, 'SAVE MENU', {
-      fontSize: '28px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    titleText.setScrollFactor(0);
-    titleText.setDepth(20001);
-
     // Show current save info
     const saveInfo = this.saveManager.getSaveInfo();
     let infoText = 'No save data found';
@@ -227,184 +156,120 @@ export class MenuScene extends Phaser.Scene {
       infoText = `Last save: ${saveDate}\nSteps: ${saveInfo.steps}`;
     }
     
-    const infoDisplay = this.add.text(centerX, centerY - 40, infoText, {
-      fontSize: '16px',
-      color: '#cccccc',
-      align: 'center'
-    }).setOrigin(0.5);
-    infoDisplay.setScrollFactor(0);
-    infoDisplay.setDepth(20001);
-
-    // Add save button
-    const saveButton = this.add.text(centerX, centerY + 20, 'Save Game', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#27ae60',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    saveButton.setScrollFactor(0);
-    saveButton.setDepth(20001);
-    saveButton.setInteractive();
-
-    // Add load button
-    const loadButton = this.add.text(centerX, centerY + 60, 'Load Game', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#3498db',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    loadButton.setScrollFactor(0);
-    loadButton.setDepth(20001);
-    loadButton.setInteractive();
-
-    // Add clear save button
-    const clearButton = this.add.text(centerX, centerY + 100, 'Clear Save', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#e74c3c',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    clearButton.setScrollFactor(0);
-    clearButton.setDepth(20001);
-    clearButton.setInteractive();
-
-    // Add close button
-    const closeButton = this.add.text(centerX, centerY + 140, 'Close', {
-      fontSize: '18px',
-      color: '#ffffff',
-      backgroundColor: '#7f8c8d',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    closeButton.setScrollFactor(0);
-    closeButton.setDepth(20001);
-    closeButton.setInteractive();
-
-    // Add click handlers
-    saveButton.on('pointerdown', () => {
-      this.saveGame();
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
-    });
-    
-    loadButton.on('pointerdown', () => {
-      this.loadGame();
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
-    });
-    
-    clearButton.on('pointerdown', () => {
-      this.clearSave();
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
-    });
-    
-    closeButton.on('pointerdown', () => {
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
-    });
-
-    this.currentMenuElements = {
-      background,
-      saveLayerText,
-      titleText,
-      infoDisplay,
-      saveButton,
-      loadButton,
-      clearButton,
-      closeButton
+    const menuConfig: MenuConfig = {
+      layerText: 'SAVE MENU LAYER',
+      title: 'SAVE MENU',
+      texts: [
+        {
+          text: infoText,
+          y: this.cameras.main.height / 2 - 40,
+          style: this.config.menus.styles.infoText
+        }
+      ],
+      buttons: [
+        {
+          text: 'Save Game',
+          onClick: () => {
+            this.saveGame();
+            this.clearCurrentMenu();
+            // Don't sleep MenuScene - keep it active but empty
+            // this.scene.sleep('MenuScene');
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#27ae60'
+          }
+        },
+        {
+          text: 'Load Game',
+          onClick: () => {
+            this.loadGame();
+            this.clearCurrentMenu();
+            // Don't sleep MenuScene - keep it active but empty
+            // this.scene.sleep('MenuScene');
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#3498db'
+          }
+        },
+        {
+          text: 'Clear Save',
+          onClick: () => {
+            this.clearSave();
+            this.clearCurrentMenu();
+            // Don't sleep MenuScene - keep it active but empty
+            // this.scene.sleep('MenuScene');
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#e74c3c'
+          }
+        },
+        {
+          text: 'Close',
+          onClick: () => {
+            this.clearCurrentMenu();
+            // Don't sleep MenuScene - keep it active but empty
+            // this.scene.sleep('MenuScene');
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#7f8c8d'
+          }
+        }
+      ]
     };
+
+    this.menuBuilder.createMenu(menuConfig);
   }
 
   private showGameOverMenu() {
     this.clearCurrentMenu();
     
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Add 80% transparent black background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
-    background.setScrollFactor(0);
-    background.setDepth(20000);
-
-    // Add game over layer text
-    const gameOverLayerText = this.add.text(10, 190, 'GAME OVER LAYER', {
-      fontSize: '16px',
-      color: '#ff00ff',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    gameOverLayerText.setScrollFactor(0);
-    gameOverLayerText.setDepth(20001);
-
-    // Add "You Lost!" text
-    const gameOverText = this.add.text(centerX, centerY - 40, 'YOU LOST!', {
-      fontSize: '32px',
-      color: '#ff0000',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    gameOverText.setScrollFactor(0);
-    gameOverText.setDepth(20001);
-
-    // Add countdown text
-    const countdownText = this.add.text(centerX, centerY, 'Time ran out!', {
-      fontSize: '18px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    countdownText.setScrollFactor(0);
-    countdownText.setDepth(20001);
-
-    // Add restart button
-    const restartButton = this.add.text(centerX, centerY + 40, 'Restart Game', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#27ae60',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    restartButton.setScrollFactor(0);
-    restartButton.setDepth(20001);
-    restartButton.setInteractive();
-    restartButton.on('pointerdown', () => {
-      console.log('Restarting game via page reload...');
-      window.location.reload();
-    });
-
-    this.currentMenuElements = {
-      background,
-      gameOverLayerText,
-      gameOverText,
-      countdownText,
-      restartButton
+    const menuConfig: MenuConfig = {
+      layerText: 'GAME OVER LAYER',
+      texts: [
+        {
+          text: 'YOU LOST!',
+          y: this.cameras.main.height / 2 - 40,
+          style: {
+            ...this.config.menus.styles.title,
+            fontSize: '32px',
+            color: '#ff0000'
+          }
+        },
+        {
+          text: 'Time ran out!',
+          y: this.cameras.main.height / 2,
+          style: {
+            ...this.config.menus.styles.bodyText,
+            fontSize: '18px',
+            fontStyle: 'bold'
+          }
+        }
+      ],
+      buttons: [
+        {
+          text: 'Restart Game',
+          onClick: () => {
+            console.log('Restarting game via page reload...');
+            window.location.reload();
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#27ae60'
+          }
+        }
+      ]
     };
+
+    this.menuBuilder.createMenu(menuConfig);
   }
 
   private showObstacleMenu(obstacleType: string) {
     this.clearCurrentMenu();
     
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Add 80% transparent black background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
-    background.setScrollFactor(0);
-    background.setDepth(20000);
-
-    // Add obstacle menu layer text
-    const obstacleLayerText = this.add.text(10, 190, 'OBSTACLE MENU LAYER', {
-      fontSize: '16px',
-      color: '#ff00ff',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    obstacleLayerText.setScrollFactor(0);
-    obstacleLayerText.setDepth(20001);
-
     // Create obstacle-specific dialog
     let titleText = '';
     let messageText = '';
@@ -417,54 +282,41 @@ export class MenuScene extends Phaser.Scene {
       messageText = 'You found an exit!\n\nGood job!\nYou earned rewards.\n\nKeep up the good driving!';
     }
 
-    // Add title text
-    const titleTextObj = this.add.text(centerX, centerY - 60, titleText, {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    titleTextObj.setScrollFactor(0);
-    titleTextObj.setDepth(20001);
-
-    // Add message text
-    const messageTextObj = this.add.text(centerX, centerY, messageText, {
-      fontSize: '16px',
-      color: '#ffffff',
-      align: 'center'
-    }).setOrigin(0.5);
-    messageTextObj.setScrollFactor(0);
-    messageTextObj.setDepth(20001);
-
-    // Add continue button
-    const continueButton = this.add.text(centerX, centerY + 80, 'Continue', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#27ae60',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    continueButton.setScrollFactor(0);
-    continueButton.setDepth(20001);
-    continueButton.setInteractive();
-    continueButton.on('pointerdown', () => {
-      console.log('Continue clicked!');
-      
-      // Resume driving by calling GameScene's resumeDriving method
-      const gameScene = this.scene.get('GameScene');
-      if (gameScene) {
-        (gameScene as any).resumeDriving();
-      }
-      
-      this.clearCurrentMenu();
-      this.scene.sleep('MenuScene');
-    });
-
-    this.currentMenuElements = {
-      background,
-      obstacleLayerText,
-      titleTextObj,
-      messageTextObj,
-      continueButton
+    const menuConfig: MenuConfig = {
+      layerText: 'OBSTACLE MENU LAYER',
+      title: titleText,
+      texts: [
+        {
+          text: messageText,
+          y: this.cameras.main.height / 2,
+          style: this.config.menus.styles.bodyText
+        }
+      ],
+      buttons: [
+        {
+          text: 'Continue',
+          onClick: () => {
+            console.log('Continue clicked!');
+            
+            // Resume driving by calling GameScene's resumeDriving method
+            const gameScene = this.scene.get('GameScene');
+            if (gameScene) {
+              (gameScene as any).resumeDriving();
+            }
+            
+            this.clearCurrentMenu();
+            // Don't sleep MenuScene - keep it active but empty
+            // this.scene.sleep('MenuScene');
+          },
+          style: {
+            ...this.config.menus.styles.button,
+            backgroundColor: '#27ae60'
+          }
+        }
+      ]
     };
+
+    this.menuBuilder.createMenu(menuConfig);
   }
 
   private saveGame() {

@@ -2243,20 +2243,20 @@ export class GameScene extends Phaser.Scene {
      const gameWidth = this.cameras.main.width;
      const gameHeight = this.cameras.main.height;
      
-     // Create driving container that will move with the camera but stay behind UI
-     this.drivingBackground = this.add.container(0, 0);
-     this.drivingBackground.setDepth(-1000); // Behind UI elements but above other content
+    // Create driving container that will move with the camera but stay behind UI
+    this.drivingBackground = this.add.container(0, 0);
+    this.drivingBackground.setDepth(-10000); // Very low depth to ensure it's behind everything
      
          // Create sky
     const sky = this.add.rectangle(0, 0, gameWidth, gameHeight / 2, 0x87CEEB);
     sky.setOrigin(0);
-    sky.setDepth(-1000); // Ensure sky is behind UI
+    sky.setDepth(-10000); // Ensure sky is behind everything
     this.drivingBackground.add(sky);
      
          // Create road
     this.drivingRoad = this.add.rectangle(0, gameHeight / 2, gameWidth, gameHeight / 2, 0x333333);
     this.drivingRoad.setOrigin(0);
-    this.drivingRoad.setDepth(-1000); // Ensure road is behind UI
+    this.drivingRoad.setDepth(-10000); // Ensure road is behind everything
     this.drivingBackground.add(this.drivingRoad);
      
      // Create road lines - proper center lines like a real road
@@ -2268,7 +2268,7 @@ export class GameScene extends Phaser.Scene {
          // Create center line segments
     for (let y = centerLineY; y < gameHeight; y += lineGap + lineHeight) {
       const line = this.add.rectangle(gameWidth / 2, y, lineWidth, lineHeight, 0xffffff);
-      line.setDepth(-1000); // Ensure road lines are behind UI
+      line.setDepth(-10000); // Ensure road lines are behind everything
       this.drivingRoadLines.push(line);
       this.drivingBackground.add(line);
     }
@@ -2289,7 +2289,7 @@ export class GameScene extends Phaser.Scene {
          // Create car (simple rectangle for now)
     this.drivingCar = this.add.rectangle(gameWidth / 2, gameHeight - 80, 40, 20, 0xff0000);
     this.drivingCar.setOrigin(0.5);
-    this.drivingCar.setDepth(-1000); // Ensure car is behind UI
+    this.drivingCar.setDepth(-10000); // Ensure car is behind everything
     this.drivingBackground.add(this.drivingCar);
      
     // Initialize car position
@@ -2352,24 +2352,24 @@ export class GameScene extends Phaser.Scene {
     // Initially hide the tutorial overlay - it will be shown when conditions are met
     this.tutorialOverlay.setVisible(false);
     
-    console.log('Transparent overlay with circular cutout created, initially hidden');
+    //console.log('Transparent overlay with circular cutout created, initially hidden');
   }
 
   private updateTutorialOverlay() {
     if (!this.tutorialOverlay) {
-      console.log('Tutorial overlay not found');
+      //console.log('Tutorial overlay not found');
       return;
     }
     
     // Show simple grey overlay when keys are not snapped to magnetic target
     const shouldShowTutorial = !this.keysConstraint;
     
-    console.log('Keys constraint:', this.keysConstraint);
-    console.log('Should show tutorial:', shouldShowTutorial);
+    //console.log('Keys constraint:', this.keysConstraint);
+    //console.log('Should show tutorial:', shouldShowTutorial);
     
     this.tutorialOverlay.setVisible(shouldShowTutorial);
     
-    console.log('Tutorial overlay visibility:', shouldShowTutorial ? 'shown' : 'hidden');
+    //console.log('Tutorial overlay visibility:', shouldShowTutorial ? 'shown' : 'hidden');
   }
 
   private updateTutorialMask() {
@@ -2379,13 +2379,13 @@ export class GameScene extends Phaser.Scene {
     }
     
     if (!this.tutorialMaskGraphics) {
-      console.log('Tutorial mask graphics not found');
+      //console.log('Tutorial mask graphics not found');
       return;
     }
     
     const magneticConfig = this.config.physics.magneticTarget;
     
-    console.log('Updating tutorial mask with keys at:', this.frontseatKeys.gameObject.x, this.frontseatKeys.gameObject.y);
+    //console.log('Updating tutorial mask with keys at:', this.frontseatKeys.gameObject.x, this.frontseatKeys.gameObject.y);
     
     // Clear and redraw the mask with updated positions
     this.tutorialMaskGraphics.clear();
@@ -2413,7 +2413,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorialMaskGraphics.closePath();
     this.tutorialMaskGraphics.fill();
     
-    console.log('Mask updated with two cutouts');
+    //console.log('Mask updated with two cutouts');
   }
 
 
@@ -2424,7 +2424,7 @@ export class GameScene extends Phaser.Scene {
      // Convert steering wheel value (-100 to 100) to steering direction
      const normalizedValue = steeringValue / 100; // Convert to -1 to 1 range
      
-     console.log('Driving steering input:', normalizedValue);
+     //console.log('Driving steering input:', normalizedValue);
      
      if (normalizedValue < -0.1) {
        console.log('Driving LEFT:', Math.abs(normalizedValue));

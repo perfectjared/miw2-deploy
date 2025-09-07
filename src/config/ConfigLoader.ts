@@ -111,6 +111,58 @@ export interface GameConfig {
     menuDelay: number; // milliseconds
   };
   
+  // Menu system
+  menus: {
+    background: {
+      color: string;
+      alpha: number;
+    };
+    depths: {
+      background: number;
+      content: number;
+    };
+    styles: {
+      layerText: {
+        fontSize: string;
+        color: string;
+        fontStyle: string;
+        backgroundColor: string;
+        padding: { x: number; y: number };
+      };
+      title: {
+        fontSize: string;
+        color: string;
+        fontStyle: string;
+      };
+      button: {
+        fontSize: string;
+        color: string;
+        fontStyle: string;
+        backgroundColor: string;
+        padding: { x: number; y: number };
+      };
+      buttonHover: {
+        backgroundColor: string;
+      };
+      bodyText: {
+        fontSize: string;
+        color: string;
+        align: string;
+      };
+      infoText: {
+        fontSize: string;
+        color: string;
+        align: string;
+      };
+    };
+    positions: {
+      layerText: { x: number; y: number };
+      titleOffset: { x: number; y: number };
+      buttonSpacing: number;
+      buttonStartOffset: number;
+    };
+  };
+  
   // Camera and navigation
   navigation: {
     animationDuration: number;
@@ -317,6 +369,68 @@ export class ConfigLoader {
       },
       collision: {
         menuDelay: data.collision?.menuDelay ?? 1000,
+      },
+      menus: {
+        background: {
+          color: data.menus?.background?.color ?? '0x000000',
+          alpha: data.menus?.background?.alpha ?? 0.8,
+        },
+        depths: {
+          background: data.menus?.depths?.background ?? 20000,
+          content: data.menus?.depths?.content ?? 20001,
+        },
+        styles: {
+          layerText: {
+            fontSize: data.menus?.styles?.layerText?.fontSize ?? '16px',
+            color: data.menus?.styles?.layerText?.color ?? '#ff00ff',
+            fontStyle: data.menus?.styles?.layerText?.fontStyle ?? 'bold',
+            backgroundColor: data.menus?.styles?.layerText?.backgroundColor ?? '#000000',
+            padding: {
+              x: data.menus?.styles?.layerText?.padding?.x ?? 8,
+              y: data.menus?.styles?.layerText?.padding?.y ?? 4,
+            },
+          },
+          title: {
+            fontSize: data.menus?.styles?.title?.fontSize ?? '24px',
+            color: data.menus?.styles?.title?.color ?? '#ffffff',
+            fontStyle: data.menus?.styles?.title?.fontStyle ?? 'bold',
+          },
+          button: {
+            fontSize: data.menus?.styles?.button?.fontSize ?? '18px',
+            color: data.menus?.styles?.button?.color ?? '#ffffff',
+            fontStyle: data.menus?.styles?.button?.fontStyle ?? 'bold',
+            backgroundColor: data.menus?.styles?.button?.backgroundColor ?? '#333333',
+            padding: {
+              x: data.menus?.styles?.button?.padding?.x ?? 20,
+              y: data.menus?.styles?.button?.padding?.y ?? 10,
+            },
+          },
+          buttonHover: {
+            backgroundColor: data.menus?.styles?.buttonHover?.backgroundColor ?? '#555555',
+          },
+          bodyText: {
+            fontSize: data.menus?.styles?.bodyText?.fontSize ?? '16px',
+            color: data.menus?.styles?.bodyText?.color ?? '#ffffff',
+            align: data.menus?.styles?.bodyText?.align ?? 'center',
+          },
+          infoText: {
+            fontSize: data.menus?.styles?.infoText?.fontSize ?? '14px',
+            color: data.menus?.styles?.infoText?.color ?? '#cccccc',
+            align: data.menus?.styles?.infoText?.align ?? 'center',
+          },
+        },
+        positions: {
+          layerText: {
+            x: data.menus?.positions?.layerText?.x ?? 10,
+            y: data.menus?.positions?.layerText?.y ?? 190,
+          },
+          titleOffset: {
+            x: data.menus?.positions?.titleOffset?.x ?? 0,
+            y: data.menus?.positions?.titleOffset?.y ?? -60,
+          },
+          buttonSpacing: data.menus?.positions?.buttonSpacing ?? 60,
+          buttonStartOffset: data.menus?.positions?.buttonStartOffset ?? 20,
+        },
       },
       navigation: {
         animationDuration: data.navigation?.animationDuration ?? 500,
