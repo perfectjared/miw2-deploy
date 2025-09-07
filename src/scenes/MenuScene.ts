@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
+import { SaveManager } from '../utils/SaveManager';
 
 export class MenuScene extends Phaser.Scene {
+  private saveManager!: SaveManager;
+  private currentMenuElements: any = null;
+
   constructor() {
     super({ key: 'MenuScene' });
   }
@@ -11,158 +15,18 @@ export class MenuScene extends Phaser.Scene {
     // Set up overlay camera for this scene
     this.setupOverlayCamera();
     
-    // Listen for obstacle menu events
+    // Initialize save manager
+    this.saveManager = SaveManager.getInstance();
+    
+    // Listen for different menu events
     this.events.on('showObstacleMenu', this.showObstacleMenu, this);
+    this.events.on('showPauseMenu', this.showPauseMenu, this);
+    this.events.on('showSaveMenu', this.showSaveMenu, this);
+    this.events.on('showGameOverMenu', this.showGameOverMenu, this);
+    this.events.on('showStartMenu', this.showStartMenu, this);
     
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-
-    // Add a lightly opaque black background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.3);
-    background.setScrollFactor(0);
-    background.setDepth(9999); // Just below other menu elements
-
-    console.log('Creating modal at:', centerX, centerY); // Debug log
-
-    // Add a simple text to show the menu is working
-    const menuWorkingText = this.add.text(centerX, centerY - 50, 'MENU IS WORKING!', {
-      fontSize: '32px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    });
-    menuWorkingText.setOrigin(0.5);
-    menuWorkingText.setScrollFactor(0);
-    menuWorkingText.setDepth(10000);
-
-    // Try to create RexUI modal, but catch any errors
-    try {
-      console.log('Attempting to create RexUI modal...'); // Debug log
-      console.log('this.rexUI:', this.rexUI); // Debug what rexUI contains
-      console.log('this.rexUI.add:', this.rexUI.add); // Debug what add contains
-      console.log('Available methods on this.rexUI.add:', Object.keys(this.rexUI.add || {})); // Debug available methods
-      
-      // Create a simple RexUI label-based dialog
-      const dialog = this.rexUI.add.label({
-        x: centerX,
-        y: centerY,
-        width: 250,
-        height: 180,
-        background: this.add.rectangle(0, 0, 250, 180, 0x2c3e50),
-        text: this.add.text(0, 0, 'Start Game\n\nAre you ready to start the game?', {
-          fontSize: '18px',
-          color: '#ffffff',
-          align: 'center'
-        }),
-        space: {
-          left: 15,
-          right: 15,
-          top: 15,
-          bottom: 15
-        }
-      })
-      .setScrollFactor(0)
-      .setDepth(10000)
-      .layout();
-
-      // Add buttons as separate interactive elements
-      const cancelButton = this.add.text(centerX - 80, centerY + 60, 'Cancel', {
-        fontSize: '20px',
-        color: '#ffffff',
-        backgroundColor: '#e74c3c',
-        padding: { x: 10, y: 5 }
-      });
-      cancelButton.setOrigin(0.5);
-      cancelButton.setScrollFactor(0);
-      cancelButton.setDepth(10001);
-      cancelButton.setInteractive();
-      cancelButton.on('pointerdown', () => {
-        console.log('Cancel clicked!');
-        dialog.destroy();
-        cancelButton.destroy();
-        startButton.destroy();
-        this.scene.sleep('MenuScene');
-      });
-
-      const startButton = this.add.text(centerX + 80, centerY + 60, 'Start', {
-        fontSize: '20px',
-        color: '#ffffff',
-        backgroundColor: '#27ae60',
-        padding: { x: 10, y: 5 }
-      });
-      startButton.setOrigin(0.5);
-      startButton.setScrollFactor(0);
-      startButton.setDepth(10001);
-      startButton.setInteractive();
-      startButton.on('pointerdown', () => {
-        console.log('Start clicked!');
-        dialog.destroy();
-        cancelButton.destroy();
-        startButton.destroy();
-        
-        // Start the game by calling AppScene's startGame method
-        const appScene = this.scene.get('AppScene');
-        if (appScene) {
-          (appScene as any).startGame();
-        }
-        
-        this.scene.sleep('MenuScene');
-      });
-
-    console.log('RexUI dialog created successfully!'); // Debug log
-  } catch (error) {
-    console.error('Error creating RexUI modal:', error); // Debug log
-    
-    // Fallback: create simple buttons
-    const cancelButton = this.add.text(centerX - 80, centerY + 50, 'Cancel', {
-      fontSize: '24px',
-      color: '#ffffff',
-      backgroundColor: '#e74c3c',
-      padding: { x: 10, y: 5 }
-    });
-         cancelButton.setOrigin(0.5);
-     cancelButton.setScrollFactor(0);
-     cancelButton.setDepth(10000);
-    cancelButton.setInteractive();
-    cancelButton.on('pointerdown', () => {
-      console.log('Cancel clicked!');
-      this.scene.sleep('MenuScene');
-    });
-
-    const startButton = this.add.text(centerX + 80, centerY + 50, 'Start', {
-      fontSize: '24px',
-      color: '#ffffff',
-      backgroundColor: '#27ae60',
-      padding: { x: 10, y: 5 }
-    });
-         startButton.setOrigin(0.5);
-     startButton.setScrollFactor(0);
-     startButton.setDepth(10000);
-    startButton.setInteractive();
-         startButton.on('pointerdown', () => {
-       console.log('Start clicked!');
-       
-       // Start the game by calling AppScene's startGame method
-       const appScene = this.scene.get('AppScene');
-       if (appScene) {
-         (appScene as any).startGame();
-       }
-       
-       this.scene.sleep('MenuScene');
-     });
-  }
-
-    // Add menu overlay text
-    const menuText = this.add.text(10, 130, 'MENU LAYER', {
-      fontSize: '16px',
-      color: '#ff00ff',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-             menuText.setScrollFactor(0);
-    menuText.setDepth(10000);
+    // Don't create any default menu - wait for events
+    console.log('MenuScene ready - waiting for menu events');
   }
 
   private setupOverlayCamera() {
@@ -178,76 +42,465 @@ export class MenuScene extends Phaser.Scene {
     console.log('MenuScene: Overlay camera set up');
   }
 
-  private showObstacleMenu(obstacleType: string) {
-    console.log(`MenuScene: Showing ${obstacleType} menu`);
+  private clearCurrentMenu() {
+    if (this.currentMenuElements) {
+      Object.values(this.currentMenuElements).forEach((element: any) => {
+        if (element && element.destroy) {
+          element.destroy();
+        }
+      });
+      this.currentMenuElements = null;
+    }
+  }
+
+  private showStartMenu() {
+    console.log('MenuScene: showStartMenu called');
+    this.clearCurrentMenu();
     
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
     const centerX = gameWidth / 2;
     const centerY = gameHeight / 2;
-    
-    // Clear any existing menu content
-    this.children.removeAll();
-    
-    // Add background
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
+
+    // Add 80% transparent black background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
     background.setScrollFactor(0);
-    background.setDepth(9999);
+    background.setDepth(20000);
+
+    // Add menu layer text
+    const menuLayerText = this.add.text(10, 130, 'MENU LAYER', {
+      fontSize: '16px',
+      color: '#ff00ff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    menuLayerText.setScrollFactor(0);
+    menuLayerText.setDepth(20001);
+
+    // Add title text
+    const titleText = this.add.text(centerX, centerY - 50, 'START GAME', {
+      fontSize: '32px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    });
+    titleText.setOrigin(0.5);
+    titleText.setScrollFactor(0);
+    titleText.setDepth(20001);
+
+    // Add start button
+    const startButton = this.add.text(centerX, centerY + 50, 'Start Game', {
+      fontSize: '24px',
+      color: '#ffffff',
+      backgroundColor: '#27ae60',
+      padding: { x: 15, y: 8 }
+    });
+    startButton.setOrigin(0.5);
+    startButton.setScrollFactor(0);
+    startButton.setDepth(20001);
+    startButton.setInteractive();
+    startButton.on('pointerdown', () => {
+      console.log('Start Game clicked!');
+      
+      // Start the game by calling AppScene's startGame method
+      const appScene = this.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).startGame();
+      }
+      
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
+    });
+
+    this.currentMenuElements = {
+      background,
+      menuLayerText,
+      titleText,
+      startButton
+    };
+  }
+
+  private showPauseMenu() {
+    console.log('MenuScene: showPauseMenu called');
+    this.clearCurrentMenu();
     
-    // Create obstacle-specific dialog
-    let titleText = '';
-    let messageText = '';
-    let buttonText = '';
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+
+    // Add 80% transparent black background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
+    background.setScrollFactor(0);
+    background.setDepth(20000);
+
+    // Add pause menu layer text
+    const pauseLayerText = this.add.text(10, 160, 'PAUSE MENU LAYER', {
+      fontSize: '16px',
+      color: '#ff00ff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    pauseLayerText.setScrollFactor(0);
+    pauseLayerText.setDepth(20001);
+
+    // Add title text
+    const titleText = this.add.text(centerX, centerY - 60, 'PAUSED', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    titleText.setScrollFactor(0);
+    titleText.setDepth(20001);
+
+    // Add resume button
+    const resumeButton = this.add.text(centerX, centerY + 20, 'Resume', {
+      fontSize: '18px',
+      color: '#ffffff',
+      backgroundColor: '#008800',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    resumeButton.setScrollFactor(0);
+    resumeButton.setDepth(20001);
+    resumeButton.setInteractive();
+    resumeButton.on('pointerdown', () => {
+      console.log('Resume clicked!');
+      
+      // Resume the game by calling AppScene's togglePauseMenu method
+      const appScene = this.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).togglePauseMenu();
+      }
+      
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
+    });
+
+    this.currentMenuElements = {
+      background,
+      pauseLayerText,
+      titleText,
+      resumeButton
+    };
+  }
+
+  private showSaveMenu() {
+    console.log('MenuScene: showSaveMenu called');
+    this.clearCurrentMenu();
     
-    if (obstacleType === 'pothole') {
-      titleText = 'POTHOLE HIT!';
-      messageText = 'You hit a pothole!\n\nYour car took damage.\nHealth decreased.\n\nBe more careful next time!';
-      buttonText = 'Continue';
-    } else if (obstacleType === 'exit') {
-      titleText = 'EXIT REACHED!';
-      messageText = 'You found an exit!\n\nGood job!\nYou earned rewards.\n\nKeep up the good driving!';
-      buttonText = 'Continue';
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+
+    // Add 80% transparent black background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
+    background.setScrollFactor(0);
+    background.setDepth(20000);
+
+    // Add save menu layer text
+    const saveLayerText = this.add.text(10, 190, 'SAVE MENU LAYER', {
+      fontSize: '16px',
+      color: '#ff00ff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    saveLayerText.setScrollFactor(0);
+    saveLayerText.setDepth(20001);
+
+    // Add title text
+    const titleText = this.add.text(centerX, centerY - 100, 'SAVE MENU', {
+      fontSize: '28px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    titleText.setScrollFactor(0);
+    titleText.setDepth(20001);
+
+    // Show current save info
+    const saveInfo = this.saveManager.getSaveInfo();
+    let infoText = 'No save data found';
+    if (saveInfo.exists) {
+      const saveDate = new Date(saveInfo.timestamp!).toLocaleString();
+      infoText = `Last save: ${saveDate}\nSteps: ${saveInfo.steps}`;
     }
     
-    // Create RexUI dialog
-    const dialog = this.rexUI.add.label({
-      x: centerX,
-      y: centerY,
-      width: 350,
-      height: 220,
-      background: this.add.rectangle(0, 0, 350, 220, 0x2c3e50),
-      text: this.add.text(0, 0, `${titleText}\n\n${messageText}`, {
-        fontSize: '18px',
-        color: '#ffffff',
-        align: 'center'
-      }),
-      space: {
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: 20
-      }
+    const infoDisplay = this.add.text(centerX, centerY - 40, infoText, {
+      fontSize: '16px',
+      color: '#cccccc',
+      align: 'center'
     }).setOrigin(0.5);
-    
-    dialog.setScrollFactor(0);
-    dialog.setDepth(10000);
-    
-    // Add continue button
-    const continueButton = this.add.text(centerX, centerY + 80, buttonText, {
+    infoDisplay.setScrollFactor(0);
+    infoDisplay.setDepth(20001);
+
+    // Add save button
+    const saveButton = this.add.text(centerX, centerY + 20, 'Save Game', {
       fontSize: '20px',
       color: '#ffffff',
       backgroundColor: '#27ae60',
       padding: { x: 15, y: 8 }
     }).setOrigin(0.5);
-    
-    continueButton.setScrollFactor(0);
-    continueButton.setDepth(10001);
-    continueButton.setInteractive();
-    
-    continueButton.on('pointerdown', () => {
-      // Close the menu and return to game
-      this.scene.stop('MenuScene');
-      console.log(`${obstacleType} menu closed`);
+    saveButton.setScrollFactor(0);
+    saveButton.setDepth(20001);
+    saveButton.setInteractive();
+
+    // Add load button
+    const loadButton = this.add.text(centerX, centerY + 60, 'Load Game', {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#3498db',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    loadButton.setScrollFactor(0);
+    loadButton.setDepth(20001);
+    loadButton.setInteractive();
+
+    // Add clear save button
+    const clearButton = this.add.text(centerX, centerY + 100, 'Clear Save', {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#e74c3c',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    clearButton.setScrollFactor(0);
+    clearButton.setDepth(20001);
+    clearButton.setInteractive();
+
+    // Add close button
+    const closeButton = this.add.text(centerX, centerY + 140, 'Close', {
+      fontSize: '18px',
+      color: '#ffffff',
+      backgroundColor: '#7f8c8d',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    closeButton.setScrollFactor(0);
+    closeButton.setDepth(20001);
+    closeButton.setInteractive();
+
+    // Add click handlers
+    saveButton.on('pointerdown', () => {
+      this.saveGame();
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
     });
+    
+    loadButton.on('pointerdown', () => {
+      this.loadGame();
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
+    });
+    
+    clearButton.on('pointerdown', () => {
+      this.clearSave();
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
+    });
+    
+    closeButton.on('pointerdown', () => {
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
+    });
+
+    this.currentMenuElements = {
+      background,
+      saveLayerText,
+      titleText,
+      infoDisplay,
+      saveButton,
+      loadButton,
+      clearButton,
+      closeButton
+    };
+  }
+
+  private showGameOverMenu() {
+    this.clearCurrentMenu();
+    
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+
+    // Add 80% transparent black background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
+    background.setScrollFactor(0);
+    background.setDepth(20000);
+
+    // Add game over layer text
+    const gameOverLayerText = this.add.text(10, 190, 'GAME OVER LAYER', {
+      fontSize: '16px',
+      color: '#ff00ff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    gameOverLayerText.setScrollFactor(0);
+    gameOverLayerText.setDepth(20001);
+
+    // Add "You Lost!" text
+    const gameOverText = this.add.text(centerX, centerY - 40, 'YOU LOST!', {
+      fontSize: '32px',
+      color: '#ff0000',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    gameOverText.setScrollFactor(0);
+    gameOverText.setDepth(20001);
+
+    // Add countdown text
+    const countdownText = this.add.text(centerX, centerY, 'Time ran out!', {
+      fontSize: '18px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    countdownText.setScrollFactor(0);
+    countdownText.setDepth(20001);
+
+    // Add restart button
+    const restartButton = this.add.text(centerX, centerY + 40, 'Restart Game', {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#27ae60',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    restartButton.setScrollFactor(0);
+    restartButton.setDepth(20001);
+    restartButton.setInteractive();
+    restartButton.on('pointerdown', () => {
+      console.log('Restarting game via page reload...');
+      window.location.reload();
+    });
+
+    this.currentMenuElements = {
+      background,
+      gameOverLayerText,
+      gameOverText,
+      countdownText,
+      restartButton
+    };
+  }
+
+  private showObstacleMenu(obstacleType: string) {
+    this.clearCurrentMenu();
+    
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+
+    // Add 80% transparent black background
+    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.8);
+    background.setScrollFactor(0);
+    background.setDepth(20000);
+
+    // Add obstacle menu layer text
+    const obstacleLayerText = this.add.text(10, 190, 'OBSTACLE MENU LAYER', {
+      fontSize: '16px',
+      color: '#ff00ff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    obstacleLayerText.setScrollFactor(0);
+    obstacleLayerText.setDepth(20001);
+
+    // Create obstacle-specific dialog
+    let titleText = '';
+    let messageText = '';
+    
+    if (obstacleType === 'pothole') {
+      titleText = 'POTHOLE HIT!';
+      messageText = 'You hit a pothole!\n\nYour car took damage.\nHealth decreased.\n\nBe more careful next time!';
+    } else if (obstacleType === 'exit') {
+      titleText = 'EXIT REACHED!';
+      messageText = 'You found an exit!\n\nGood job!\nYou earned rewards.\n\nKeep up the good driving!';
+    }
+
+    // Add title text
+    const titleTextObj = this.add.text(centerX, centerY - 60, titleText, {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    titleTextObj.setScrollFactor(0);
+    titleTextObj.setDepth(20001);
+
+    // Add message text
+    const messageTextObj = this.add.text(centerX, centerY, messageText, {
+      fontSize: '16px',
+      color: '#ffffff',
+      align: 'center'
+    }).setOrigin(0.5);
+    messageTextObj.setScrollFactor(0);
+    messageTextObj.setDepth(20001);
+
+    // Add continue button
+    const continueButton = this.add.text(centerX, centerY + 80, 'Continue', {
+      fontSize: '20px',
+      color: '#ffffff',
+      backgroundColor: '#27ae60',
+      padding: { x: 15, y: 8 }
+    }).setOrigin(0.5);
+    continueButton.setScrollFactor(0);
+    continueButton.setDepth(20001);
+    continueButton.setInteractive();
+    continueButton.on('pointerdown', () => {
+      console.log('Continue clicked!');
+      
+      // Resume driving by calling GameScene's resumeDriving method
+      const gameScene = this.scene.get('GameScene');
+      if (gameScene) {
+        (gameScene as any).resumeDriving();
+      }
+      
+      this.clearCurrentMenu();
+      this.scene.sleep('MenuScene');
+    });
+
+    this.currentMenuElements = {
+      background,
+      obstacleLayerText,
+      titleTextObj,
+      messageTextObj,
+      continueButton
+    };
+  }
+
+  private saveGame() {
+    // Get current steps from AppScene
+    const appScene = this.scene.get('AppScene') as any;
+    const currentSteps = appScene ? appScene.getStep() : 0;
+    
+    const success = this.saveManager.save(currentSteps);
+    if (success) {
+      console.log(`Game saved successfully with ${currentSteps} steps`);
+    } else {
+      console.error('Failed to save game');
+    }
+  }
+
+  private loadGame() {
+    const saveData = this.saveManager.load();
+    if (saveData) {
+      // Restore steps to AppScene
+      const appScene = this.scene.get('AppScene') as any;
+      if (appScene && appScene.setStep) {
+        appScene.setStep(saveData.steps);
+      }
+      
+      console.log(`Game loaded successfully with ${saveData.steps} steps`);
+    } else {
+      console.log('No save data to load');
+    }
+  }
+
+  private clearSave() {
+    const success = this.saveManager.clearSave();
+    if (success) {
+      console.log('Save data cleared successfully');
+    } else {
+      console.error('Failed to clear save data');
+    }
   }
 }

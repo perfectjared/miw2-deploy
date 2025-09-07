@@ -58,20 +58,41 @@ class Trash implements PhysicsObject {
       this.gameObject.setFillStyle(originalColor);
     });
     
-    // Drag functionality
-    this.gameObject.on('pointerdown', () => {
-      this.gameObject.setFillStyle(dragColor);
-      this.scene.input.setDraggable(this.gameObject);
-    });
+    // Drag functionality - manual implementation with global tracking
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let velocityX = 0;
+    let velocityY = 0;
     
-    this.gameObject.on('dragstart', () => {
+    this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      console.log('Trash pointerdown - starting manual drag');
+      isDragging = true;
+      dragStartX = pointer.x;
+      dragStartY = pointer.y;
+      lastPointerX = pointer.x;
+      lastPointerY = pointer.y;
+      this.gameObject.setFillStyle(dragColor);
+      (this.scene as any).isDraggingObject = true;
+      
       // Disable physics during drag
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = true;
       }
     });
     
-    this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
+    // Use global pointer move instead of object-specific
+    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!isDragging) return;
+      
+      // Calculate velocity for momentum
+      velocityX = pointer.x - lastPointerX;
+      velocityY = pointer.y - lastPointerY;
+      lastPointerX = pointer.x;
+      lastPointerY = pointer.y;
+      
       // Convert screen coordinates to container-relative coordinates for Trash
       const containerX = (this.scene as any).frontseatPhysicsContainer.x;
       const relativeX = pointer.x - containerX;
@@ -79,13 +100,21 @@ class Trash implements PhysicsObject {
       this.gameObject.y = pointer.y;
     });
     
-    this.gameObject.on('dragend', () => {
-      // Re-enable physics and restore color
+    // Use global pointer up instead of object-specific
+    this.scene.input.on('pointerup', () => {
+      if (!isDragging) return;
+      
+      console.log('Trash pointerup - ending manual drag with momentum');
+      isDragging = false;
+      this.gameObject.setFillStyle(originalColor);
+      (this.scene as any).isDraggingObject = false;
+      
+      // Re-enable physics and apply momentum
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = false;
+        // Apply velocity as momentum
+        this.scene.matter.body.setVelocity(this.gameObject.body, { x: velocityX * 0.5, y: velocityY * 0.5 });
       }
-      this.gameObject.setFillStyle(originalColor);
-      this.scene.input.setDraggable(this.gameObject, false);
     });
   }
 }
@@ -140,20 +169,41 @@ class Item implements PhysicsObject {
       this.gameObject.setFillStyle(originalColor);
     });
     
-    // Drag functionality
-    this.gameObject.on('pointerdown', () => {
-      this.gameObject.setFillStyle(dragColor);
-      this.scene.input.setDraggable(this.gameObject);
-    });
+    // Drag functionality - manual implementation with global tracking
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let velocityX = 0;
+    let velocityY = 0;
     
-    this.gameObject.on('dragstart', () => {
+    this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      console.log('Item pointerdown - starting manual drag');
+      isDragging = true;
+      dragStartX = pointer.x;
+      dragStartY = pointer.y;
+      lastPointerX = pointer.x;
+      lastPointerY = pointer.y;
+      this.gameObject.setFillStyle(dragColor);
+      (this.scene as any).isDraggingObject = true;
+      
       // Disable physics during drag
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = true;
       }
     });
     
-    this.gameObject.on('drag', (pointer: Phaser.Input.Pointer) => {
+    // Use global pointer move instead of object-specific
+    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!isDragging) return;
+      
+      // Calculate velocity for momentum
+      velocityX = pointer.x - lastPointerX;
+      velocityY = pointer.y - lastPointerY;
+      lastPointerX = pointer.x;
+      lastPointerY = pointer.y;
+      
       // Convert screen coordinates to container-relative coordinates for Item
       const containerX = (this.scene as any).backseatPhysicsContainer.x;
       const relativeX = pointer.x - containerX;
@@ -161,13 +211,21 @@ class Item implements PhysicsObject {
       this.gameObject.y = pointer.y;
     });
     
-    this.gameObject.on('dragend', () => {
-      // Re-enable physics and restore color
+    // Use global pointer up instead of object-specific
+    this.scene.input.on('pointerup', () => {
+      if (!isDragging) return;
+      
+      console.log('Item pointerup - ending manual drag with momentum');
+      isDragging = false;
+      this.gameObject.setFillStyle(originalColor);
+      (this.scene as any).isDraggingObject = false;
+      
+      // Re-enable physics and apply momentum
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = false;
+        // Apply velocity as momentum
+        this.scene.matter.body.setVelocity(this.gameObject.body, { x: velocityX * 0.5, y: velocityY * 0.5 });
       }
-      this.gameObject.setFillStyle(originalColor);
-      this.scene.input.setDraggable(this.gameObject, false);
     });
   }
 }
@@ -228,6 +286,7 @@ export class GameScene extends Phaser.Scene {
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
   private drivingPaused: boolean = false; // Track if driving is paused (for collision menus)
    private isKnobActive: boolean = false; // Track if knob is being interacted with
+  private isDraggingObject: boolean = false; // Track if dragging a physics object
    private knobReturnTimer!: Phaser.Time.TimerEvent | null; // Timer for gradual return to center
    private currentSteeringValue: number = 0; // Current steering value for driving mode
    private drivingCar!: Phaser.GameObjects.Rectangle;
@@ -995,28 +1054,35 @@ export class GameScene extends Phaser.Scene {
     let startTime = 0;
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      // Don't start swipe tracking if knob is being used
-      if (this.isKnobActive) return;
+      // Don't start swipe tracking if knob is being used or dragging an object
+      if (this.isKnobActive || this.isDraggingObject) return;
       
-      // Don't start swipe tracking if clicking on an interactive object
+      // Check if clicking on interactive objects FIRST
       const hitObjects = this.input.hitTestPointer(pointer);
       if (hitObjects.length > 0) {
         // Check if any hit object is interactive (Matter.js sprites, knob, etc.)
         const hasInteractiveObject = hitObjects.some(obj => 
           obj.input?.enabled || 
           obj.body || // Matter.js objects have a body
-          obj === this.frontseatDragDial
+          obj === this.frontseatDragDial ||
+          obj === this.frontseatTrash?.gameObject ||
+          obj === this.backseatItem?.gameObject
         );
-        if (hasInteractiveObject) return;
+        if (hasInteractiveObject) {
+          console.log('Swipe detection blocked by interactive object - not starting swipe tracking');
+          return;
+        }
       }
       
+      // Only start swipe tracking if we're not clicking on interactive objects
       startX = pointer.x;
       startY = pointer.y;
       startTime = Date.now();
+      console.log('Swipe tracking started');
     });
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-      if (!this.gameStarted || this.isKnobActive) return;
+      if (!this.gameStarted || this.isKnobActive || this.isDraggingObject) return;
       
       // Don't process swipe if clicking on an interactive object
       const hitObjects = this.input.hitTestPointer(pointer);
@@ -1024,9 +1090,14 @@ export class GameScene extends Phaser.Scene {
         const hasInteractiveObject = hitObjects.some(obj => 
           obj.input?.enabled || 
           obj.body || // Matter.js objects have a body
-          obj === this.frontseatDragDial
+          obj === this.frontseatDragDial ||
+          obj === this.frontseatTrash?.gameObject ||
+          obj === this.backseatItem?.gameObject
         );
-        if (hasInteractiveObject) return;
+        if (hasInteractiveObject) {
+          console.log('Swipe detection blocked by interactive object on pointerup');
+          return;
+        }
       }
       
       const endX = pointer.x;
@@ -1482,68 +1553,14 @@ export class GameScene extends Phaser.Scene {
      if (this.gameOverDialogShown) return;
      this.gameOverDialogShown = true;
      
-     // Check if scene is still active before accessing cameras
-     if (!this.scene.isActive() || !this.cameras.main) {
-       console.log('Scene is no longer active, skipping dialog creation');
-       return;
+     // Show game over menu via MenuScene
+     const menuScene = this.scene.get('MenuScene');
+     if (menuScene) {
+       menuScene.events.emit('showGameOverMenu');
+       this.scene.bringToTop('MenuScene');
      }
      
-     const gameWidth = this.cameras.main.width;
-     const gameHeight = this.cameras.main.height;
-     const centerX = gameWidth / 2;
-     const centerY = gameHeight / 2;
-     
-     // Create semi-transparent background overlay
-     const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
-     background.setScrollFactor(0);
-     background.setDepth(20000);
-     
-     // Create dialog box
-     const dialogWidth = 300;
-     const dialogHeight = 200;
-     const dialog = this.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x333333);
-     dialog.setStrokeStyle(3, 0xffffff);
-     dialog.setScrollFactor(0);
-     dialog.setDepth(20001);
-     
-     // Create "You Lost!" text
-     const gameOverText = this.add.text(centerX, centerY - 40, 'YOU LOST!', {
-       fontSize: '32px',
-       color: '#ff0000',
-       fontStyle: 'bold'
-     }).setOrigin(0.5);
-     gameOverText.setScrollFactor(0);
-     gameOverText.setDepth(20002);
-     
-     // Create countdown text
-     const countdownText = this.add.text(centerX, centerY, 'Time ran out!', {
-       fontSize: '18px',
-       color: '#ffffff',
-       fontStyle: 'bold'
-     }).setOrigin(0.5);
-     countdownText.setScrollFactor(0);
-     countdownText.setDepth(20002);
-     
-     // Create restart button
-     const restartButton = this.add.text(centerX, centerY + 40, 'Restart Game', {
-       fontSize: '20px',
-       color: '#ffffff',
-       backgroundColor: '#27ae60',
-       padding: { x: 15, y: 8 }
-     }).setOrigin(0.5);
-     restartButton.setScrollFactor(0);
-     restartButton.setDepth(20002);
-     restartButton.setInteractive();
-     
-     // Add click handler for restart
-     restartButton.on('pointerdown', () => {
-       console.log('Restarting game via page reload...');
-       
-       // Simple page reload for complete reset
-       window.location.reload();
-     });
-     
-     console.log('Game Over dialog created');
+     console.log('Game Over dialog shown');
    }
 
    // Public method to trigger a countdown step
@@ -1631,188 +1648,12 @@ export class GameScene extends Phaser.Scene {
    }
 
    // ===== SAVE SYSTEM =====
-   private showSaveMenu() {
-     // Prevent multiple dialogs from being created
-     if (this.saveMenuShown) return;
-     this.saveMenuShown = true;
-     
-     // Check if scene is still active before accessing cameras
-     if (!this.scene.isActive() || !this.cameras.main) {
-       console.log('Scene is no longer active, skipping save menu creation');
-       return;
-     }
-     
-     const gameWidth = this.cameras.main.width;
-     const gameHeight = this.cameras.main.height;
-     const centerX = gameWidth / 2;
-     const centerY = gameHeight / 2;
-     
-     // Create semi-transparent background overlay
-     const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
-     background.setScrollFactor(0);
-     background.setDepth(20000);
-     
-     // Create dialog box
-     const dialogWidth = 400;
-     const dialogHeight = 300;
-     const dialog = this.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x333333);
-     dialog.setStrokeStyle(3, 0xffffff);
-     dialog.setScrollFactor(0);
-     dialog.setDepth(20001);
-     
-     // Create title text
-     const titleText = this.add.text(centerX, centerY - 100, 'SAVE MENU', {
-       fontSize: '28px',
-       color: '#ffffff',
-       fontStyle: 'bold'
-     }).setOrigin(0.5);
-     titleText.setScrollFactor(0);
-     titleText.setDepth(20002);
-     
-     // Show current save info
-     const saveInfo = this.saveManager.getSaveInfo();
-     let infoText = 'No save data found';
-     if (saveInfo.exists) {
-       const saveDate = new Date(saveInfo.timestamp!).toLocaleString();
-       infoText = `Last save: ${saveDate}\nSteps: ${saveInfo.steps}`;
-     }
-     
-     const infoDisplay = this.add.text(centerX, centerY - 40, infoText, {
-       fontSize: '16px',
-       color: '#cccccc',
-       align: 'center'
-     }).setOrigin(0.5);
-     infoDisplay.setScrollFactor(0);
-     infoDisplay.setDepth(20002);
-     
-     // Create save button
-     const saveButton = this.add.text(centerX, centerY + 20, 'Save Game', {
-       fontSize: '20px',
-       color: '#ffffff',
-       backgroundColor: '#27ae60',
-       padding: { x: 15, y: 8 }
-     }).setOrigin(0.5);
-     saveButton.setScrollFactor(0);
-     saveButton.setDepth(20002);
-     saveButton.setInteractive();
-     
-     // Create load button
-     const loadButton = this.add.text(centerX, centerY + 60, 'Load Game', {
-       fontSize: '20px',
-       color: '#ffffff',
-       backgroundColor: '#3498db',
-       padding: { x: 15, y: 8 }
-     }).setOrigin(0.5);
-     loadButton.setScrollFactor(0);
-     loadButton.setDepth(20002);
-     loadButton.setInteractive();
-     
-     // Create clear save button
-     const clearButton = this.add.text(centerX, centerY + 100, 'Clear Save', {
-       fontSize: '20px',
-       color: '#ffffff',
-       backgroundColor: '#e74c3c',
-       padding: { x: 15, y: 8 }
-     }).setOrigin(0.5);
-     clearButton.setScrollFactor(0);
-     clearButton.setDepth(20002);
-     clearButton.setInteractive();
-     
-     // Create close button
-     const closeButton = this.add.text(centerX, centerY + 140, 'Close', {
-       fontSize: '18px',
-       color: '#ffffff',
-       backgroundColor: '#7f8c8d',
-       padding: { x: 15, y: 8 }
-     }).setOrigin(0.5);
-     closeButton.setScrollFactor(0);
-     closeButton.setDepth(20002);
-     closeButton.setInteractive();
-     
-     // Add click handlers
-     saveButton.on('pointerdown', () => {
-       this.saveGame();
-       this.hideSaveMenu();
-     });
-     
-     loadButton.on('pointerdown', () => {
-       this.loadGame();
-       this.hideSaveMenu();
-     });
-     
-     clearButton.on('pointerdown', () => {
-       this.clearSave();
-       this.hideSaveMenu();
-     });
-     
-     closeButton.on('pointerdown', () => {
-       this.hideSaveMenu();
-     });
-     
-     // Store references for cleanup
-     this.saveMenuElements = {
-       background,
-       dialog,
-       titleText,
-       infoDisplay,
-       saveButton,
-       loadButton,
-       clearButton,
-       closeButton
-     };
-     
-     console.log('Save menu created');
-   }
-
-   private hideSaveMenu() {
-     if (!this.saveMenuShown) return;
-     
-     // Remove all save menu elements
-     if (this.saveMenuElements) {
-       Object.values(this.saveMenuElements).forEach((element: any) => {
-         element.destroy();
-       });
-       this.saveMenuElements = null;
-     }
-     
-     this.saveMenuShown = false;
-     console.log('Save menu hidden');
-   }
-
-   private saveGame() {
-     // Get current steps from AppScene
-     const appScene = this.scene.get('AppScene') as any;
-     const currentSteps = appScene ? appScene.getStep() : 0;
-     
-     const success = this.saveManager.save(currentSteps);
-     if (success) {
-       console.log(`Game saved successfully with ${currentSteps} steps`);
-     } else {
-       console.error('Failed to save game');
-     }
-   }
-
-   private loadGame() {
-     const saveData = this.saveManager.load();
-     if (saveData) {
-       // Restore steps to AppScene
-       const appScene = this.scene.get('AppScene') as any;
-       if (appScene && appScene.setStep) {
-         appScene.setStep(saveData.steps);
-       }
-       
-       console.log(`Game loaded successfully with ${saveData.steps} steps`);
-     } else {
-       console.log('No save data to load');
-     }
-   }
-
-   private clearSave() {
-     const success = this.saveManager.clearSave();
-     if (success) {
-       console.log('Save data cleared successfully');
-     } else {
-       console.error('Failed to clear save data');
+   public showSaveMenu() {
+     // Show save menu via MenuScene
+     const menuScene = this.scene.get('MenuScene');
+     if (menuScene) {
+       menuScene.events.emit('showSaveMenu');
+       this.scene.bringToTop('MenuScene');
      }
    }
 
@@ -2001,15 +1842,17 @@ export class GameScene extends Phaser.Scene {
      this.drivingBackground = this.add.container(0, 0);
      this.drivingBackground.setDepth(-1000); // Behind UI elements but above other content
      
-     // Create sky
-     const sky = this.add.rectangle(0, 0, gameWidth, gameHeight / 2, 0x87CEEB);
-     sky.setOrigin(0);
-     this.drivingBackground.add(sky);
+         // Create sky
+    const sky = this.add.rectangle(0, 0, gameWidth, gameHeight / 2, 0x87CEEB);
+    sky.setOrigin(0);
+    sky.setDepth(-1000); // Ensure sky is behind UI
+    this.drivingBackground.add(sky);
      
-     // Create road
-     this.drivingRoad = this.add.rectangle(0, gameHeight / 2, gameWidth, gameHeight / 2, 0x333333);
-     this.drivingRoad.setOrigin(0);
-     this.drivingBackground.add(this.drivingRoad);
+         // Create road
+    this.drivingRoad = this.add.rectangle(0, gameHeight / 2, gameWidth, gameHeight / 2, 0x333333);
+    this.drivingRoad.setOrigin(0);
+    this.drivingRoad.setDepth(-1000); // Ensure road is behind UI
+    this.drivingBackground.add(this.drivingRoad);
      
      // Create road lines - proper center lines like a real road
      const lineWidth = 4;
@@ -2017,12 +1860,13 @@ export class GameScene extends Phaser.Scene {
      const lineGap = 40;
      const centerLineY = gameHeight / 2 + 50;
      
-     // Create center line segments
-     for (let y = centerLineY; y < gameHeight; y += lineGap + lineHeight) {
-       const line = this.add.rectangle(gameWidth / 2, y, lineWidth, lineHeight, 0xffffff);
-       this.drivingRoadLines.push(line);
-       this.drivingBackground.add(line);
-     }
+         // Create center line segments
+    for (let y = centerLineY; y < gameHeight; y += lineGap + lineHeight) {
+      const line = this.add.rectangle(gameWidth / 2, y, lineWidth, lineHeight, 0xffffff);
+      line.setDepth(-1000); // Ensure road lines are behind UI
+      this.drivingRoadLines.push(line);
+      this.drivingBackground.add(line);
+    }
      
      // Create the car
      this.createDrivingCar();
@@ -2037,10 +1881,11 @@ export class GameScene extends Phaser.Scene {
      const gameWidth = this.cameras.main.width;
      const gameHeight = this.cameras.main.height;
      
-     // Create car (simple rectangle for now)
-     this.drivingCar = this.add.rectangle(gameWidth / 2, gameHeight - 80, 40, 20, 0xff0000);
-     this.drivingCar.setOrigin(0.5);
-     this.drivingBackground.add(this.drivingCar);
+         // Create car (simple rectangle for now)
+    this.drivingCar = this.add.rectangle(gameWidth / 2, gameHeight - 80, 40, 20, 0xff0000);
+    this.drivingCar.setOrigin(0.5);
+    this.drivingCar.setDepth(-1000); // Ensure car is behind UI
+    this.drivingBackground.add(this.drivingCar);
      
      // Initialize car position
      this.carX = gameWidth / 2;
@@ -2240,79 +2085,12 @@ export class GameScene extends Phaser.Scene {
     
     console.log(`Showing ${obstacleType} menu`);
     
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-    
-    // Add background overlay
-    const background = this.add.rectangle(centerX, centerY, gameWidth, gameHeight, 0x000000, 0.7);
-    background.setScrollFactor(0);
-    background.setDepth(20000);
-    
-    // Create obstacle-specific dialog
-    let titleText = '';
-    let messageText = '';
-    
-    if (obstacleType === 'pothole') {
-      titleText = 'POTHOLE HIT!';
-      messageText = 'You hit a pothole!\n\nYour car took damage.\nHealth decreased.\n\nBe more careful next time!';
-    } else if (obstacleType === 'exit') {
-      titleText = 'EXIT REACHED!';
-      messageText = 'You found an exit!\n\nGood job!\nYou earned rewards.\n\nKeep up the good driving!';
+    // Show obstacle menu via MenuScene
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('showObstacleMenu', obstacleType);
+      this.scene.bringToTop('MenuScene');
     }
-    
-    // Create dialog box
-    const dialog = this.add.rectangle(centerX, centerY, 350, 220, 0x2c3e50);
-    dialog.setStrokeStyle(3, 0xffffff);
-    dialog.setScrollFactor(0);
-    dialog.setDepth(20001);
-    
-    // Add title text
-    const titleTextObj = this.add.text(centerX, centerY - 60, titleText, {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    titleTextObj.setScrollFactor(0);
-    titleTextObj.setDepth(20002);
-    
-    // Add message text
-    const messageTextObj = this.add.text(centerX, centerY, messageText, {
-      fontSize: '16px',
-      color: '#ffffff',
-      align: 'center'
-    }).setOrigin(0.5);
-    messageTextObj.setScrollFactor(0);
-    messageTextObj.setDepth(20002);
-    
-    // Add continue button
-    const continueButton = this.add.text(centerX, centerY + 80, 'Continue', {
-      fontSize: '20px',
-      color: '#ffffff',
-      backgroundColor: '#27ae60',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    
-    continueButton.setScrollFactor(0);
-    continueButton.setDepth(20002);
-    continueButton.setInteractive();
-    
-    continueButton.on('pointerdown', () => {
-      // Remove all menu elements
-      background.destroy();
-      dialog.destroy();
-      titleTextObj.destroy();
-      messageTextObj.destroy();
-      continueButton.destroy();
-      
-      // Resume driving if auto-resume flag is set
-      if (this.shouldAutoResumeAfterCollision) {
-        this.resumeDriving();
-      }
-      
-      console.log(`${obstacleType} menu closed`);
-    });
   }
 }
 

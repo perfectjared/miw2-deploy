@@ -27,7 +27,7 @@ export class AppScene extends Phaser.Scene {
       padding: { x: 8, y: 4 }
     });
     this.stepText.setScrollFactor(0);
-    this.stepText.setDepth(10000);
+    this.stepText.setDepth(25000);
 
     // Launch scenes in the correct layer order (bottom to top)
     // 4. Background (bottom layer)
@@ -40,8 +40,18 @@ export class AppScene extends Phaser.Scene {
     this.scene.launch('MenuScene');
     this.scene.bringToTop('MenuScene');
     
-    // 1. App (ensure AppScene is always on top)
-    this.scene.bringToTop('AppScene');
+    // Show start menu after a small delay to ensure MenuScene is ready
+    this.time.delayedCall(100, () => {
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('showStartMenu');
+        // Keep MenuScene on top for the start menu
+        this.scene.bringToTop('MenuScene');
+      }
+    });
+    
+    // Don't bring AppScene to top initially - let MenuScene show first
+    // this.scene.bringToTop('AppScene');
     
     // Note: Story scene will be launched on demand and brought to top
 
@@ -72,11 +82,26 @@ export class AppScene extends Phaser.Scene {
       padding: { x: 10, y: 5 }
     });
     testButton.setScrollFactor(0);
-    testButton.setDepth(10000);
+    testButton.setDepth(25000);
     testButton.setInteractive();
     testButton.on('pointerdown', () => {
       console.log('Pause button clicked');
       this.togglePauseMenu();
+    });
+
+    // Add save menu button next to pause button
+    const saveButton = this.add.text(80, 100, 'SAVE', {
+      fontSize: '16px',
+      color: '#ffffff',
+      backgroundColor: '#27ae60',
+      padding: { x: 10, y: 5 }
+    });
+    saveButton.setScrollFactor(0);
+    saveButton.setDepth(25000);
+    saveButton.setInteractive();
+    saveButton.on('pointerdown', () => {
+      console.log('Save button clicked');
+      this.showSaveMenu();
     });
 
     // Start the step timer (every 1000ms = 1 second) - but only when game is started
@@ -136,12 +161,6 @@ export class AppScene extends Phaser.Scene {
     if (this.isPaused) {
       // Resume game
       this.isPaused = false;
-      if (this.pauseDialog) {
-        this.pauseDialog.background.destroy();
-        this.pauseDialog.title.destroy();
-        this.pauseDialog.resumeButton.destroy();
-        this.pauseDialog = null;
-      }
       console.log('Game resumed');
       
       // Emit resume event to GameScene
@@ -152,8 +171,14 @@ export class AppScene extends Phaser.Scene {
     } else {
       // Pause game
       this.isPaused = true;
-      this.createPauseDialog();
       console.log('Game paused');
+      
+      // Show pause menu via MenuScene
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('showPauseMenu');
+        this.scene.bringToTop('MenuScene');
+      }
       
       // Emit pause event to GameScene
       const gameScene = this.scene.get('GameScene');
@@ -163,46 +188,6 @@ export class AppScene extends Phaser.Scene {
     }
   }
 
-  private createPauseDialog() {
-    const centerX = this.cameras.main.width / 2;
-    const centerY = this.cameras.main.height / 2;
-    
-    // Create a smaller dialog (less wide)
-    const dialogWidth = 300;
-    const dialogHeight = 200;
-    
-    // Background
-    const background = this.add.rectangle(centerX, centerY, dialogWidth, dialogHeight, 0x000000, 0.9);
-    background.setStrokeStyle(2, 0xffffff);
-    background.setScrollFactor(0);
-    background.setDepth(10001);
-    
-    // Title
-    const title = this.add.text(centerX, centerY - 60, 'PAUSED', {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    title.setScrollFactor(0);
-    title.setDepth(10002);
-    
-    // Resume button
-    const resumeButton = this.add.text(centerX, centerY + 20, 'Resume', {
-      fontSize: '18px',
-      color: '#ffffff',
-      backgroundColor: '#008800',
-      padding: { x: 15, y: 8 }
-    }).setOrigin(0.5);
-    resumeButton.setScrollFactor(0);
-    resumeButton.setDepth(10002);
-    resumeButton.setInteractive();
-    resumeButton.on('pointerdown', () => {
-      this.togglePauseMenu(); // This will resume the game
-    });
-    
-    // Store reference to dialog elements for cleanup
-    this.pauseDialog = { background, title, resumeButton };
-  }
 
   // Method to start the game (called from MenuScene)
   public startGame() {
@@ -219,6 +204,17 @@ export class AppScene extends Phaser.Scene {
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
       (gameScene as any).startGame();
+    }
+  }
+
+  // Method to show save menu (communicates with MenuScene)
+  private showSaveMenu() {
+    if (!this.gameStarted) return; // Can't save if game hasn't started
+    
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('showSaveMenu');
+      this.scene.bringToTop('MenuScene');
     }
   }
 
