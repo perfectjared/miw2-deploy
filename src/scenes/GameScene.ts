@@ -230,6 +230,130 @@ class Item implements PhysicsObject {
   }
 }
 
+// Keys data type for frontseat
+class Keys implements PhysicsObject {
+  public gameObject!: Phaser.GameObjects.Arc;
+  private scene: Phaser.Scene;
+  private config: any;
+
+  constructor(scene: Phaser.Scene, config: any) {
+    this.scene = scene;
+    this.config = config;
+    this.createGameObject();
+    this.setupPhysics();
+    this.setupDragInteraction();
+  }
+
+  private createGameObject() {
+    this.gameObject = this.scene.add.circle(
+      this.config.x,
+      this.config.y,
+      this.config.radius,
+      parseInt(this.config.color.replace('0x', ''), 16)
+    );
+  }
+
+  private setupPhysics() {
+    this.scene.matter.add.gameObject(this.gameObject, {
+      shape: 'circle',
+      restitution: this.config.restitution,
+      friction: this.config.friction,
+      density: this.config.density
+    });
+  }
+
+  public setupDragInteraction() {
+    // Make the circle interactive
+    this.gameObject.setInteractive();
+    
+    // Store original color for reference
+    const originalColor = parseInt(this.config.color.replace('0x', ''), 16);
+    const hoverColor = parseInt(this.config.hoverColor.replace('0x', ''), 16);
+    const dragColor = parseInt(this.config.dragColor.replace('0x', ''), 16);
+    
+    // Hover effects
+    this.gameObject.on('pointerover', () => {
+      this.gameObject.setFillStyle(hoverColor);
+    });
+    
+    this.gameObject.on('pointerout', () => {
+      this.gameObject.setFillStyle(originalColor);
+    });
+    
+    // Drag functionality - manual implementation with global tracking
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
+    let velocityX = 0;
+    let velocityY = 0;
+    
+    this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      console.log('Keys pointerdown - starting manual drag');
+      isDragging = true;
+      dragStartX = pointer.x;
+      dragStartY = pointer.y;
+      lastPointerX = pointer.x;
+      lastPointerY = pointer.y;
+      this.gameObject.setFillStyle(dragColor);
+      (this.scene as any).isDraggingObject = true;
+      
+      // Break constraint if Keys is snapped to magnetic target
+      if ((this.scene as any).keysConstraint) {
+        console.log('Breaking constraint - Keys being dragged away');
+        (this.scene as any).matter.world.remove((this.scene as any).keysConstraint);
+        (this.scene as any).keysConstraint = null;
+        
+        // Reset magnetic target color
+        if ((this.scene as any).magneticTarget) {
+          const magneticConfig = (this.scene as any).config.physics.magneticTarget;
+          (this.scene as any).magneticTarget.setFillStyle(parseInt(magneticConfig.color.replace('0x', ''), 16));
+        }
+      }
+      
+      // Disable physics during drag
+      if (this.gameObject.body) {
+        (this.gameObject.body as any).isStatic = true;
+      }
+    });
+    
+    // Use global pointer move instead of object-specific
+    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!isDragging) return;
+      
+      // Calculate velocity for momentum
+      velocityX = pointer.x - lastPointerX;
+      velocityY = pointer.y - lastPointerY;
+      lastPointerX = pointer.x;
+      lastPointerY = pointer.y;
+      
+      // Convert screen coordinates to container-relative coordinates for Keys
+      const containerX = (this.scene as any).frontseatPhysicsContainer.x;
+      const relativeX = pointer.x - containerX;
+      this.gameObject.x = relativeX;
+      this.gameObject.y = pointer.y;
+    });
+    
+    // Use global pointer up instead of object-specific
+    this.scene.input.on('pointerup', () => {
+      if (!isDragging) return;
+      
+      console.log('Keys pointerup - ending manual drag with momentum');
+      isDragging = false;
+      this.gameObject.setFillStyle(originalColor);
+      (this.scene as any).isDraggingObject = false;
+      
+      // Re-enable physics and apply momentum
+      if (this.gameObject.body) {
+        (this.gameObject.body as any).isStatic = false;
+        // Apply velocity as momentum
+        this.scene.matter.body.setVelocity(this.gameObject.body, { x: velocityX * 0.5, y: velocityY * 0.5 });
+      }
+    });
+  }
+}
+
 export class GameScene extends Phaser.Scene {
   // Configuration
   private config!: GameConfig
@@ -281,6 +405,9 @@ export class GameScene extends Phaser.Scene {
   // Physics object data types
   private frontseatTrash!: Trash;
   private backseatItem!: Item;
+  private frontseatKeys!: Keys;
+  private magneticTarget!: Phaser.GameObjects.Arc;
+  private keysConstraint!: Matter.Constraint | null; // Constraint for snapping Keys to target
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -351,6 +478,9 @@ export class GameScene extends Phaser.Scene {
     
     this.currentPosition = 'frontseat';
     this.currentView = 'main';
+    
+    // Initialize constraint as null
+    this.keysConstraint = null;
 
     // Set up keyboard controls for navigation (only when game is started)
     this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
@@ -390,6 +520,9 @@ export class GameScene extends Phaser.Scene {
 
     // Set up swipe controls for camera movement
     this.setupSwipeControls();
+    
+    // Setup keyboard controls for driving
+    this.setupKeyboardControls();
   }
 
      update() {
@@ -398,11 +531,14 @@ export class GameScene extends Phaser.Scene {
        this.cameraDebugText.setText(`Container: X=${Math.round(this.gameContentContainer.x)}, Y=${Math.round(this.gameContentContainer.y)}`);
      }
      
-     // Check physics object boundaries periodically
-     this.checkPhysicsObjectBoundaries();
-     
-     // Frame-by-frame updates
-     this.updatePosition();
+    // Check physics object boundaries periodically
+    this.checkPhysicsObjectBoundaries();
+    
+    // Apply magnetic attraction between Keys and magnetic target
+    this.applyMagneticAttraction();
+    
+    // Frame-by-frame updates
+    this.updatePosition();
    }
 
   private checkPhysicsObjectBoundaries() {
@@ -435,6 +571,31 @@ export class GameScene extends Phaser.Scene {
       }
     }
     
+    // Check frontseat Keys object
+    if (this.frontseatKeys && this.frontseatKeys.gameObject && this.frontseatKeys.gameObject.body) {
+      const keysX = this.frontseatKeys.gameObject.x;
+      const keysY = this.frontseatKeys.gameObject.y;
+      
+      // If keys is outside frontseat bounds (0 to gameWidth), teleport it back
+      if (keysX < -bufferZone || keysX > gameWidth + bufferZone || 
+          keysY < -bufferZone || keysY > gameHeight + bufferZone) {
+        console.log(`Keys significantly escaped frontseat bounds at (${keysX}, ${keysY}), teleporting back`);
+        
+        // Teleport back to center of frontseat area
+        const newX = Math.max(50, Math.min(gameWidth - 50, keysX));
+        const newY = Math.max(50, Math.min(gameHeight - 50, keysY));
+        
+        this.frontseatKeys.gameObject.x = newX;
+        this.frontseatKeys.gameObject.y = newY;
+        
+        // Update physics body position
+        this.matter.body.setPosition(this.frontseatKeys.gameObject.body, { x: newX, y: newY });
+        
+        // Stop any velocity to prevent immediate re-escape
+        this.matter.body.setVelocity(this.frontseatKeys.gameObject.body, { x: 0, y: 0 });
+      }
+    }
+    
     // Check backseat Item object
     if (this.backseatItem && this.backseatItem.gameObject && this.backseatItem.gameObject.body) {
       const itemX = this.backseatItem.gameObject.x;
@@ -458,8 +619,8 @@ export class GameScene extends Phaser.Scene {
         // Stop any velocity to prevent immediate re-escape
         this.matter.body.setVelocity(this.backseatItem.gameObject.body, { x: 0, y: 0 });
       }
-    }
-  }
+     }
+   }
 
      private setupSharedGameCamera() {
      // Set up world bounds to accommodate both scenes side by side
@@ -606,14 +767,11 @@ export class GameScene extends Phaser.Scene {
      // Create stops and progress text
      this.createStopsAndProgressText();
      
-     // Create drag dial in front seat area
-     this.createFrontseatDragDial();
-     
-     // Create driving game button
-     this.createDrivingGameButton();
-     
-     // Create driving background (always visible behind game content)
-     this.createDrivingBackground();
+    // Create drag dial in front seat area
+    this.createFrontseatDragDial();
+    
+    // Create driving background (always visible behind game content)
+    this.createDrivingBackground();
    }
 
    private createCountdownTimer() {
@@ -900,45 +1058,36 @@ export class GameScene extends Phaser.Scene {
     this.plotCText.setAlpha(this.config.ui.managerValues.opacity);
   }
 
-   private createDrivingGameButton() {
-     const gameWidth = this.cameras.main.width;
-     const gameHeight = this.cameras.main.height;
-     
-     // Position the driving game button in the front seat area
-     const buttonX = gameWidth / 2;
-     const buttonY = gameHeight * 0.75; // Position it below the steering wheel
-     
-     // Create the driving game button
-     const drivingButton = this.add.graphics();
-     drivingButton.fillStyle(0xff6600, 0.8);
-     drivingButton.fillRect(buttonX - 80, buttonY - 25, 160, 50);
-     drivingButton.lineStyle(3, 0xffffff, 1);
-     drivingButton.strokeRect(buttonX - 80, buttonY - 25, 160, 50);
-     drivingButton.setInteractive(new Phaser.Geom.Rectangle(buttonX - 80, buttonY - 25, 160, 50), Phaser.Geom.Rectangle.Contains);
-     
-     // Add button text
-     const buttonText = this.add.text(buttonX, buttonY, 'START DRIVING', {
-       fontSize: '18px',
-       color: '#ffffff',
-       fontStyle: 'bold'
-     }).setOrigin(0.5);
-     buttonText.setName('drivingButtonText');
-     
-     // Add click handler
-     drivingButton.on('pointerdown', () => {
-       console.log('Toggling driving mode...');
-       this.toggleDrivingMode();
-     });
-     
-     // Add both elements to the game content container
-     this.gameContentContainer.add([drivingButton, buttonText]);
-     
-     // Set depth to ensure they're on top
-     drivingButton.setDepth(1000);
-     buttonText.setDepth(1000);
-     
-     console.log('Driving game button created at position:', buttonX, buttonY);
-   }
+  private createMagneticTarget() {
+    const magneticConfig = this.config.physics.magneticTarget;
+    
+    // Create the magnetic target circle
+    this.magneticTarget = this.add.circle(
+      magneticConfig.x,
+      magneticConfig.y,
+      magneticConfig.radius,
+      parseInt(magneticConfig.color.replace('0x', ''), 16)
+    );
+    
+    // Make it a static sensor body (no collision, no gravity, doesn't move)
+    this.matter.add.gameObject(this.magneticTarget, {
+      shape: 'circle',
+      isStatic: true,
+      isSensor: true,  // No collision - Keys can pass through
+      render: { visible: true }
+    });
+    
+    // Add to frontseat physics container so it moves with camera
+    this.frontseatPhysicsContainer.add(this.magneticTarget);
+    
+    // Set scroll factor to move horizontally with physics containers but stay vertically fixed
+    this.magneticTarget.setScrollFactor(1, 0);
+    
+    // Set depth to be visible but not interfere with UI, behind Keys
+    this.magneticTarget.setDepth(999);
+    
+    console.log('Magnetic target created at position:', magneticConfig.x, magneticConfig.y);
+  }
 
    private handleSteeringInput(steeringValue: number) {
      // Convert steering wheel value (-100 to 100) to steering direction
@@ -1008,8 +1157,14 @@ export class GameScene extends Phaser.Scene {
     // Add Item object to backseat physics world
     this.addBackseatItem();
     
+    // Add Keys object to frontseat physics world
+    this.addFrontseatKeys();
+    
     // Create debug borders for physics worlds
     this.createDebugBorders();
+    
+    // Create magnetic target (after physics containers are created)
+    this.createMagneticTarget();
     
     console.log('Physics containers created - Frontseat:', this.frontseatPhysicsContainer, 'Backseat:', this.backseatPhysicsContainer);
   }
@@ -1113,6 +1268,24 @@ export class GameScene extends Phaser.Scene {
     console.log('Backseat Item added:', this.backseatItem);
   }
 
+  private addFrontseatKeys() {
+    const keysConfig = this.config.physics.frontseatKeys;
+    
+    // Create Keys object
+    this.frontseatKeys = new Keys(this, keysConfig);
+    
+    // Don't add to physics container - keep Keys separate for proper depth ordering
+    // Instead, manually sync position with container movement in update loop
+    
+    // Set the scroll factor to move horizontally with physics containers but stay vertically fixed
+    this.frontseatKeys.gameObject.setScrollFactor(1, 0);
+    
+    // Set depth to be visible but not interfere with UI, and in front of magnetic target
+    this.frontseatKeys.gameObject.setDepth(1001);
+    
+    console.log('Frontseat Keys added:', this.frontseatKeys);
+  }
+
 
 
   private createDebugBorders() {
@@ -1166,7 +1339,9 @@ export class GameScene extends Phaser.Scene {
           obj.body || // Matter.js objects have a body
           obj === this.frontseatDragDial ||
           obj === this.frontseatTrash?.gameObject ||
-          obj === this.backseatItem?.gameObject
+          obj === this.backseatItem?.gameObject ||
+          obj === this.frontseatKeys?.gameObject ||
+          obj === this.magneticTarget
         );
         if (hasInteractiveObject) {
           console.log('Swipe detection blocked by interactive object - not starting swipe tracking');
@@ -1192,7 +1367,9 @@ export class GameScene extends Phaser.Scene {
           obj.body || // Matter.js objects have a body
           obj === this.frontseatDragDial ||
           obj === this.frontseatTrash?.gameObject ||
-          obj === this.backseatItem?.gameObject
+          obj === this.backseatItem?.gameObject ||
+          obj === this.frontseatKeys?.gameObject ||
+          obj === this.magneticTarget
         );
         if (hasInteractiveObject) {
           console.log('Swipe detection blocked by interactive object on pointerup');
@@ -1229,6 +1406,16 @@ export class GameScene extends Phaser.Scene {
         }
       }
     });
+  }
+
+  private setupKeyboardControls() {
+    // Add keyboard controls for driving
+    this.input.keyboard?.on('keydown-SPACE', () => {
+      console.log('Space pressed - toggling driving mode...');
+      this.toggleDrivingMode();
+    });
+    
+    console.log('Keyboard controls setup - Press SPACE to toggle driving mode');
   }
 
   private setupAutoPause() {
@@ -1346,10 +1533,12 @@ export class GameScene extends Phaser.Scene {
        private showOverlay(velocity?: number) {
       if (this.currentView === 'main') {
         // Move the entire content container down to show overlay
+        const gameHeight = this.cameras.main.height;
+        const overlayOffset = gameHeight * this.config.navigation.overlayOffsetPercent;
         const duration = velocity ? Math.max(200, Math.min(1000, 1000 / (velocity / 500))) : this.config.navigation.animationDuration;
         this.tweens.add({
           targets: this.gameContentContainer,
-          y: -this.config.navigation.overlayOffset,
+          y: -overlayOffset,
           duration: duration,
           ease: 'Power2'
         });
@@ -1358,7 +1547,7 @@ export class GameScene extends Phaser.Scene {
        if (this.drivingBackground) {
          this.tweens.add({
            targets: this.drivingBackground,
-           y: -this.config.navigation.overlayOffset,
+           y: -overlayOffset,
            duration: duration,
            ease: 'Power2'
          });
@@ -1368,7 +1557,7 @@ export class GameScene extends Phaser.Scene {
        
         this.currentView = 'overlay';
         this.updateToggleButtonText();
-       console.log('Showing overlay - content and driving background moved down by 320px');
+       console.log(`Showing overlay - content and driving background moved down by ${overlayOffset}px (33% of screen)`);
       }
     }
 
@@ -1475,7 +1664,69 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-     private updatePosition() {
+  private applyMagneticAttraction() {
+    if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) return;
+    if (!this.magneticTarget || !this.magneticTarget.body) return;
+    
+    const magneticConfig = this.config.physics.magneticTarget;
+    const keysBody = this.frontseatKeys.gameObject.body;
+    const targetBody = this.magneticTarget.body;
+    
+    // Get positions using Phaser Matter API
+    const keysPos = { x: keysBody.position.x, y: keysBody.position.y };
+    const targetPos = { x: targetBody.position.x, y: targetBody.position.y };
+    
+    // Calculate distance
+    const dx = targetPos.x - keysPos.x;
+    const dy = targetPos.y - keysPos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Snap threshold - when Keys gets close enough, create a constraint
+    const snapThreshold = 20; // Distance at which Keys snaps to center
+    
+    if (distance <= snapThreshold && !this.keysConstraint) {
+      // Create constraint to snap Keys to the center of magnetic target
+      console.log('Keys snapped to magnetic target!');
+      this.keysConstraint = this.matter.add.constraint(keysBody, targetBody, 0, 0.1, {
+        pointA: { x: 0, y: 0 },
+        pointB: { x: 0, y: 0 },
+        stiffness: 1,
+        damping: 0.1
+      });
+      
+      // Visual feedback: make target glow bright when snapped
+      this.magneticTarget.setFillStyle(parseInt('0x88ff88', 16)); // Very bright green
+      
+    } else if (distance > magneticConfig.magneticRange && this.keysConstraint) {
+      // Remove constraint if Keys is dragged too far away
+      console.log('Keys released from magnetic target');
+      this.matter.world.remove(this.keysConstraint);
+      this.keysConstraint = null;
+      
+      // Reset target color
+      this.magneticTarget.setFillStyle(parseInt(magneticConfig.color.replace('0x', ''), 16));
+      
+    } else if (distance <= magneticConfig.magneticRange && distance > snapThreshold && !this.keysConstraint) {
+      // Apply magnetic attraction when close but not snapped
+      const attractionForce = magneticConfig.magneticStrength * (1 - distance / magneticConfig.magneticRange);
+      
+      // Apply force towards target
+      const forceX = (dx / distance) * attractionForce;
+      const forceY = (dy / distance) * attractionForce;
+      
+      // Apply the force to the Keys object using Phaser Matter API
+      this.matter.body.applyForce(keysBody, keysPos, { x: forceX, y: forceY });
+      
+      // Visual feedback: make target glow when Keys is close
+      this.magneticTarget.setFillStyle(parseInt('0x44ff44', 16)); // Brighter green
+      
+    } else if (distance > magneticConfig.magneticRange) {
+      // Reset target color when Keys is far away
+      this.magneticTarget.setFillStyle(parseInt(magneticConfig.color.replace('0x', ''), 16));
+    }
+  }
+
+  private updatePosition() {
     // Only update position if driving mode is active and not paused
     if (!this.drivingMode || this.drivingPaused) return;
      
@@ -2022,14 +2273,6 @@ export class GameScene extends Phaser.Scene {
      });
    }
 
-     private updateDrivingButtonText() {
-    // Find the driving button text and update it
-    const drivingButtonText = this.gameContentContainer.getByName('drivingButtonText') as Phaser.GameObjects.Text;
-    if (drivingButtonText) {
-      const buttonText = this.drivingMode ? 'STOP DRIVING' : 'START DRIVING';
-      drivingButtonText.setText(buttonText);
-    }
-  }
 
   // ===== OBSTACLE SYSTEM =====
   private createObstacle(type: string) {

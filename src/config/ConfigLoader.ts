@@ -114,7 +114,7 @@ export interface GameConfig {
   // Camera and navigation
   navigation: {
     animationDuration: number;
-    overlayOffset: number;
+    overlayOffsetPercent: number;
   };
   
   // Physics system
@@ -144,6 +144,25 @@ export interface GameConfig {
           color: string;
           hoverColor: string;
           dragColor: string;
+        };
+        frontseatKeys: {
+          radius: number;
+          x: number;
+          y: number;
+          restitution: number;
+          friction: number;
+          density: number;
+          color: string;
+          hoverColor: string;
+          dragColor: string;
+        };
+        magneticTarget: {
+          radius: number;
+          x: number;
+          y: number;
+          color: string;
+          magneticStrength: number;
+          magneticRange: number;
         };
   };
 }
@@ -301,7 +320,7 @@ export class ConfigLoader {
       },
       navigation: {
         animationDuration: data.navigation?.animationDuration ?? 500,
-        overlayOffset: data.navigation?.overlayOffset ?? 320,
+        overlayOffsetPercent: data.navigation?.overlayOffsetPercent ?? 0.33,
       },
       physics: {
         gravity: {
@@ -329,6 +348,25 @@ export class ConfigLoader {
           color: data.physics?.backseatCircle?.color ?? '0x6b6bff',
           hoverColor: data.physics?.backseatCircle?.hoverColor ?? '0x9999ff',
           dragColor: data.physics?.backseatCircle?.dragColor ?? '0x3333ff',
+        },
+        frontseatKeys: {
+          radius: data.physics?.frontseatKeys?.radius ?? 18,
+          x: data.physics?.frontseatKeys?.x ?? 150,
+          y: data.physics?.frontseatKeys?.y ?? 200,
+          restitution: data.physics?.frontseatKeys?.restitution ?? 0.7,
+          friction: data.physics?.frontseatKeys?.friction ?? 0.2,
+          density: data.physics?.frontseatKeys?.density ?? 0.001,
+          color: data.physics?.frontseatKeys?.color ?? '0xff8800',
+          hoverColor: data.physics?.frontseatKeys?.hoverColor ?? '0xffaa44',
+          dragColor: data.physics?.frontseatKeys?.dragColor ?? '0xff6600',
+        },
+        magneticTarget: {
+          radius: data.physics?.magneticTarget?.radius ?? 25,
+          x: data.physics?.magneticTarget?.x ?? 400,
+          y: data.physics?.magneticTarget?.y ?? 300,
+          color: data.physics?.magneticTarget?.color ?? '0x00ff00',
+          magneticStrength: data.physics?.magneticTarget?.magneticStrength ?? 0.01,
+          magneticRange: data.physics?.magneticTarget?.magneticRange ?? 100,
         },
       },
     };
