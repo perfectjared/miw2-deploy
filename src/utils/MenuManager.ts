@@ -31,26 +31,74 @@ export class MenuManager {
   public showStartMenu() {
     this.clearCurrentDialog();
     
-    const menuConfig: MenuConfig = {
-      title: 'START GAME',
-      content: 'Welcome to the game! Click Start to begin your adventure.',
-      buttons: [
-        {
-          text: 'Start Game',
-          onClick: () => {
-            this.closeDialog();
-            const appScene = this.scene.scene.get('AppScene');
-            if (appScene) {
-              (appScene as any).startGame();
+    // Check if there's existing save data
+    const saveData = this.saveManager.load();
+    const hasExistingSave = saveData && saveData.steps > 0;
+    
+    let menuConfig: MenuConfig;
+    
+    if (hasExistingSave) {
+      // Show resume menu for existing save
+      const saveDate = new Date(saveData.timestamp).toLocaleString();
+      menuConfig = {
+        title: 'RESUME GAME',
+        content: `Welcome back! You have a saved game with ${saveData.steps} steps.\nSaved: ${saveDate}`,
+        buttons: [
+          {
+            text: 'Resume Game',
+            onClick: () => {
+              this.closeDialog();
+              const appScene = this.scene.scene.get('AppScene');
+              if (appScene) {
+                (appScene as any).startGame();
+              }
+            },
+            style: {
+              backgroundColor: '#27ae60',
+              color: '#ffffff'
             }
           },
-          style: {
-            backgroundColor: '#27ae60',
-            color: '#ffffff'
+          {
+            text: 'Start Fresh',
+            onClick: () => {
+              // Clear existing save and start fresh
+              this.saveManager.clearSave();
+              this.closeDialog();
+              const appScene = this.scene.scene.get('AppScene');
+              if (appScene) {
+                (appScene as any).startGame();
+              }
+            },
+            style: {
+              backgroundColor: '#e74c3c',
+              color: '#ffffff'
+            }
           }
-        }
-      ]
-    };
+        ]
+      };
+    } else {
+      // Show new game menu for first time
+      menuConfig = {
+        title: 'START GAME',
+        content: 'Welcome to the game! Click Start to begin your adventure.',
+        buttons: [
+          {
+            text: 'Start Game',
+            onClick: () => {
+              this.closeDialog();
+              const appScene = this.scene.scene.get('AppScene');
+              if (appScene) {
+                (appScene as any).startGame();
+              }
+            },
+            style: {
+              backgroundColor: '#27ae60',
+              color: '#ffffff'
+            }
+          }
+        ]
+      };
+    }
 
     this.createDialog(menuConfig);
   }
@@ -108,9 +156,9 @@ export class MenuManager {
         {
           text: 'Save Game',
           onClick: () => {
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              const steps = (gameScene as any).getCurrentSteps();
+            const appScene = this.scene.scene.get('AppScene');
+            if (appScene) {
+              const steps = (appScene as any).getStep();
               this.saveManager.save(steps);
               this.closeDialog();
             }
