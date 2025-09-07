@@ -398,9 +398,65 @@ export class GameScene extends Phaser.Scene {
        this.cameraDebugText.setText(`Container: X=${Math.round(this.gameContentContainer.x)}, Y=${Math.round(this.gameContentContainer.y)}`);
      }
      
+     // Check physics object boundaries periodically
+     this.checkPhysicsObjectBoundaries();
+     
      // Frame-by-frame updates
      this.updatePosition();
    }
+
+  private checkPhysicsObjectBoundaries() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Check frontseat Trash object
+    if (this.frontseatTrash && this.frontseatTrash.gameObject && this.frontseatTrash.gameObject.body) {
+      const trashX = this.frontseatTrash.gameObject.x;
+      const trashY = this.frontseatTrash.gameObject.y;
+      
+      // If trash is outside frontseat bounds (0 to gameWidth), teleport it back
+      if (trashX < 0 || trashX > gameWidth || trashY < 0 || trashY > gameHeight) {
+        console.log(`Trash escaped frontseat bounds at (${trashX}, ${trashY}), teleporting back`);
+        
+        // Teleport back to center of frontseat area
+        const newX = Math.max(50, Math.min(gameWidth - 50, trashX));
+        const newY = Math.max(50, Math.min(gameHeight - 50, trashY));
+        
+        this.frontseatTrash.gameObject.x = newX;
+        this.frontseatTrash.gameObject.y = newY;
+        
+        // Update physics body position
+        this.matter.body.setPosition(this.frontseatTrash.gameObject.body, { x: newX, y: newY });
+        
+        // Stop any velocity to prevent immediate re-escape
+        this.matter.body.setVelocity(this.frontseatTrash.gameObject.body, { x: 0, y: 0 });
+      }
+    }
+    
+    // Check backseat Item object
+    if (this.backseatItem && this.backseatItem.gameObject && this.backseatItem.gameObject.body) {
+      const itemX = this.backseatItem.gameObject.x;
+      const itemY = this.backseatItem.gameObject.y;
+      
+      // If item is outside backseat bounds (gameWidth to gameWidth*2), teleport it back
+      if (itemX < gameWidth || itemX > gameWidth * 2 || itemY < 0 || itemY > gameHeight) {
+        console.log(`Item escaped backseat bounds at (${itemX}, ${itemY}), teleporting back`);
+        
+        // Teleport back to center of backseat area
+        const newX = Math.max(gameWidth + 50, Math.min(gameWidth * 2 - 50, itemX));
+        const newY = Math.max(50, Math.min(gameHeight - 50, itemY));
+        
+        this.backseatItem.gameObject.x = newX;
+        this.backseatItem.gameObject.y = newY;
+        
+        // Update physics body position
+        this.matter.body.setPosition(this.backseatItem.gameObject.body, { x: newX, y: newY });
+        
+        // Stop any velocity to prevent immediate re-escape
+        this.matter.body.setVelocity(this.backseatItem.gameObject.body, { x: 0, y: 0 });
+      }
+    }
+  }
 
      private setupSharedGameCamera() {
      // Set up world bounds to accommodate both scenes side by side
