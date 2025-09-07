@@ -408,15 +408,17 @@ export class GameScene extends Phaser.Scene {
   private checkPhysicsObjectBoundaries() {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
+    const bufferZone = 100; // Buffer zone before teleporting
     
     // Check frontseat Trash object
     if (this.frontseatTrash && this.frontseatTrash.gameObject && this.frontseatTrash.gameObject.body) {
       const trashX = this.frontseatTrash.gameObject.x;
       const trashY = this.frontseatTrash.gameObject.y;
       
-      // If trash is outside frontseat bounds (0 to gameWidth), teleport it back
-      if (trashX < 0 || trashX > gameWidth || trashY < 0 || trashY > gameHeight) {
-        console.log(`Trash escaped frontseat bounds at (${trashX}, ${trashY}), teleporting back`);
+      // Only teleport if trash is significantly outside frontseat bounds (with buffer)
+      if (trashX < -bufferZone || trashX > gameWidth + bufferZone || 
+          trashY < -bufferZone || trashY > gameHeight + bufferZone) {
+        console.log(`Trash significantly escaped frontseat bounds at (${trashX}, ${trashY}), teleporting back`);
         
         // Teleport back to center of frontseat area
         const newX = Math.max(50, Math.min(gameWidth - 50, trashX));
@@ -438,9 +440,10 @@ export class GameScene extends Phaser.Scene {
       const itemX = this.backseatItem.gameObject.x;
       const itemY = this.backseatItem.gameObject.y;
       
-      // If item is outside backseat bounds (gameWidth to gameWidth*2), teleport it back
-      if (itemX < gameWidth || itemX > gameWidth * 2 || itemY < 0 || itemY > gameHeight) {
-        console.log(`Item escaped backseat bounds at (${itemX}, ${itemY}), teleporting back`);
+      // Only teleport if item is significantly outside backseat bounds (with buffer)
+      if (itemX < gameWidth - bufferZone || itemX > gameWidth * 2 + bufferZone || 
+          itemY < -bufferZone || itemY > gameHeight + bufferZone) {
+        console.log(`Item significantly escaped backseat bounds at (${itemX}, ${itemY}), teleporting back`);
         
         // Teleport back to center of backseat area
         const newX = Math.max(gameWidth + 50, Math.min(gameWidth * 2 - 50, itemX));
@@ -993,6 +996,9 @@ export class GameScene extends Phaser.Scene {
     // Set gravity from config
     this.matter.world.setGravity(this.config.physics.gravity.x, this.config.physics.gravity.y);
     
+    // Create invisible walls for natural bouncing
+    this.createInvisibleWalls();
+    
     // Add a test physics body to demonstrate the physics worlds
     this.addTestPhysicsBodies();
     
@@ -1006,6 +1012,44 @@ export class GameScene extends Phaser.Scene {
     this.createDebugBorders();
     
     console.log('Physics containers created - Frontseat:', this.frontseatPhysicsContainer, 'Backseat:', this.backseatPhysicsContainer);
+  }
+
+  private createInvisibleWalls() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Create invisible walls for natural bouncing
+    // Left wall (left edge of screen)
+    this.matter.add.rectangle(-10, gameHeight / 2, 20, gameHeight, {
+      isStatic: true,
+      render: { visible: false }
+    });
+    
+    // Right wall (right edge of screen)
+    this.matter.add.rectangle(gameWidth * 2 + 10, gameHeight / 2, 20, gameHeight, {
+      isStatic: true,
+      render: { visible: false }
+    });
+    
+    // Center wall (separates frontseat and backseat)
+    this.matter.add.rectangle(gameWidth, gameHeight / 2, 20, gameHeight, {
+      isStatic: true,
+      render: { visible: false }
+    });
+    
+    // Top wall (top edge of screen)
+    this.matter.add.rectangle(gameWidth, -10, gameWidth * 2, 20, {
+      isStatic: true,
+      render: { visible: false }
+    });
+    
+    // Bottom wall (bottom edge of screen)
+    this.matter.add.rectangle(gameWidth, gameHeight + 10, gameWidth * 2, 20, {
+      isStatic: true,
+      render: { visible: false }
+    });
+    
+    console.log('Invisible walls created for natural bouncing');
   }
 
    private addTestPhysicsBodies() {
