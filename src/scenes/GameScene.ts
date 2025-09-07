@@ -113,7 +113,7 @@ class Trash implements PhysicsObject {
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = false;
         // Apply velocity as momentum
-        this.scene.matter.body.setVelocity(this.gameObject.body, { x: velocityX * 0.5, y: velocityY * 0.5 });
+        this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.5, y: velocityY * 0.5 });
       }
     });
   }
@@ -224,7 +224,7 @@ class Item implements PhysicsObject {
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = false;
         // Apply velocity as momentum
-        this.scene.matter.body.setVelocity(this.gameObject.body, { x: velocityX * 0.5, y: velocityY * 0.5 });
+        this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.5, y: velocityY * 0.5 });
       }
     });
   }
@@ -308,8 +308,16 @@ class Keys implements PhysicsObject {
         // Reset magnetic target color
         if ((this.scene as any).magneticTarget) {
           const magneticConfig = (this.scene as any).config.physics.magneticTarget;
-          (this.scene as any).magneticTarget.setFillStyle(parseInt(magneticConfig.color.replace('0x', ''), 16));
+          (this.scene as any).magneticTarget.clear();
+          (this.scene as any).magneticTarget.lineStyle(3, parseInt(magneticConfig.color.replace('0x', ''), 16), 1);
+          (this.scene as any).magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
         }
+        
+        // Reset Keys scroll factor to horizontal only
+        this.gameObject.setScrollFactor(1, 0);
+        
+        // Update tutorial overlay visibility
+        (this.scene as any).updateTutorialOverlay();
       }
       
       // Disable physics during drag
@@ -348,7 +356,7 @@ class Keys implements PhysicsObject {
       if (this.gameObject.body) {
         (this.gameObject.body as any).isStatic = false;
         // Apply velocity as momentum
-        this.scene.matter.body.setVelocity(this.gameObject.body, { x: velocityX * 0.5, y: velocityY * 0.5 });
+        this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.5, y: velocityY * 0.5 });
       }
     });
   }
@@ -406,8 +414,9 @@ export class GameScene extends Phaser.Scene {
   private frontseatTrash!: Trash;
   private backseatItem!: Item;
   private frontseatKeys!: Keys;
-  private magneticTarget!: Phaser.GameObjects.Arc;
-  private keysConstraint!: Matter.Constraint | null; // Constraint for snapping Keys to target
+  private magneticTarget!: Phaser.GameObjects.Graphics;
+  private keysConstraint!: MatterJS.Constraint | null; // Constraint for snapping Keys to target
+  private tutorialOverlay!: Phaser.GameObjects.Container; // Tutorial overlay with masking
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -537,6 +546,11 @@ export class GameScene extends Phaser.Scene {
     // Apply magnetic attraction between Keys and magnetic target
     this.applyMagneticAttraction();
     
+    // Update tutorial mask to follow keys movement
+    if (this.tutorialOverlay && this.tutorialOverlay.visible && this.frontseatKeys?.gameObject) {
+      this.updateTutorialMask();
+    }
+    
     // Frame-by-frame updates
     this.updatePosition();
    }
@@ -564,10 +578,10 @@ export class GameScene extends Phaser.Scene {
         this.frontseatTrash.gameObject.y = newY;
         
         // Update physics body position
-        this.matter.body.setPosition(this.frontseatTrash.gameObject.body, { x: newX, y: newY });
+        this.matter.body.setPosition(this.frontseatTrash.gameObject.body as any, { x: newX, y: newY });
         
         // Stop any velocity to prevent immediate re-escape
-        this.matter.body.setVelocity(this.frontseatTrash.gameObject.body, { x: 0, y: 0 });
+        this.matter.body.setVelocity(this.frontseatTrash.gameObject.body as any, { x: 0, y: 0 });
       }
     }
     
@@ -589,10 +603,10 @@ export class GameScene extends Phaser.Scene {
         this.frontseatKeys.gameObject.y = newY;
         
         // Update physics body position
-        this.matter.body.setPosition(this.frontseatKeys.gameObject.body, { x: newX, y: newY });
+        this.matter.body.setPosition(this.frontseatKeys.gameObject.body as any, { x: newX, y: newY });
         
         // Stop any velocity to prevent immediate re-escape
-        this.matter.body.setVelocity(this.frontseatKeys.gameObject.body, { x: 0, y: 0 });
+        this.matter.body.setVelocity(this.frontseatKeys.gameObject.body as any, { x: 0, y: 0 });
       }
     }
     
@@ -614,10 +628,10 @@ export class GameScene extends Phaser.Scene {
         this.backseatItem.gameObject.y = newY;
         
         // Update physics body position
-        this.matter.body.setPosition(this.backseatItem.gameObject.body, { x: newX, y: newY });
+        this.matter.body.setPosition(this.backseatItem.gameObject.body as any, { x: newX, y: newY });
         
         // Stop any velocity to prevent immediate re-escape
-        this.matter.body.setVelocity(this.backseatItem.gameObject.body, { x: 0, y: 0 });
+        this.matter.body.setVelocity(this.backseatItem.gameObject.body as any, { x: 0, y: 0 });
       }
      }
    }
@@ -772,6 +786,9 @@ export class GameScene extends Phaser.Scene {
     
     // Create driving background (always visible behind game content)
     this.createDrivingBackground();
+    
+    // Create tutorial overlay (transparent black with masked areas to guide player)
+    this.createTutorialOverlay();
    }
 
    private createCountdownTimer() {
@@ -1061,30 +1078,30 @@ export class GameScene extends Phaser.Scene {
   private createMagneticTarget() {
     const magneticConfig = this.config.physics.magneticTarget;
     
-    // Create the magnetic target circle
-    this.magneticTarget = this.add.circle(
-      magneticConfig.x,
-      magneticConfig.y,
-      magneticConfig.radius,
-      parseInt(magneticConfig.color.replace('0x', ''), 16)
-    );
+    // Create the magnetic target circle (outline only)
+    this.magneticTarget = this.add.graphics();
+    this.magneticTarget.lineStyle(3, parseInt(magneticConfig.color.replace('0x', ''), 16), 1);
+    this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
     
-    // Make it a static sensor body (no collision, no gravity, doesn't move)
-    this.matter.add.gameObject(this.magneticTarget, {
-      shape: 'circle',
+    // Create a separate invisible Matter.js body for collision detection
+    const magneticBody = this.matter.add.circle(magneticConfig.x, magneticConfig.y, magneticConfig.radius, {
       isStatic: true,
       isSensor: true,  // No collision - Keys can pass through
-      render: { visible: true }
+      render: { visible: false } // Invisible body
     });
     
-    // Add to frontseat physics container so it moves with camera
-    this.frontseatPhysicsContainer.add(this.magneticTarget);
+    // Store reference to the body for collision detection
+    (this.magneticTarget as any).magneticBody = magneticBody;
     
-    // Set scroll factor to move horizontally with physics containers but stay vertically fixed
-    this.magneticTarget.setScrollFactor(1, 0);
+    // Don't add to physics container - manage position manually for proper depth
+    // Set scroll factor to move with camera (both horizontally and vertically)
+    this.magneticTarget.setScrollFactor(1, 1);
     
     // Set depth to be visible but not interfere with UI, behind Keys
     this.magneticTarget.setDepth(999);
+    
+    // Add to game content container so it moves with camera
+    this.gameContentContainer.add(this.magneticTarget);
     
     console.log('Magnetic target created at position:', magneticConfig.x, magneticConfig.y);
   }
@@ -1274,14 +1291,15 @@ export class GameScene extends Phaser.Scene {
     // Create Keys object
     this.frontseatKeys = new Keys(this, keysConfig);
     
-    // Don't add to physics container - keep Keys separate for proper depth ordering
-    // Instead, manually sync position with container movement in update loop
-    
+    // Don't add to physics container - manage position manually for proper depth
     // Set the scroll factor to move horizontally with physics containers but stay vertically fixed
     this.frontseatKeys.gameObject.setScrollFactor(1, 0);
     
     // Set depth to be visible but not interfere with UI, and in front of magnetic target
-    this.frontseatKeys.gameObject.setDepth(1001);
+    this.frontseatKeys.gameObject.setDepth(2000);
+    
+    // Add to game content container so it moves with camera
+    this.gameContentContainer.add(this.frontseatKeys.gameObject);
     
     console.log('Frontseat Keys added:', this.frontseatKeys);
   }
@@ -1330,6 +1348,9 @@ export class GameScene extends Phaser.Scene {
       // Don't start swipe tracking if knob is being used or dragging an object
       if (this.isKnobActive || this.isDraggingObject) return;
       
+      // Don't allow swiping if Keys is not snapped to magnetic target
+      if (!this.keysConstraint) return;
+      
       // Check if clicking on interactive objects FIRST
       const hitObjects = this.input.hitTestPointer(pointer);
       if (hitObjects.length > 0) {
@@ -1358,6 +1379,9 @@ export class GameScene extends Phaser.Scene {
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       if (!this.gameStarted || this.isKnobActive || this.isDraggingObject) return;
+      
+      // Don't process swipe if Keys is not snapped to magnetic target
+      if (!this.keysConstraint) return;
       
       // Don't process swipe if clicking on an interactive object
       const hitObjects = this.input.hitTestPointer(pointer);
@@ -1492,6 +1516,9 @@ export class GameScene extends Phaser.Scene {
         
         this.currentPosition = 'backseat';
         this.currentView = 'main';
+        
+        // Update tutorial overlay visibility
+        this.updateTutorialOverlay();
       }
     }
 
@@ -1664,17 +1691,22 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private syncPhysicsObjectPositions() {
+    // This method is not needed - objects are now in gameContentContainer
+    // which moves with the camera automatically
+  }
+
   private applyMagneticAttraction() {
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) return;
-    if (!this.magneticTarget || !this.magneticTarget.body) return;
+    if (!this.magneticTarget || !(this.magneticTarget as any).magneticBody) return;
     
     const magneticConfig = this.config.physics.magneticTarget;
     const keysBody = this.frontseatKeys.gameObject.body;
-    const targetBody = this.magneticTarget.body;
+    const magneticBody = (this.magneticTarget as any).magneticBody;
     
     // Get positions using Phaser Matter API
     const keysPos = { x: keysBody.position.x, y: keysBody.position.y };
-    const targetPos = { x: targetBody.position.x, y: targetBody.position.y };
+    const targetPos = { x: magneticBody.position.x, y: magneticBody.position.y };
     
     // Calculate distance
     const dx = targetPos.x - keysPos.x;
@@ -1687,15 +1719,23 @@ export class GameScene extends Phaser.Scene {
     if (distance <= snapThreshold && !this.keysConstraint) {
       // Create constraint to snap Keys to the center of magnetic target
       console.log('Keys snapped to magnetic target!');
-      this.keysConstraint = this.matter.add.constraint(keysBody, targetBody, 0, 0.1, {
+      this.keysConstraint = this.matter.add.constraint(keysBody, magneticBody, 0, 0.1, {
         pointA: { x: 0, y: 0 },
         pointB: { x: 0, y: 0 },
         stiffness: 1,
         damping: 0.1
       });
       
+      // Make Keys move vertically with camera when snapped
+      this.frontseatKeys.gameObject.setScrollFactor(1, 1);
+      
       // Visual feedback: make target glow bright when snapped
-      this.magneticTarget.setFillStyle(parseInt('0x88ff88', 16)); // Very bright green
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(5, parseInt('0x88ff88', 16), 1); // Thicker, brighter green
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+      
+      // Update tutorial overlay visibility
+      this.updateTutorialOverlay();
       
     } else if (distance > magneticConfig.magneticRange && this.keysConstraint) {
       // Remove constraint if Keys is dragged too far away
@@ -1703,8 +1743,16 @@ export class GameScene extends Phaser.Scene {
       this.matter.world.remove(this.keysConstraint);
       this.keysConstraint = null;
       
+      // Reset Keys scroll factor to horizontal only
+      this.frontseatKeys.gameObject.setScrollFactor(1, 0);
+      
       // Reset target color
-      this.magneticTarget.setFillStyle(parseInt(magneticConfig.color.replace('0x', ''), 16));
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(3, parseInt(magneticConfig.color.replace('0x', ''), 16), 1);
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+      
+      // Update tutorial overlay visibility
+      this.updateTutorialOverlay();
       
     } else if (distance <= magneticConfig.magneticRange && distance > snapThreshold && !this.keysConstraint) {
       // Apply magnetic attraction when close but not snapped
@@ -1715,14 +1763,18 @@ export class GameScene extends Phaser.Scene {
       const forceY = (dy / distance) * attractionForce;
       
       // Apply the force to the Keys object using Phaser Matter API
-      this.matter.body.applyForce(keysBody, keysPos, { x: forceX, y: forceY });
+      this.matter.body.applyForce(keysBody as any, keysPos, { x: forceX, y: forceY });
       
       // Visual feedback: make target glow when Keys is close
-      this.magneticTarget.setFillStyle(parseInt('0x44ff44', 16)); // Brighter green
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(4, parseInt('0x44ff44', 16), 1); // Brighter green
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
       
     } else if (distance > magneticConfig.magneticRange) {
       // Reset target color when Keys is far away
-      this.magneticTarget.setFillStyle(parseInt(magneticConfig.color.replace('0x', ''), 16));
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(3, parseInt(magneticConfig.color.replace('0x', ''), 16), 1);
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
     }
   }
 
@@ -1834,6 +1886,9 @@ export class GameScene extends Phaser.Scene {
   public startGame() {
     this.gameStarted = true;
     console.log('GameScene: Game started! Controls are now enabled.');
+    
+    // Update tutorial overlay visibility now that game has started
+    this.updateTutorialOverlay();
     
     // Start the countdown timer
     this.startCountdownTimer();
@@ -2056,9 +2111,6 @@ export class GameScene extends Phaser.Scene {
     
     // Start obstacle spawning
     this.startObstacleSpawning();
-    
-    // Update button text
-    this.updateDrivingButtonText();
    }
 
    private stopDriving() {
@@ -2076,9 +2128,6 @@ export class GameScene extends Phaser.Scene {
     
     // Stop obstacle spawning and clear obstacles
     this.stopObstacleSpawning();
-    
-    // Update button text
-    this.updateDrivingButtonText();
      }
 
   private pauseDriving() {
@@ -2238,12 +2287,134 @@ export class GameScene extends Phaser.Scene {
     this.drivingCar.setDepth(-1000); // Ensure car is behind UI
     this.drivingBackground.add(this.drivingCar);
      
-     // Initialize car position
-     this.carX = gameWidth / 2;
-     this.carSpeed = 0;
-   }
+    // Initialize car position
+    this.carX = gameWidth / 2;
+    this.carSpeed = 0;
+  }
 
-   private handleDrivingSteeringInput(steeringValue: number) {
+  private createTutorialOverlay() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const magneticConfig = this.config.physics.magneticTarget;
+    
+    console.log('Creating tutorial overlay with dimensions:', gameWidth, gameHeight);
+    
+    // Create tutorial overlay container
+    this.tutorialOverlay = this.add.container(0, 0);
+    this.tutorialOverlay.setDepth(50000); // Above everything
+    
+    // Create the main dark overlay
+    const darkOverlay = this.add.graphics();
+    darkOverlay.fillStyle(0x000000, 0.3);
+    darkOverlay.fillRect(0, 0, gameWidth, gameHeight);
+    this.tutorialOverlay.add(darkOverlay);
+    
+    // Create mask graphics to cut out holes for interaction areas
+    const maskGraphics = this.add.graphics();
+    
+    // Fill entire screen with black (this will be the mask)
+    maskGraphics.fillStyle(0x000000, 1);
+    maskGraphics.fillRect(0, 0, gameWidth, gameHeight);
+    
+    // Cut out circular hole for magnetic target area
+    const targetCutoutRadius = magneticConfig.radius + 30; // Extra space around target
+    maskGraphics.fillStyle(0x000000, 0); // Transparent fill for cutout
+    maskGraphics.beginPath();
+    maskGraphics.arc(magneticConfig.x, magneticConfig.y, targetCutoutRadius, 0, Math.PI * 2);
+    maskGraphics.closePath();
+    maskGraphics.fill();
+    
+    // Cut out circular hole for keys area (will be updated dynamically)
+    const keysCutoutRadius = 25; // Size of hole around keys
+    const keysX = this.frontseatKeys?.gameObject?.x || magneticConfig.x;
+    const keysY = this.frontseatKeys?.gameObject?.y || magneticConfig.y;
+    maskGraphics.beginPath();
+    maskGraphics.arc(keysX, keysY, keysCutoutRadius, 0, Math.PI * 2);
+    maskGraphics.closePath();
+    maskGraphics.fill();
+    
+    // Apply the mask to the dark overlay
+    try {
+      darkOverlay.mask = new Phaser.Display.Masks.GeometryMask(this, maskGraphics);
+      console.log('Mask applied successfully to tutorial overlay');
+    } catch (error) {
+      console.error('Failed to apply mask to tutorial overlay:', error);
+      // If mask fails, just hide the overlay completely
+      this.tutorialOverlay.setVisible(false);
+      return;
+    }
+    
+    this.tutorialOverlay.add(maskGraphics);
+    
+    // Initially hide the tutorial overlay - it will be shown when conditions are met
+    this.tutorialOverlay.setVisible(false);
+    
+    console.log('Tutorial overlay created, initially hidden');
+  }
+
+  private updateTutorialOverlay() {
+    if (!this.tutorialOverlay) return;
+    
+    // Temporarily disable tutorial overlay to debug blocking issue
+    this.tutorialOverlay.setVisible(false);
+    console.log('Tutorial overlay temporarily disabled for debugging');
+    
+    // TODO: Re-enable when mask is working properly
+    /*
+    // Only show tutorial overlay if:
+    // 1. Keys are not snapped to magnetic target AND
+    // 2. Player is in frontseat view AND
+    // 3. Game has started
+    const shouldShowTutorial = !this.keysConstraint && 
+                              this.currentPosition === 'frontseat' && 
+                              this.gameStarted;
+    
+    this.tutorialOverlay.setVisible(shouldShowTutorial);
+    
+    // Update the mask to follow the keys position
+    if (shouldShowTutorial && this.frontseatKeys?.gameObject) {
+      this.updateTutorialMask();
+    }
+    
+    console.log('Tutorial overlay visibility:', shouldShowTutorial ? 'shown' : 'hidden');
+    */
+  }
+
+  private updateTutorialMask() {
+    if (!this.tutorialOverlay || !this.frontseatKeys?.gameObject) return;
+    
+    const magneticConfig = this.config.physics.magneticTarget;
+    const maskGraphics = this.tutorialOverlay.list[1] as Phaser.GameObjects.Graphics; // Second child is mask
+    
+    if (!maskGraphics) return;
+    
+    // Clear and redraw the mask with updated keys position
+    maskGraphics.clear();
+    
+    // Fill entire screen with black
+    maskGraphics.fillStyle(0x000000, 1);
+    maskGraphics.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
+    
+    // Cut out hole for magnetic target
+    const targetCutoutRadius = magneticConfig.radius + 30;
+    maskGraphics.fillStyle(0x000000, 0);
+    maskGraphics.beginPath();
+    maskGraphics.arc(magneticConfig.x, magneticConfig.y, targetCutoutRadius, 0, Math.PI * 2);
+    maskGraphics.closePath();
+    maskGraphics.fill();
+    
+    // Cut out hole for keys at current position
+    const keysCutoutRadius = 25;
+    const keysX = this.frontseatKeys.gameObject.x;
+    const keysY = this.frontseatKeys.gameObject.y;
+    maskGraphics.beginPath();
+    maskGraphics.arc(keysX, keysY, keysCutoutRadius, 0, Math.PI * 2);
+    maskGraphics.closePath();
+    maskGraphics.fill();
+  }
+
+
+  private handleDrivingSteeringInput(steeringValue: number) {
      // Store the current steering value for continuous updates
      this.currentSteeringValue = steeringValue;
      
