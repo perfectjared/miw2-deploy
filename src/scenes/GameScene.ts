@@ -417,6 +417,7 @@ export class GameScene extends Phaser.Scene {
   private magneticTarget!: Phaser.GameObjects.Graphics;
   private keysConstraint!: MatterJS.Constraint | null; // Constraint for snapping Keys to target
   private tutorialOverlay!: Phaser.GameObjects.Container; // Tutorial overlay with masking
+  private tutorialMaskGraphics!: Phaser.GameObjects.Graphics; // Reference to mask graphics for updates
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -546,8 +547,12 @@ export class GameScene extends Phaser.Scene {
     // Apply magnetic attraction between Keys and magnetic target
     this.applyMagneticAttraction();
     
+    // Update tutorial overlay visibility
+    this.updateTutorialOverlay();
+    
     // Update tutorial mask to follow keys movement
     if (this.tutorialOverlay && this.tutorialOverlay.visible && this.frontseatKeys?.gameObject) {
+      console.log('Calling updateTutorialMask');
       this.updateTutorialMask();
     }
     
@@ -2303,114 +2308,112 @@ export class GameScene extends Phaser.Scene {
     this.tutorialOverlay = this.add.container(0, 0);
     this.tutorialOverlay.setDepth(50000); // Above everything
     
-    // Create the main dark overlay
-    const darkOverlay = this.add.graphics();
-    darkOverlay.fillStyle(0x000000, 0.3);
-    darkOverlay.fillRect(0, 0, gameWidth, gameHeight);
-    this.tutorialOverlay.add(darkOverlay);
+    // Create 20% transparent black overlay covering the screen
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, gameWidth, gameHeight);
+    this.tutorialOverlay.add(overlay);
     
-    // Create mask graphics to cut out holes for interaction areas
-    const maskGraphics = this.add.graphics();
+    // Create circular mask for cutout
+    const maskGraphics = this.make.graphics();
     
-    // Fill entire screen with black (this will be the mask)
-    maskGraphics.fillStyle(0x000000, 1);
-    maskGraphics.fillRect(0, 0, gameWidth, gameHeight);
+    // Store reference to mask graphics for updates
+    this.tutorialMaskGraphics = maskGraphics;
     
-    // Cut out circular hole for magnetic target area
-    const targetCutoutRadius = magneticConfig.radius + 30; // Extra space around target
-    maskGraphics.fillStyle(0x000000, 0); // Transparent fill for cutout
+    // Fill the mask with white (this will be the cutout area)
+    maskGraphics.fillStyle(0xffffff);
+    
+    // Position the first cutout at the magnetic target location
+    const targetX = magneticConfig.x;
+    const targetY = magneticConfig.y;
+    const targetHoleRadius = magneticConfig.radius * 1.2; // 20% larger than magnetic target
+    
     maskGraphics.beginPath();
-    maskGraphics.arc(magneticConfig.x, magneticConfig.y, targetCutoutRadius, 0, Math.PI * 2);
+    maskGraphics.arc(targetX, targetY, targetHoleRadius, 0, Math.PI * 2);
     maskGraphics.closePath();
     maskGraphics.fill();
     
-    // Cut out circular hole for keys area (will be updated dynamically)
-    const keysCutoutRadius = 25; // Size of hole around keys
+    // Position the second cutout at the keys location
     const keysX = this.frontseatKeys?.gameObject?.x || magneticConfig.x;
     const keysY = this.frontseatKeys?.gameObject?.y || magneticConfig.y;
+    const keysHoleRadius = 25; // Fixed size for keys cutout
+    
     maskGraphics.beginPath();
-    maskGraphics.arc(keysX, keysY, keysCutoutRadius, 0, Math.PI * 2);
+    maskGraphics.arc(keysX, keysY, keysHoleRadius, 0, Math.PI * 2);
     maskGraphics.closePath();
     maskGraphics.fill();
     
-    // Apply the mask to the dark overlay
-    try {
-      darkOverlay.mask = new Phaser.Display.Masks.GeometryMask(this, maskGraphics);
-      console.log('Mask applied successfully to tutorial overlay');
-    } catch (error) {
-      console.error('Failed to apply mask to tutorial overlay:', error);
-      // If mask fails, just hide the overlay completely
-      this.tutorialOverlay.setVisible(false);
-      return;
-    }
+    // Create BitmapMask with inverted alpha (white areas become cutouts)
+    const mask = new Phaser.Display.Masks.BitmapMask(this, maskGraphics);
+    mask.invertAlpha = true; // This makes white areas transparent (cutouts)
     
-    this.tutorialOverlay.add(maskGraphics);
+    // Apply the mask to the overlay
+    overlay.setMask(mask);
     
     // Initially hide the tutorial overlay - it will be shown when conditions are met
     this.tutorialOverlay.setVisible(false);
     
-    console.log('Tutorial overlay created, initially hidden');
+    console.log('Transparent overlay with circular cutout created, initially hidden');
   }
 
   private updateTutorialOverlay() {
-    if (!this.tutorialOverlay) return;
+    if (!this.tutorialOverlay) {
+      console.log('Tutorial overlay not found');
+      return;
+    }
     
-    // Temporarily disable tutorial overlay to debug blocking issue
-    this.tutorialOverlay.setVisible(false);
-    console.log('Tutorial overlay temporarily disabled for debugging');
+    // Show simple grey overlay when keys are not snapped to magnetic target
+    const shouldShowTutorial = !this.keysConstraint;
     
-    // TODO: Re-enable when mask is working properly
-    /*
-    // Only show tutorial overlay if:
-    // 1. Keys are not snapped to magnetic target AND
-    // 2. Player is in frontseat view AND
-    // 3. Game has started
-    const shouldShowTutorial = !this.keysConstraint && 
-                              this.currentPosition === 'frontseat' && 
-                              this.gameStarted;
+    console.log('Keys constraint:', this.keysConstraint);
+    console.log('Should show tutorial:', shouldShowTutorial);
     
     this.tutorialOverlay.setVisible(shouldShowTutorial);
     
-    // Update the mask to follow the keys position
-    if (shouldShowTutorial && this.frontseatKeys?.gameObject) {
-      this.updateTutorialMask();
-    }
-    
     console.log('Tutorial overlay visibility:', shouldShowTutorial ? 'shown' : 'hidden');
-    */
   }
 
   private updateTutorialMask() {
-    if (!this.tutorialOverlay || !this.frontseatKeys?.gameObject) return;
+    if (!this.tutorialOverlay || !this.frontseatKeys?.gameObject) {
+      console.log('Cannot update mask - overlay or keys not found');
+      return;
+    }
+    
+    if (!this.tutorialMaskGraphics) {
+      console.log('Tutorial mask graphics not found');
+      return;
+    }
     
     const magneticConfig = this.config.physics.magneticTarget;
-    const maskGraphics = this.tutorialOverlay.list[1] as Phaser.GameObjects.Graphics; // Second child is mask
     
-    if (!maskGraphics) return;
+    console.log('Updating tutorial mask with keys at:', this.frontseatKeys.gameObject.x, this.frontseatKeys.gameObject.y);
     
-    // Clear and redraw the mask with updated keys position
-    maskGraphics.clear();
+    // Clear and redraw the mask with updated positions
+    this.tutorialMaskGraphics.clear();
     
-    // Fill entire screen with black
-    maskGraphics.fillStyle(0x000000, 1);
-    maskGraphics.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
+    // Fill the mask with white (this will be the cutout area)
+    this.tutorialMaskGraphics.fillStyle(0xffffff);
     
-    // Cut out hole for magnetic target
-    const targetCutoutRadius = magneticConfig.radius + 30;
-    maskGraphics.fillStyle(0x000000, 0);
-    maskGraphics.beginPath();
-    maskGraphics.arc(magneticConfig.x, magneticConfig.y, targetCutoutRadius, 0, Math.PI * 2);
-    maskGraphics.closePath();
-    maskGraphics.fill();
+    // Position the first cutout at the magnetic target location
+    const targetX = magneticConfig.x;
+    const targetY = magneticConfig.y;
+    const targetHoleRadius = magneticConfig.radius * 1.2; // 20% larger than magnetic target
     
-    // Cut out hole for keys at current position
-    const keysCutoutRadius = 25;
+    this.tutorialMaskGraphics.beginPath();
+    this.tutorialMaskGraphics.arc(targetX, targetY, targetHoleRadius, 0, Math.PI * 2);
+    this.tutorialMaskGraphics.closePath();
+    this.tutorialMaskGraphics.fill();
+    
+    // Position the second cutout at the keys location
     const keysX = this.frontseatKeys.gameObject.x;
     const keysY = this.frontseatKeys.gameObject.y;
-    maskGraphics.beginPath();
-    maskGraphics.arc(keysX, keysY, keysCutoutRadius, 0, Math.PI * 2);
-    maskGraphics.closePath();
-    maskGraphics.fill();
+    const keysHoleRadius = 25; // Fixed size for keys cutout
+    
+    this.tutorialMaskGraphics.beginPath();
+    this.tutorialMaskGraphics.arc(keysX, keysY, keysHoleRadius, 0, Math.PI * 2);
+    this.tutorialMaskGraphics.closePath();
+    this.tutorialMaskGraphics.fill();
+    
+    console.log('Mask updated with two cutouts');
   }
 
 
