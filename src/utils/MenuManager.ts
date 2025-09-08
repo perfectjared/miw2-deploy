@@ -297,6 +297,17 @@ export class MenuManager {
     
     // Add drag dial after creating the dialog
     this.addTurnKeyDial();
+    
+    // Emit event to notify GameScene that ignition menu is shown
+    console.log('MenuManager: Emitting ignitionMenuShown event');
+    this.scene.events.emit('ignitionMenuShown');
+    
+    // Also emit on GameScene
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene) {
+      console.log('MenuManager: Emitting ignitionMenuShown event on GameScene');
+      gameScene.events.emit('ignitionMenuShown');
+    }
   }
 
   private addTurnKeyDial() {
@@ -730,6 +741,17 @@ export class MenuManager {
       
       this.currentDialog.destroy();
       this.currentDialog = null;
+      
+      // Emit event to notify GameScene that menu is hidden
+      console.log('MenuManager: Emitting ignitionMenuHidden event');
+      this.scene.events.emit('ignitionMenuHidden');
+      
+      // Also emit on GameScene
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
+        gameScene.events.emit('ignitionMenuHidden');
+      }
     }
   }
 

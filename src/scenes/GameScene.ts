@@ -312,6 +312,20 @@ class Keys implements PhysicsObject {
         // Reset car started state since keys are removed
         (this.scene as any).carStarted = false;
         
+        // Stop driving mode when keys are removed
+        if ((this.scene as any).drivingMode) {
+          (this.scene as any).stopDriving();
+          console.log('Driving mode stopped due to key drag removal');
+        }
+        
+        // Reset speed crank to 0 when car stops being started
+        if ((this.scene as any).resetSpeedCrank) {
+          (this.scene as any).resetSpeedCrank();
+        }
+        
+        // Reset steering value to prevent any position changes
+        (this.scene as any).currentSteeringValue = 0;
+        
         // Hide navigation buttons until car is started again
         (this.scene as any).updateNavigationButtonVisibility();
         
@@ -454,6 +468,11 @@ export class GameScene extends Phaser.Scene {
   private resetSpeedCrank!: () => void; // Function to reset speed crank to 0
   private currentSpeedCrankPercentage: number = 0; // Current speed crank percentage (0-100)
   private speedDisplayText!: Phaser.GameObjects.Text; // Debug display for current car speed
+  private crankTutorialOverlay!: Phaser.GameObjects.Container; // Overlay container for speed crank highlighting
+  private crankTutorialMaskGraphics!: Phaser.GameObjects.Graphics; // Mask graphics for crank cutout
+  private ignitionTutorialOverlay!: Phaser.GameObjects.Container; // Overlay container for ignition menu highlighting
+  private ignitionTutorialMaskGraphics!: Phaser.GameObjects.Graphics; // Mask graphics for ignition menu cutout
+  private speedCrankCooldown: number = 0; // Cooldown timer for speed crank interaction
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -564,6 +583,8 @@ export class GameScene extends Phaser.Scene {
     // Listen for turn key menu events
     this.events.on('turnKey', this.onTurnKey, this);
     this.events.on('removeKeys', this.onRemoveKeys, this);
+    this.events.on('ignitionMenuShown', this.onIgnitionMenuShown, this);
+    this.events.on('ignitionMenuHidden', this.onIgnitionMenuHidden, this);
 
     // Set up automatic pause when window loses focus
     this.setupAutoPause();
@@ -598,6 +619,15 @@ export class GameScene extends Phaser.Scene {
     
     // Frame-by-frame updates
     this.updatePosition();
+    
+    // Update speed crank cooldown
+    if (this.speedCrankCooldown > 0) {
+      this.speedCrankCooldown -= 16; // Assuming ~60 FPS, subtract ~16ms per frame
+      if (this.speedCrankCooldown <= 0) {
+        this.speedCrankCooldown = 0;
+        console.log('Speed crank cooldown ended');
+      }
+    }
    }
 
   private checkPhysicsObjectBoundaries() {
@@ -858,6 +888,12 @@ export class GameScene extends Phaser.Scene {
     
     // Create tutorial overlay (transparent black with masked areas to guide player)
     this.createTutorialOverlay();
+    
+    // Create crank tutorial overlay (for speed crank highlighting)
+    this.createCrankTutorialOverlay();
+    
+    // Create ignition tutorial overlay (for ignition menu highlighting)
+    this.createIgnitionTutorialOverlay();
    }
 
    private createCountdownTimer() {
@@ -1049,21 +1085,33 @@ export class GameScene extends Phaser.Scene {
        return closest;
      };
      
-     const updateCrank = () => {
-       const handleY = crankY - crankHeight/2 + (currentProgress * crankHeight);
-       redrawHandle(handleY);
-       
-       // Update percentage text and store current percentage
-       const percentage = Math.round(currentProgress * 100);
-       this.speedCrankPercentageText.setText(`${percentage}%`);
-       this.currentSpeedCrankPercentage = percentage; // Store for driving system
-       console.log('Speed crank value:', percentage);
-     };
+    const updateCrank = () => {
+      const handleY = crankY - crankHeight/2 + (currentProgress * crankHeight);
+      redrawHandle(handleY);
+      
+      // Update percentage text and store current percentage
+      const percentage = Math.round(currentProgress * 100);
+      this.speedCrankPercentageText.setText(`${percentage}%`);
+      this.currentSpeedCrankPercentage = percentage; // Store for driving system
+      console.log('Speed crank value:', percentage);
+      
+      // Update crank tutorial overlay visibility
+      this.updateCrankTutorialOverlay();
+      
+      // Update navigation button visibility based on crank position
+      this.updateNavigationButtonVisibility();
+    };
      
      crankArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
        // Only allow interaction if car is started
        if (!this.carStarted) {
          console.log('Speed crank disabled - car not started');
+         return;
+       }
+       
+       // Check cooldown
+       if (this.speedCrankCooldown > 0) {
+         console.log('Speed crank on cooldown:', this.speedCrankCooldown);
          return;
        }
        
@@ -1088,6 +1136,10 @@ export class GameScene extends Phaser.Scene {
          currentProgress = findClosestSnap(currentProgress);
          updateCrank();
          console.log('Snapped to:', Math.round(currentProgress * 100) + '%');
+         
+         // Start cooldown after snapping
+         this.speedCrankCooldown = 600; // 0.6 seconds in milliseconds
+         console.log('Speed crank cooldown started:', this.speedCrankCooldown);
        }
        isDragging = false;
      });
@@ -1348,13 +1400,18 @@ export class GameScene extends Phaser.Scene {
      // Negative values = turn left, positive values = turn right
      const normalizedValue = steeringValue / 100; // Convert to -1 to 1 range
      
-     console.log('Steering input:', normalizedValue);
+     console.log('Steering input:', normalizedValue, 'carStarted:', this.carStarted, 'drivingMode:', this.drivingMode);
      
-     // If in driving mode, handle driving steering
-     if (this.drivingMode) {
+     // Only process steering if car is started and in driving mode
+     if (this.drivingMode && this.carStarted) {
        this.handleDrivingSteeringInput(steeringValue);
        return;
      }
+     
+     // If car is not started or not in driving mode, ignore steering input
+     console.log('Steering input ignored - car not started or not in driving mode');
+     this.currentSteeringValue = 0; // Ensure steering value is reset
+     return;
      
      // Here you can add steering logic for your game
      // For example:
@@ -2031,6 +2088,20 @@ export class GameScene extends Phaser.Scene {
       // Reset car started state since keys are removed
       this.carStarted = false;
       
+      // Stop driving mode when keys are removed
+      if (this.drivingMode) {
+        this.stopDriving();
+        console.log('Driving mode stopped due to magnetic range removal');
+      }
+      
+      // Reset speed crank to 0 when car stops being started
+      if (this.resetSpeedCrank) {
+        this.resetSpeedCrank();
+      }
+      
+      // Reset steering value to prevent any position changes
+      this.currentSteeringValue = 0;
+      
       // Hide navigation buttons until car is started again
       this.updateNavigationButtonVisibility();
       
@@ -2603,13 +2674,37 @@ export class GameScene extends Phaser.Scene {
 
      private updateCarPosition() {
     if (!this.drivingMode || !this.drivingCar || this.drivingPaused) return;
+    
+    // Only allow steering when speed crank is at 40% or higher
+    const crankPercentage = this.getSpeedCrankPercentage();
+    if (crankPercentage < 40) {
+      console.log('Position update blocked - crank below 40%:', crankPercentage, 'carStarted:', this.carStarted);
+      return; // Don't update car position when crank is below 40%
+    }
+    
+    // Don't update position if car is not moving (with small tolerance for floating point)
+    if (this.carSpeed < 0.01) {
+      console.log('Position update blocked - car speed too low:', this.carSpeed, 'crank:', crankPercentage);
+      return; // No steering when car is essentially stationary
+    }
+    
+    // Additional check: ensure car is actually started
+    if (!this.carStarted) {
+      console.log('Position update blocked - car not started');
+      return;
+    }
+    
+    console.log('Position update ALLOWED - speed:', this.carSpeed, 'crank:', crankPercentage, 'steering:', this.currentSteeringValue);
      
          // Use the current steering value to update car position
     const normalizedValue = this.currentSteeringValue / 100;
     const steeringSensitivity = this.config.driving.steering.sensitivity;
+    
+    // Make steering proportional to car speed - faster car = more steering effect
+    const speedMultiplier = this.carSpeed / this.config.driving.carSpeed.maxSpeed;
      
-     // Update car position based on steering
-     this.carX += normalizedValue * steeringSensitivity;
+     // Update car position based on steering (multiplied by speed)
+     this.carX += normalizedValue * steeringSensitivity * speedMultiplier;
      
      // Clamp car position to road boundaries
      const gameWidth = this.cameras.main.width;
@@ -2796,9 +2891,232 @@ export class GameScene extends Phaser.Scene {
     //console.log('Mask updated with two cutouts');
   }
 
+  private createCrankTutorialOverlay() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    console.log('Creating crank tutorial overlay with dimensions:', gameWidth, gameHeight);
+    
+    // Create tutorial overlay container
+    this.crankTutorialOverlay = this.add.container(0, 0);
+    this.crankTutorialOverlay.setDepth(50000); // Above everything
+    
+    // Create 50% transparent black overlay covering the screen
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, gameWidth, gameHeight);
+    this.crankTutorialOverlay.add(overlay);
+    
+    // Create mask for cutout
+    const maskGraphics = this.make.graphics();
+    
+    // Store reference to mask graphics for updates
+    this.crankTutorialMaskGraphics = maskGraphics;
+    
+    // Fill the mask with white (this will be the cutout area)
+    maskGraphics.fillStyle(0xffffff);
+    
+    // Create BitmapMask with inverted alpha (white areas become cutouts)
+    const mask = new Phaser.Display.Masks.BitmapMask(this, maskGraphics);
+    mask.invertAlpha = true; // This makes white areas transparent (cutouts)
+    
+    // Apply the mask to the overlay
+    overlay.setMask(mask);
+    
+    // Initially hidden
+    this.crankTutorialOverlay.setVisible(false);
+    
+    console.log('Crank tutorial overlay created');
+  }
+
+  private updateCrankTutorialOverlay() {
+    if (!this.crankTutorialOverlay) {
+      console.log('Crank tutorial overlay not found');
+      return;
+    }
+    
+    // Show overlay when car is started and crank is at 0%
+    const shouldShowCrankTutorial = this.carStarted && this.currentSpeedCrankPercentage === 0;
+    
+    console.log('Crank overlay check - carStarted:', this.carStarted, 'crankPercentage:', this.currentSpeedCrankPercentage, 'shouldShow:', shouldShowCrankTutorial);
+    
+    this.crankTutorialOverlay.setVisible(shouldShowCrankTutorial);
+    
+    if (shouldShowCrankTutorial) {
+      this.updateCrankTutorialMask();
+    }
+    
+    console.log('Crank tutorial overlay visibility:', shouldShowCrankTutorial ? 'shown' : 'hidden');
+  }
+
+  private updateCrankTutorialMask() {
+    if (!this.crankTutorialOverlay || !this.speedCrankArea) {
+      console.log('Cannot update crank mask - overlay or crank area not found');
+      return;
+    }
+    
+    if (!this.crankTutorialMaskGraphics) {
+      return;
+    }
+    
+    // Clear and redraw the mask
+    this.crankTutorialMaskGraphics.clear();
+    
+    // Fill the mask with white (this will be the cutout area)
+    this.crankTutorialMaskGraphics.fillStyle(0xffffff);
+    
+    // Get crank position and size
+    const crankX = this.speedCrankArea.x;
+    const crankY = this.speedCrankArea.y;
+    const crankWidth = this.speedCrankArea.width;
+    const crankHeight = this.speedCrankArea.height;
+    
+    // Create cutout around the speed crank area
+    const cutoutPadding = 10; // Extra padding around the crank
+    const cutoutX = crankX - crankWidth/2 - cutoutPadding;
+    const cutoutY = crankY - crankHeight/2 - cutoutPadding;
+    const cutoutWidth = crankWidth + (cutoutPadding * 2);
+    const cutoutHeight = crankHeight + (cutoutPadding * 2);
+    
+    this.crankTutorialMaskGraphics.beginPath();
+    this.crankTutorialMaskGraphics.fillRoundedRect(cutoutX, cutoutY, cutoutWidth, cutoutHeight, 8);
+    this.crankTutorialMaskGraphics.closePath();
+    this.crankTutorialMaskGraphics.fill();
+    
+    console.log('Crank mask updated with cutout at:', crankX, crankY);
+  }
+
+  private createIgnitionTutorialOverlay() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    console.log('Creating ignition tutorial overlay with dimensions:', gameWidth, gameHeight);
+    
+    // Create tutorial overlay container
+    this.ignitionTutorialOverlay = this.add.container(0, 0);
+    this.ignitionTutorialOverlay.setDepth(50000); // Above everything
+    
+    // Create 50% transparent black overlay covering the screen
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, gameWidth, gameHeight);
+    this.ignitionTutorialOverlay.add(overlay);
+    
+    // Create mask for cutout
+    const maskGraphics = this.make.graphics();
+    
+    // Store reference to mask graphics for updates
+    this.ignitionTutorialMaskGraphics = maskGraphics;
+    
+    // Fill the mask with white (this will be the cutout area)
+    maskGraphics.fillStyle(0xffffff);
+    
+    // Create BitmapMask with inverted alpha (white areas become cutouts)
+    const mask = new Phaser.Display.Masks.BitmapMask(this, maskGraphics);
+    mask.invertAlpha = true; // This makes white areas transparent (cutouts)
+    
+    // Apply the mask to the overlay
+    overlay.setMask(mask);
+    
+    // Initially hidden
+    this.ignitionTutorialOverlay.setVisible(false);
+    
+    // Set depth to be above everything else
+    this.ignitionTutorialOverlay.setDepth(1000);
+    
+    console.log('Ignition tutorial overlay created with depth:', this.ignitionTutorialOverlay.depth);
+    console.log('Ignition tutorial overlay mask applied:', !!overlay.mask);
+    console.log('Ignition tutorial overlay mask invertAlpha:', mask.invertAlpha);
+  }
+
+  private updateIgnitionTutorialOverlay() {
+    if (!this.ignitionTutorialOverlay) {
+      console.log('Ignition tutorial overlay not found');
+      return;
+    }
+    
+    // Show overlay when ignition menu is open
+    const shouldShowIgnitionTutorial = this.ignitionMenuShown;
+    
+    console.log('Ignition overlay check - ignitionMenuShown:', this.ignitionMenuShown, 'shouldShow:', shouldShowIgnitionTutorial);
+    console.log('Ignition overlay exists:', !!this.ignitionTutorialOverlay);
+    console.log('Ignition overlay visible before:', this.ignitionTutorialOverlay.visible);
+    
+    this.ignitionTutorialOverlay.setVisible(shouldShowIgnitionTutorial);
+    
+    console.log('Ignition overlay visible after:', this.ignitionTutorialOverlay.visible);
+    console.log('Ignition overlay depth:', this.ignitionTutorialOverlay.depth);
+    console.log('Ignition overlay alpha:', this.ignitionTutorialOverlay.alpha);
+    
+    if (shouldShowIgnitionTutorial) {
+      this.updateIgnitionTutorialMask();
+      console.log('Ignition mask updated');
+    }
+    
+    console.log('Ignition tutorial overlay visibility:', shouldShowIgnitionTutorial ? 'shown' : 'hidden');
+  }
+
+  private updateIgnitionTutorialMask() {
+    if (!this.ignitionTutorialOverlay) {
+      console.log('Cannot update ignition mask - overlay not found');
+      return;
+    }
+    
+    if (!this.ignitionTutorialMaskGraphics) {
+      return;
+    }
+    
+    // Clear and redraw the mask
+    this.ignitionTutorialMaskGraphics.clear();
+    
+    // Fill the mask with white (this will be the cutout area)
+    this.ignitionTutorialMaskGraphics.fillStyle(0xffffff);
+    
+    // Get ignition menu position and size (approximate center of screen)
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const menuX = gameWidth / 2;
+    const menuY = gameHeight / 2;
+    
+    // Create cutout around the ignition menu area (1.2x size as requested)
+    const menuWidth = 300; // Approximate menu width
+    const menuHeight = 200; // Approximate menu height
+    const scaleFactor = 1.2; // 1.2x size as requested
+    const cutoutWidth = menuWidth * scaleFactor;
+    const cutoutHeight = menuHeight * scaleFactor;
+    
+    const cutoutX = menuX - cutoutWidth/2;
+    const cutoutY = menuY - cutoutHeight/2;
+    
+    this.ignitionTutorialMaskGraphics.beginPath();
+    this.ignitionTutorialMaskGraphics.fillRoundedRect(cutoutX, cutoutY, cutoutWidth, cutoutHeight, 12);
+    this.ignitionTutorialMaskGraphics.closePath();
+    this.ignitionTutorialMaskGraphics.fill();
+    
+    console.log('Ignition mask updated with cutout at:', menuX, menuY, 'size:', cutoutWidth, 'x', cutoutHeight);
+    console.log('Ignition mask cutout position:', cutoutX, cutoutY);
+    console.log('Ignition mask graphics exists:', !!this.ignitionTutorialMaskGraphics);
+  }
+
 
   private handleDrivingSteeringInput(steeringValue: number) {
-     // Store the current steering value for continuous updates
+     // Only allow steering when speed crank is at 40% or higher
+     const crankPercentage = this.getSpeedCrankPercentage();
+     if (crankPercentage < 40) {
+       console.log('Steering disabled - speed crank below 40%:', crankPercentage, 'carStarted:', this.carStarted);
+       // Reset steering value to prevent any position changes
+       this.currentSteeringValue = 0;
+       return;
+     }
+     
+     // Also check car speed
+     if (this.carSpeed < 0.01) {
+       console.log('Steering disabled - car speed too low:', this.carSpeed, 'crank:', crankPercentage);
+       // Reset steering value to prevent any position changes
+       this.currentSteeringValue = 0;
+       return;
+     }
+     
+     // Only store steering value if all conditions are met
+     console.log('Steering enabled - storing value:', steeringValue, 'speed:', this.carSpeed, 'crank:', crankPercentage);
      this.currentSteeringValue = steeringValue;
      
      // Convert steering wheel value (-100 to 100) to steering direction
@@ -3007,6 +3325,23 @@ export class GameScene extends Phaser.Scene {
     }
     
     this.updateNavigationButtonVisibility();
+    
+    // Update crank tutorial overlay when car starts
+    this.updateCrankTutorialOverlay();
+  }
+
+  private onIgnitionMenuShown() {
+    console.log('Ignition menu shown - updating overlay');
+    this.ignitionMenuShown = true;
+    console.log('ignitionMenuShown set to:', this.ignitionMenuShown);
+    this.updateIgnitionTutorialOverlay();
+  }
+
+  private onIgnitionMenuHidden() {
+    console.log('Ignition menu hidden - updating overlay');
+    this.ignitionMenuShown = false;
+    console.log('ignitionMenuShown set to:', this.ignitionMenuShown);
+    this.updateIgnitionTutorialOverlay();
   }
 
   private onRemoveKeys() {
@@ -3019,10 +3354,20 @@ export class GameScene extends Phaser.Scene {
       // Reset car started state since keys are removed
       this.carStarted = false;
       
+      // Stop driving mode when keys are removed
+      if (this.drivingMode) {
+        this.stopDriving();
+        console.log('Driving mode stopped due to key removal');
+      }
+      
       // Reset speed crank to 0 when car stops being started
       if (this.resetSpeedCrank) {
         this.resetSpeedCrank();
       }
+      
+      // Reset steering value to prevent any position changes
+      this.currentSteeringValue = 0;
+      console.log('Steering reset due to key removal');
       
       // Set cooldown to prevent immediate re-snapping
       this.keysRemovalCooldown = 1000; // 1 second cooldown
@@ -3054,27 +3399,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateNavigationButtonVisibility() {
-    // Show/hide navigation buttons based on car started state
-    // Simple logic: buttons only visible when car is fully started
-    const shouldShowButtons = this.carStarted;
+    // Show/hide navigation buttons based on car started state AND crank position
+    // Buttons only visible when car is started AND crank is at 40% or higher
+    const crankPercentage = this.getSpeedCrankPercentage();
+    const shouldShowButtons = this.carStarted && crankPercentage >= 40;
+    
+    console.log('Updating navigation button visibility - carStarted:', this.carStarted, 'crankPercentage:', crankPercentage, 'shouldShow:', shouldShowButtons);
     
     if (this.frontseatButton) {
       this.frontseatButton.setVisible(shouldShowButtons);
+      console.log('Frontseat button visibility set to:', shouldShowButtons);
     }
     if (this.backseatButton) {
       this.backseatButton.setVisible(shouldShowButtons);
+      console.log('Backseat button visibility set to:', shouldShowButtons);
     }
     if (this.mapToggleButton) {
       this.mapToggleButton.setVisible(shouldShowButtons);
+      console.log('Map toggle button visibility set to:', shouldShowButtons);
     }
     if (this.inventoryToggleButton) {
       this.inventoryToggleButton.setVisible(shouldShowButtons);
+      console.log('Inventory toggle button visibility set to:', shouldShowButtons);
     }
     if (this.mapToggleText) {
       this.mapToggleText.setVisible(shouldShowButtons);
+      console.log('Map toggle text visibility set to:', shouldShowButtons);
     }
     if (this.inventoryToggleText) {
       this.inventoryToggleText.setVisible(shouldShowButtons);
+      console.log('Inventory toggle text visibility set to:', shouldShowButtons);
     }
   }
 }
