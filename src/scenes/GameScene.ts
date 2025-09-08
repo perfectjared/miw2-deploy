@@ -1338,21 +1338,6 @@ export class GameScene extends Phaser.Scene {
      console.log('Steering input ignored - car not started or not in driving mode');
      this.resetSteeringValue('car not started or not in driving mode');
      return;
-     
-     // Here you can add steering logic for your game
-     // For example:
-     // - Move the car left/right based on steering value
-     // - Adjust camera angle
-     // - Update physics simulation
-     
-     // For now, we'll just log the steering input
-     if (normalizedValue < -0.1) {
-       console.log('Steering LEFT:', Math.abs(normalizedValue));
-     } else if (normalizedValue > 0.1) {
-       console.log('Steering RIGHT:', normalizedValue);
-     } else {
-       console.log('Steering CENTER');
-     }
    }
 
      private setupPhysicsWorlds() {
@@ -1558,7 +1543,22 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-    // ===== INPUT CONTROLS =====
+    // ===== SCENE ACCESS HELPERS =====
+  /**
+   * Gets the AppScene instance
+   */
+  private getAppScene(): any {
+    return this.scene.get('AppScene');
+  }
+
+  /**
+   * Gets the MenuScene instance
+   */
+  private getMenuScene(): any {
+    return this.scene.get('MenuScene');
+  }
+
+  // ===== INPUT CONTROLS =====
   private setupSwipeControls() {
     let startX = 0;
     let startY = 0;
@@ -1705,7 +1705,7 @@ export class GameScene extends Phaser.Scene {
 
   private triggerAppScenePause() {
     // Get the AppScene and trigger its pause method
-    const appScene = this.scene.get('AppScene');
+    const appScene = this.getAppScene();
     if (appScene && appScene.scene.isActive()) {
       // Call the togglePauseMenu method if not already paused
       if (!(appScene as any).isPaused) {
@@ -1716,7 +1716,7 @@ export class GameScene extends Phaser.Scene {
 
   private triggerAppSceneResume() {
     // Get the AppScene and trigger its resume method
-    const appScene = this.scene.get('AppScene');
+    const appScene = this.getAppScene();
     if (appScene && appScene.scene.isActive()) {
       // Call the togglePauseMenu method if currently paused
       if ((appScene as any).isPaused) {
@@ -2375,7 +2375,7 @@ export class GameScene extends Phaser.Scene {
   // ===== SAVE SYSTEM =====
   public showSaveMenu() {
     // Show save menu via MenuScene
-    const menuScene = this.scene.get('MenuScene');
+    const menuScene = this.getMenuScene();
     if (menuScene) {
       menuScene.events.emit('showSaveMenu');
       this.scene.bringToTop('MenuScene');
@@ -2386,7 +2386,7 @@ export class GameScene extends Phaser.Scene {
     console.log(`Loading game from step ${steps}`);
     
     // Restore the step counter to the saved value
-    const appScene = this.scene.get('AppScene');
+    const appScene = this.getAppScene();
     if (appScene) {
       (appScene as any).setStep(steps);
     }
