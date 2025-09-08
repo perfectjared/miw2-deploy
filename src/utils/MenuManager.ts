@@ -760,6 +760,7 @@ export class MenuManager {
   }
 
   public closeCurrentDialog() {
+    console.log('MenuManager: closeCurrentDialog called');
     this.clearCurrentDialog();
   }
 }

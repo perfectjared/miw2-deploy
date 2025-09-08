@@ -303,37 +303,9 @@ class Keys implements PhysicsObject {
       // Break constraint if Keys is snapped to magnetic target
       if ((this.scene as any).keysConstraint) {
         console.log('Breaking constraint - Keys being dragged away');
-        (this.scene as any).matter.world.remove((this.scene as any).keysConstraint);
-        (this.scene as any).keysConstraint = null;
         
-        // Set cooldown to prevent immediate re-snapping
-        (this.scene as any).keysRemovalCooldown = 1000; // 1 second cooldown
-        
-        // Reset car started state since keys are removed
-        (this.scene as any).carStarted = false;
-        
-        // Stop driving mode when keys are removed
-        if ((this.scene as any).drivingMode) {
-          (this.scene as any).stopDriving();
-          console.log('Driving mode stopped due to key drag removal');
-        }
-        
-        // Reset speed crank to 0 when car stops being started
-        if ((this.scene as any).resetSpeedCrank) {
-          (this.scene as any).resetSpeedCrank();
-        }
-        
-        // Reset steering value to prevent any position changes
-        (this.scene as any).currentSteeringValue = 0;
-        
-        // Hide navigation buttons until car is started again
-        (this.scene as any).updateNavigationButtonVisibility();
-        
-        // Close ignition menu if open
-        const menuScene = (this.scene as any).scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('closeCurrentMenu');
-        }
+        // Use consolidated key removal logic (this will handle constraint removal)
+        (this.scene as any).handleKeyRemoval('drag away');
         
         // Reset magnetic target color
         if ((this.scene as any).magneticTarget) {
@@ -736,60 +708,14 @@ export class GameScene extends Phaser.Scene {
      // Create a container to hold all game content that we can move as one unit
      this.gameContentContainer = this.add.container(0, 0);
      
-     // Create Frontseat content (left side)
+     // Create navigation buttons
+     this.createNavigationButtons(gameWidth, gameHeight);
+     
+     // Get center positions for other elements
      const frontseatCenterX = gameWidth / 2;
      const frontseatCenterY = gameHeight / 2;
-     
-     // Frontseat button
-     const frontseatButton = this.add.graphics();
-    this.frontseatButton = frontseatButton; // Store reference
-     frontseatButton.fillStyle(0x4444ff, 0.7);
-     frontseatButton.fillRect(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2);
-     frontseatButton.lineStyle(2, 0xffffff, 1);
-     frontseatButton.strokeRect(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2);
-     frontseatButton.setInteractive(new Phaser.Geom.Rectangle(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2), Phaser.Geom.Rectangle.Contains);
-     frontseatButton.on('pointerup', () => {
-       if (this.gameStarted) {
-         // Don't allow switching to backseat if keys are not in ignition
-         if (!this.keysConstraint) {
-           console.log('Cannot switch to backseat - keys not in ignition!');
-           return;
-         }
-         this.switchToBackseat();
-       }
-     });
-     
-     // Frontseat title
-     const frontseatTitle = this.add.text(frontseatCenterX, frontseatCenterY - 30, 'FRONT SEAT', {
-       fontSize: '36px',
-       color: '#ffffff',
-       fontStyle: 'bold'
-     }).setOrigin(0.5);
-     
-     // Create Backseat content (right side)
      const backseatCenterX = gameWidth + (gameWidth / 2);
      const backseatCenterY = gameHeight / 2;
-     
-     // Backseat button
-     const backseatButton = this.add.graphics();
-    this.backseatButton = backseatButton; // Store reference
-     backseatButton.fillStyle(0x44ff44, 0.7);
-     backseatButton.fillRect(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1);
-     backseatButton.lineStyle(2, 0xffffff, 1);
-     backseatButton.strokeRect(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1);
-     backseatButton.setInteractive(new Phaser.Geom.Rectangle(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1), Phaser.Geom.Rectangle.Contains);
-     backseatButton.on('pointerdown', () => {
-       if (this.gameStarted) {
-         this.switchToFrontseat();
-       }
-     });
-     
-     // Backseat title
-     const backseatTitle = this.add.text(backseatCenterX, backseatCenterY - 30, 'BACK SEAT', {
-       fontSize: '36px',
-       color: '#ffffff',
-       fontStyle: 'bold'
-     }).setOrigin(0.5);
      
      
            // Create overlay content
@@ -872,7 +798,7 @@ export class GameScene extends Phaser.Scene {
        inventoryToggleText.setName('inventoryToggleText');
       
       // Add all content to the container
-      this.gameContentContainer.add([frontseatButton, frontseatTitle, backseatButton, backseatTitle, mapOverlay, mapToggleButton, mapToggleText, inventoryOverlay, inventoryToggleButton, inventoryToggleText]);
+      this.gameContentContainer.add([mapOverlay, mapToggleButton, mapToggleText, inventoryOverlay, inventoryToggleButton, inventoryToggleText]);
       
            // Create countdown timer text
      this.createCountdownTimer();
@@ -1410,7 +1336,7 @@ export class GameScene extends Phaser.Scene {
      
      // If car is not started or not in driving mode, ignore steering input
      console.log('Steering input ignored - car not started or not in driving mode');
-     this.currentSteeringValue = 0; // Ensure steering value is reset
+     this.resetSteeringValue('car not started or not in driving mode');
      return;
      
      // Here you can add steering logic for your game
@@ -1632,7 +1558,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-    // ===== SWIPE CONTROLS =====
+    // ===== INPUT CONTROLS =====
   private setupSwipeControls() {
     let startX = 0;
     let startY = 0;
@@ -2082,34 +2008,9 @@ export class GameScene extends Phaser.Scene {
     } else if (distance > magneticConfig.magneticRange && this.keysConstraint) {
       // Remove constraint if Keys is dragged too far away
       console.log('Keys released from magnetic target');
-      this.matter.world.remove(this.keysConstraint);
-      this.keysConstraint = null;
       
-      // Reset car started state since keys are removed
-      this.carStarted = false;
-      
-      // Stop driving mode when keys are removed
-      if (this.drivingMode) {
-        this.stopDriving();
-        console.log('Driving mode stopped due to magnetic range removal');
-      }
-      
-      // Reset speed crank to 0 when car stops being started
-      if (this.resetSpeedCrank) {
-        this.resetSpeedCrank();
-      }
-      
-      // Reset steering value to prevent any position changes
-      this.currentSteeringValue = 0;
-      
-      // Hide navigation buttons until car is started again
-      this.updateNavigationButtonVisibility();
-      
-      // Close ignition menu if open
-      const menuScene = this.scene.get('MenuScene');
-      if (menuScene) {
-        menuScene.events.emit('closeCurrentMenu');
-      }
+      // Use consolidated key removal logic (this will handle constraint removal)
+      this.handleKeyRemoval('magnetic range exceeded');
       
       // Reset Keys scroll factor to horizontal only
       this.frontseatKeys.gameObject.setScrollFactor(1, 0);
@@ -2149,6 +2050,13 @@ export class GameScene extends Phaser.Scene {
   private updatePosition() {
     // Only update position if driving mode is active and not paused
     if (!this.drivingMode || this.drivingPaused) return;
+    
+    // Only allow position changes when speed crank is at 40% or higher
+    const crankPercentage = this.getSpeedCrankPercentage();
+    if (crankPercentage < 40) {
+      console.log('Position update blocked - crank below 40%:', crankPercentage);
+      return; // Don't update position when crank is below 40%
+    }
      
      // Update position based on reactive knobValue (-100 to 100)
      const changeRate = this.knobValue / 100; // -1 to 1
@@ -2445,7 +2353,26 @@ export class GameScene extends Phaser.Scene {
      return this.frontseatDragDial ? this.frontseatDragDial.value : 0;
    }
 
-   // ===== SAVE SYSTEM =====
+   // ===== GAME STATE MANAGEMENT =====
+  private resetGameState() {
+    // Reset all game state variables to their defaults
+    this.gameTime = 10; // Reset to starting time
+    this.knobValue = 0; // Reset knob to neutral
+    this.money = 108; // Reset money
+    this.health = 10; // Reset health to max
+    this.stops = 0; // Reset stops
+    this.progress = 0; // Reset progress
+    this.drivingMode = false; // Reset driving mode
+    this.isKnobActive = false; // Reset knob state
+    this.currentSteeringValue = 0; // Reset steering
+    this.carSpeed = 0; // Reset car speed
+    this.carX = 0; // Reset car position
+    this.gameOverDialogShown = false; // Reset dialog flag
+    
+    console.log('Game state reset to defaults');
+  }
+
+  // ===== SAVE SYSTEM =====
   public showSaveMenu() {
     // Show save menu via MenuScene
     const menuScene = this.scene.get('MenuScene');
@@ -2679,18 +2606,24 @@ export class GameScene extends Phaser.Scene {
     const crankPercentage = this.getSpeedCrankPercentage();
     if (crankPercentage < 40) {
       console.log('Position update blocked - crank below 40%:', crankPercentage, 'carStarted:', this.carStarted);
+      // Reset steering value to prevent any position changes
+      this.currentSteeringValue = 0;
       return; // Don't update car position when crank is below 40%
     }
     
     // Don't update position if car is not moving (with small tolerance for floating point)
     if (this.carSpeed < 0.01) {
       console.log('Position update blocked - car speed too low:', this.carSpeed, 'crank:', crankPercentage);
+      // Reset steering value to prevent any position changes
+      this.currentSteeringValue = 0;
       return; // No steering when car is essentially stationary
     }
     
     // Additional check: ensure car is actually started
     if (!this.carStarted) {
       console.log('Position update blocked - car not started');
+      // Reset steering value to prevent any position changes
+      this.currentSteeringValue = 0;
       return;
     }
     
@@ -3102,16 +3035,14 @@ export class GameScene extends Phaser.Scene {
      const crankPercentage = this.getSpeedCrankPercentage();
      if (crankPercentage < 40) {
        console.log('Steering disabled - speed crank below 40%:', crankPercentage, 'carStarted:', this.carStarted);
-       // Reset steering value to prevent any position changes
-       this.currentSteeringValue = 0;
+       this.resetSteeringValue('crank below 40%');
        return;
      }
      
      // Also check car speed
      if (this.carSpeed < 0.01) {
        console.log('Steering disabled - car speed too low:', this.carSpeed, 'crank:', crankPercentage);
-       // Reset steering value to prevent any position changes
-       this.currentSteeringValue = 0;
+       this.resetSteeringValue('car speed too low');
        return;
      }
      
@@ -3145,6 +3076,40 @@ export class GameScene extends Phaser.Scene {
      });
    }
 
+
+  // ===== DRIVING SYSTEM =====
+  private startDriving() {
+    this.drivingMode = true;
+    this.shouldAutoRestartDriving = true; // Set flag to auto-restart on resume
+    console.log('Starting driving...');
+    
+    // Reset car state
+    this.carSpeed = 0;
+    this.carX = this.cameras.main.width / 2;
+    if (this.drivingCar) {
+      this.drivingCar.setX(this.carX);
+    }
+    
+    // Start forward movement timer
+    this.startForwardMovementTimer();
+    
+    // Start obstacle spawning
+    this.startObstacleSpawning();
+  }
+
+  private stopDriving() {
+    this.drivingMode = false;
+    console.log('Stopping driving...');
+    
+    // Stop car movement
+    this.carSpeed = 0;
+    
+    // Stop forward movement timer
+    this.stopForwardMovementTimer();
+    
+    // Stop obstacle spawning
+    this.stopObstacleSpawning();
+  }
 
   // ===== OBSTACLE SYSTEM =====
   private createObstacle(type: string) {
@@ -3344,30 +3309,20 @@ export class GameScene extends Phaser.Scene {
     this.updateIgnitionTutorialOverlay();
   }
 
-  private onRemoveKeys() {
-    console.log('Remove Keys clicked! Removing keys from ignition.');
+  // ===== KEY MANAGEMENT SYSTEM =====
+  /**
+   * Handles the complete key removal process - consolidates all key removal logic
+   */
+  private handleKeyRemoval(reason: string = 'unknown') {
+    console.log(`Keys removed from ignition - reason: ${reason}`);
+    
     // Remove the constraint to release the keys
     if (this.keysConstraint) {
       this.matter.world.remove(this.keysConstraint);
       this.keysConstraint = null;
       
-      // Reset car started state since keys are removed
-      this.carStarted = false;
-      
-      // Stop driving mode when keys are removed
-      if (this.drivingMode) {
-        this.stopDriving();
-        console.log('Driving mode stopped due to key removal');
-      }
-      
-      // Reset speed crank to 0 when car stops being started
-      if (this.resetSpeedCrank) {
-        this.resetSpeedCrank();
-      }
-      
-      // Reset steering value to prevent any position changes
-      this.currentSteeringValue = 0;
-      console.log('Steering reset due to key removal');
+      // Reset all car-related state
+      this.resetCarState();
       
       // Set cooldown to prevent immediate re-snapping
       this.keysRemovalCooldown = 1000; // 1 second cooldown
@@ -3393,9 +3348,109 @@ export class GameScene extends Phaser.Scene {
       // Close the turn key menu since keys are no longer in ignition
       const menuScene = this.scene.get('MenuScene');
       if (menuScene) {
+        console.log('GameScene: Emitting closeCurrentMenu event to MenuScene');
         menuScene.events.emit('closeCurrentMenu');
+      } else {
+        console.log('GameScene: MenuScene not found when trying to emit closeCurrentMenu');
       }
     }
+  }
+
+  /**
+   * Resets all car-related state when keys are removed
+   */
+  private resetCarState() {
+    // Reset car started state
+    this.carStarted = false;
+    
+    // Stop driving mode
+    if (this.drivingMode) {
+      this.stopDriving();
+      console.log('Driving mode stopped due to key removal');
+    }
+    
+    // Reset speed crank to 0
+    if (this.resetSpeedCrank) {
+      this.resetSpeedCrank();
+    }
+    
+    // Reset steering value
+    this.resetSteeringValue('key removal');
+  }
+
+  /**
+   * Resets steering value and logs the reason
+   */
+  private resetSteeringValue(reason: string) {
+    this.currentSteeringValue = 0;
+    console.log(`Steering reset due to ${reason}`);
+  }
+
+  /**
+   * Creates navigation buttons (frontseat/backseat) and their titles
+   */
+  private createNavigationButtons(gameWidth: number, gameHeight: number) {
+    // Create Frontseat content (left side)
+    const frontseatCenterX = gameWidth / 2;
+    const frontseatCenterY = gameHeight / 2;
+    
+    // Frontseat button
+    const frontseatButton = this.add.graphics();
+    this.frontseatButton = frontseatButton; // Store reference
+    frontseatButton.fillStyle(0x4444ff, 0.7);
+    frontseatButton.fillRect(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2);
+    frontseatButton.lineStyle(2, 0xffffff, 1);
+    frontseatButton.strokeRect(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2);
+    frontseatButton.setInteractive(new Phaser.Geom.Rectangle(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2), Phaser.Geom.Rectangle.Contains);
+    frontseatButton.on('pointerup', () => {
+      if (this.gameStarted) {
+        // Don't allow switching to backseat if keys are not in ignition
+        if (!this.keysConstraint) {
+          console.log('Cannot switch to backseat - keys not in ignition!');
+          return;
+        }
+        this.switchToBackseat();
+      }
+    });
+    
+    // Frontseat title
+    const frontseatTitle = this.add.text(frontseatCenterX, frontseatCenterY - 30, 'FRONT SEAT', {
+      fontSize: '36px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    
+    // Create Backseat content (right side)
+    const backseatCenterX = gameWidth + (gameWidth / 2);
+    const backseatCenterY = gameHeight / 2;
+    
+    // Backseat button
+    const backseatButton = this.add.graphics();
+    this.backseatButton = backseatButton; // Store reference
+    backseatButton.fillStyle(0x44ff44, 0.7);
+    backseatButton.fillRect(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1);
+    backseatButton.lineStyle(2, 0xffffff, 1);
+    backseatButton.strokeRect(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1);
+    backseatButton.setInteractive(new Phaser.Geom.Rectangle(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1), Phaser.Geom.Rectangle.Contains);
+    backseatButton.on('pointerdown', () => {
+      if (this.gameStarted) {
+        this.switchToFrontseat();
+      }
+    });
+    
+    // Backseat title
+    const backseatTitle = this.add.text(backseatCenterX, backseatCenterY - 30, 'BACK SEAT', {
+      fontSize: '36px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    
+    // Add all elements to the container
+    this.gameContentContainer.add([frontseatButton, frontseatTitle, backseatButton, backseatTitle]);
+  }
+
+  private onRemoveKeys() {
+    this.handleKeyRemoval('menu button');
   }
 
   private updateNavigationButtonVisibility() {

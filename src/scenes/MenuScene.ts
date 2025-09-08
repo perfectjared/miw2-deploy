@@ -81,6 +81,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private closeCurrentMenu() {
+    console.log('MenuScene: Received closeCurrentMenu event');
     this.menuManager.closeCurrentDialog();
   }
 }
