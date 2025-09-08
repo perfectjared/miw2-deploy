@@ -120,7 +120,15 @@ export class MenuManager {
             this.closeDialog();
             const appScene = this.scene.scene.get('AppScene');
             if (appScene) {
-              (appScene as any).togglePauseMenu();
+              // Don't call togglePauseMenu() - just resume directly
+              (appScene as any).isPaused = false;
+              console.log('Game resumed from pause menu');
+              
+              // Emit resume event to GameScene
+              const gameScene = this.scene.scene.get('GameScene');
+              if (gameScene) {
+                gameScene.events.emit('gameResumed');
+              }
             }
           },
           style: {
