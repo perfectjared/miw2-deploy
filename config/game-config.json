@@ -1,31 +1,38 @@
 {
-  "gameTime": {
-    "initial": 99,
-    "stepInterval": 1000
-  },
+  "gameTime": { "initial": 99, "stepInterval": 1000 },
   "playerStats": {
-    "initialMoney": 108,
-    "initialHealth": 10,
-    "initialSkill": 0,
-    "initialDifficulty": 0,
-    "initialMomentum": 0,
-    "initialPlotA": 0,
-    "initialPlotB": 0,
-    "initialPlotC": 0
+    "initialMoney": 108, "initialHealth": 10, "initialSkill": 0,
+    "initialDifficulty": 0, "initialMomentum": 0, "initialPlotA": 0,
+    "initialPlotB": 0, "initialPlotC": 0
   },
   "driving": {
     "carSpeed": {
       "acceleration": 0.1,
-      "maxSpeed": 5
+      "maxSpeed": 5,
+      "tuning": { "baseAccelScale": 0.3, "decelScale": 1.5, "stopDecelScale": 0.5 }
     },
     "steering": {
       "sensitivity": 2.0,
-      "returnSpeed": 2
+      "returnSpeed": 2,
+      "minCrankPercentForSteering": 40,
+      "minSpeedForSteering": 0.01
     },
-    "knob": {
-      "maxAngle": 45,
-      "returnSpeed": 3
-    }
+    "knob": { "maxAngle": 45, "returnSpeed": 3 },
+    "roadVisual": {
+      "lineWidth": 4,
+      "lineHeight": 30,
+      "lineGap": 40,
+      "centerLineYOffset": 50,
+      "backgroundDepth": -10000,
+      "roadDepth": -10000,
+      "lineDepth": -10000,
+      "roadColor": "0x333333",
+      "lineColor": "0xffffff",
+      "skyColor": "0x87CEEB",
+      "boundaryPadding": 50,
+      "viewYOffsetPercent": -0.3
+    },
+    "progress": { "scale": 2, "misalignThreshold": 0.1, "misalignPenaltyScale": 0.1 }
   },
   "obstacles": {
     "pothole": {
@@ -33,8 +40,9 @@
       "speed": 1,
       "width": 0.15,
       "height": 0.02,
-      "position": 0.75,
-      "spawnY": 0.8,
+      "minPos": 0,
+      "maxPos": 0.65,
+      "spawnY": 0.4,
       "color": "0x8B4513"
     },
     "exit": {
@@ -42,160 +50,55 @@
       "speed": 0.5,
       "width": 30,
       "height": 40,
-      "position": 0.75,
-      "spawnY": 0.8,
+      "position": 0.8,
+      "spawnY": 0.4,
       "color": "0x00ff00"
-    }
+    },
+    "spawner": { "minDelayMs": 5000, "maxDelayMs": 12000, "potholeProbability": 0.8 }
   },
   "ui": {
-    "countdown": {
-      "fontSize": "36px",
-      "color": "#ffffff",
-      "backgroundColor": "#000000",
-      "padding": { "x": 10, "y": 5 }
-    },
+    "countdown": { "fontSize": "36px", "color": "#ffffff", "backgroundColor": "#000000", "padding": { "x": 10, "y": 5 } },
     "stats": {
       "fontSize": "18px",
-      "colors": {
-        "skill": "#00ffff",
-        "difficulty": "#ff00ff",
-        "momentum": "#ffff00",
-        "plotA": "#ff8800",
-        "plotB": "#8800ff",
-        "plotC": "#00ff88"
-      },
-      "backgroundColor": "#000000",
-      "padding": { "x": 6, "y": 3 }
+      "colors": { "skill": "#00ffff", "difficulty": "#ff00ff", "momentum": "#ffff00", "plotA": "#ff8800", "plotB": "#8800ff", "plotC": "#00ff88" },
+      "backgroundColor": "#000000", "padding": { "x": 6, "y": 3 }
     },
     "managerValues": {
-      "fontSize": "14px",
-      "opacity": 0.5,
-      "colors": {
-        "skill": "#00ffff",
-        "difficulty": "#ff00ff",
-        "momentum": "#ffff00",
-        "plotA": "#ff8800",
-        "plotB": "#8800ff",
-        "plotC": "#00ff88"
-      },
-      "backgroundColor": "#000000",
-      "padding": { "x": 4, "y": 2 }
+      "fontSize": "14px", "opacity": 0.5,
+      "colors": { "skill": "#00ffff", "difficulty": "#ff00ff", "momentum": "#ffff00", "plotA": "#ff8800", "plotB": "#8800ff", "plotC": "#00ff88" },
+      "backgroundColor": "#000000", "padding": { "x": 4, "y": 2 }
     },
-    "money": {
-      "fontSize": "24px",
-      "color": "#00ff00",
-      "backgroundColor": "#000000",
-      "padding": { "x": 8, "y": 4 }
-    },
-    "health": {
-      "fontSize": "24px",
-      "color": "#ff6600",
-      "backgroundColor": "#000000",
-      "padding": { "x": 8, "y": 4 }
-    }
+    "money": { "fontSize": "24px", "color": "#00ff00", "backgroundColor": "#000000", "padding": { "x": 8, "y": 4 } },
+    "health": { "fontSize": "24px", "color": "#ff6600", "backgroundColor": "#000000", "padding": { "x": 8, "y": 4 } }
   },
-  "collision": {
-    "menuDelay": 3000
-  },
+  "collision": { "menuDelay": 3000 },
   "menus": {
-    "background": {
-      "color": "0x000000",
-      "alpha": 0.8
-    },
-    "depths": {
-      "background": 20000,
-      "content": 20001
-    },
+    "background": { "color": "0x000000", "alpha": 0.8 },
+    "depths": { "background": 20000, "content": 20001 },
     "styles": {
-      "layerText": {
-        "fontSize": "16px",
-        "color": "#ff00ff",
-        "fontStyle": "bold",
-        "backgroundColor": "#000000",
-        "padding": { "x": 8, "y": 4 }
-      },
-      "title": {
-        "fontSize": "24px",
-        "color": "#ffffff",
-        "fontStyle": "bold"
-      },
-      "button": {
-        "fontSize": "18px",
-        "color": "#ffffff",
-        "fontStyle": "bold",
-        "backgroundColor": "#333333",
-        "padding": { "x": 20, "y": 10 }
-      },
-      "buttonHover": {
-        "backgroundColor": "#555555"
-      },
-      "bodyText": {
-        "fontSize": "16px",
-        "color": "#ffffff",
-        "align": "center"
-      },
-      "infoText": {
-        "fontSize": "14px",
-        "color": "#cccccc",
-        "align": "center"
-      }
+      "layerText": { "fontSize": "16px", "color": "#ff00ff", "fontStyle": "bold", "backgroundColor": "#000000", "padding": { "x": 8, "y": 4 } },
+      "title": { "fontSize": "24px", "color": "#ffffff", "fontStyle": "bold" },
+      "button": { "fontSize": "18px", "color": "#ffffff", "fontStyle": "bold", "backgroundColor": "#333333", "padding": { "x": 20, "y": 10 } },
+      "buttonHover": { "backgroundColor": "#555555" },
+      "bodyText": { "fontSize": "16px", "color": "#ffffff", "align": "center" },
+      "infoText": { "fontSize": "14px", "color": "#cccccc", "align": "center" }
     },
-    "positions": {
-      "layerText": { "x": 10, "y": 190 },
-      "titleOffset": { "x": 0, "y": -60 },
-      "buttonSpacing": 60,
-      "buttonStartOffset": 20
-    }
+    "positions": { "layerText": { "x": 10, "y": 190 }, "titleOffset": { "x": 0, "y": -60 }, "buttonSpacing": 60, "buttonStartOffset": 20 }
   },
-  "navigation": {
-    "animationDuration": 500,
-    "overlayOffsetPercent": 0.33
-  },
+  "navigation": { "animationDuration": 500, "overlayOffsetPercent": 0.33, "minCrankPercentForNavButtons": 40 },
   "physics": {
-    "gravity": {
-      "x": 0,
-      "y": 0.5
-    },
-            "frontseatCircle": {
-          "radius": 25,
-          "x": 180,
-          "y": 100,
-          "restitution": 0.8,
-          "friction": 0.1,
-          "density": 0.001,
-          "color": "0xff6b6b",
-          "hoverColor": "0xff9999",
-          "dragColor": "0xff3333"
-        },
-        "backseatCircle": {
-          "radius": 20,
-          "x": 200,
-          "y": 120,
-          "restitution": 0.6,
-          "friction": 0.2,
-          "density": 0.002,
-          "color": "0x6b6bff",
-          "hoverColor": "0x9999ff",
-          "dragColor": "0x3333ff"
-        },
-        "frontseatKeys": {
-          "radius": 18,
-          "x": 150,
-          "y": 200,
-          "restitution": 0.7,
-          "friction": 0.2,
-          "density": 0.001,
-          "color": "0xff8800",
-          "hoverColor": "0xffaa44",
-          "dragColor": "0xff6600"
-        },
-        "magneticTarget": {
-          "radius": 30,
-          "x": 225,
-          "y": 475,
-          "color": "0x00ff00",
-          "magneticStrength": 0.01,
-          "magneticRange": 70
-        }
+    "gravity": { "x": 0, "y": 0.5 },
+    "frontseatCircle": { "radius": 25, "x": 180, "y": 100, "restitution": 0.8, "friction": 0.1, "density": 0.001, "color": "0xff6b6b", "hoverColor": "0xff9999", "dragColor": "0xff3333" },
+    "backseatCircle": { "radius": 20, "x": 200, "y": 120, "restitution": 0.6, "friction": 0.2, "density": 0.002, "color": "0x6b6bff", "hoverColor": "0x9999ff", "dragColor": "0x3333ff" },
+    "frontseatKeys": { "radius": 18, "x": 150, "y": 200, "restitution": 0.7, "friction": 0.2, "density": 0.001, "color": "0xff8800", "hoverColor": "0xffaa44", "dragColor": "0xff6600" },
+    "magneticTarget": { "radius": 30, "x": 225, "y": 475, "color": "0x00ff00", "magneticStrength": 0.01, "magneticRange": 70, "snapThreshold": 20 }
+  },
+  "overlays": {
+    "tutorial": {
+      "alpha": 0.5,
+      "depth": 50000,
+      "crank": { "cutoutPadding": 10, "cornerRadius": 8 },
+      "ignition": { "depth": 1000, "cutoutScale": 1.2, "cornerRadius": 12 }
+    }
   }
 }

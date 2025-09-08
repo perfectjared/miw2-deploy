@@ -1,4 +1,10 @@
 import Phaser from 'phaser';
+import { KeySystem } from '../systems/KeySystem';
+import { OverlaySystem } from '../systems/OverlaySystem';
+import { NavigationUI } from '../systems/NavigationUI';
+import { MenuBridge } from '../systems/MenuBridge';
+import { SaveLoadBridge } from '../systems/SaveLoadBridge';
+import { DrivingSystem } from '../systems/DrivingSystem';
 import { ConfigLoader, GameConfig } from '../config/ConfigLoader';
 import { SaveManager } from '../utils/SaveManager';
 
@@ -449,6 +455,13 @@ export class GameScene extends Phaser.Scene {
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
   private drivingPaused: boolean = false; // Track if driving is paused (for collision menus)
+  // Systems
+  private keySystem!: KeySystem;
+  private overlaySystem!: OverlaySystem;
+  private navigationUI!: NavigationUI;
+  private menuBridge!: MenuBridge;
+  private saveLoadBridge!: SaveLoadBridge;
+  private drivingSystem!: DrivingSystem;
    private isKnobActive: boolean = false; // Track if knob is being interacted with
   private isDraggingObject: boolean = false; // Track if dragging a physics object
    private knobReturnTimer!: Phaser.Time.TimerEvent | null; // Timer for gradual return to center
@@ -478,6 +491,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   async create() {
+    // Initialize systems
+    this.keySystem = new KeySystem(this);
+    this.overlaySystem = new OverlaySystem(this);
+    this.navigationUI = new NavigationUI(this);
+    this.menuBridge = new MenuBridge(this);
+    this.saveLoadBridge = new SaveLoadBridge(this);
+    this.drivingSystem = new DrivingSystem(this);
     // Load configuration first
     const configLoader = ConfigLoader.getInstance();
     this.config = await configLoader.loadConfig(this);
@@ -555,8 +575,8 @@ export class GameScene extends Phaser.Scene {
     // Listen for turn key menu events
     this.events.on('turnKey', this.onTurnKey, this);
     this.events.on('removeKeys', this.onRemoveKeys, this);
-    this.events.on('ignitionMenuShown', this.onIgnitionMenuShown, this);
-    this.events.on('ignitionMenuHidden', this.onIgnitionMenuHidden, this);
+    this.events.on('ignitionMenuShown', () => this.overlaySystem.onIgnitionMenuShown(), this);
+    this.events.on('ignitionMenuHidden', () => this.overlaySystem.onIgnitionMenuHidden(), this);
 
     // Set up automatic pause when window loses focus
     this.setupAutoPause();
@@ -696,7 +716,7 @@ export class GameScene extends Phaser.Scene {
      this.createGameContent();
     
     // Initialize navigation button visibility (hidden until car starts)
-    this.updateNavigationButtonVisibility();
+    this.navigationUI.updateVisibility();
      
      console.log('Game camera set up with content container');
    }
@@ -1091,7 +1111,7 @@ export class GameScene extends Phaser.Scene {
    // Method to get current speed crank percentage
    private getSpeedCrankPercentage(): number {
      // This will be set by the speed crank interaction logic
-     console.log('Getting speed crank percentage:', this.currentSpeedCrankPercentage);
+     //console.log('Getting speed crank percentage:', this.currentSpeedCrankPercentage);
      return this.currentSpeedCrankPercentage || 0;
    }
 
@@ -1973,7 +1993,7 @@ export class GameScene extends Phaser.Scene {
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // Snap threshold - when Keys gets close enough, create a constraint
-    const snapThreshold = 20; // Distance at which Keys snaps to center
+    const snapThreshold = this.config.physics.magneticTarget.snapThreshold; // Distance at which Keys snaps to center
     
     if (distance <= snapThreshold && !this.keysConstraint) {
       // Create constraint to snap Keys to the center of magnetic target
@@ -1987,11 +2007,7 @@ export class GameScene extends Phaser.Scene {
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
       if (!this.carStarted && this.keysConstraint) {
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showTurnKeyMenu');
-          this.scene.bringToTop('MenuScene');
-        }
+        this.menuBridge.showTurnKeyMenu();
       }
       
       // Make Keys move vertically with camera when snapped
@@ -2265,13 +2281,16 @@ export class GameScene extends Phaser.Scene {
        const speedRatio = this.carSpeed / maxSpeed; // Current speed as ratio of max speed
        const crankRatio = speedCrankPercentage / 100; // Crank position as ratio
        
-       // Base progress increment
-       let progressIncrement = speedRatio * 2; // Scale factor for progress speed
+       // Base progress increment (from config)
+       const progressScale = this.config.driving.progress?.scale ?? 2;
+       let progressIncrement = speedRatio * progressScale; // Scale factor for progress speed
        
        // If crank is misaligned with actual speed, slow down progress significantly
        const speedDifference = Math.abs(speedRatio - crankRatio);
-       if (speedDifference > 0.1) { // More than 10% difference
-         progressIncrement *= 0.1; // Very slow progress when misaligned
+       const misalignThreshold = this.config.driving.progress?.misalignThreshold ?? 0.1;
+       const misalignPenaltyScale = this.config.driving.progress?.misalignPenaltyScale ?? 0.1;
+       if (speedDifference > misalignThreshold) { // More than threshold difference
+         progressIncrement *= misalignPenaltyScale; // Very slow progress when misaligned
          console.log(`Progress slowed due to crank misalignment - speed: ${Math.round(speedRatio * 100)}%, crank: ${speedCrankPercentage}%`);
        }
        
@@ -2287,14 +2306,14 @@ export class GameScene extends Phaser.Scene {
     // Check if we should auto-resume driving after collision
     if (this.shouldAutoResumeAfterCollision && !this.drivingMode) {
       console.log('Auto-resuming driving after collision...');
-      this.startDriving();
+      this.drivingSystem.startDriving();
     }
   }
 
    private onGamePaused() {
      console.log('GameScene: Game paused - stopping driving visualization');
      if (this.drivingMode) {
-       this.stopDriving();
+       this.drivingSystem.stopDriving();
        // Note: shouldAutoRestartDriving flag remains true
      }
    }
@@ -2303,7 +2322,7 @@ export class GameScene extends Phaser.Scene {
      console.log('GameScene: Game resumed');
      // Auto-restart driving if it was active before pause
      if (this.shouldAutoRestartDriving && !this.drivingMode) {
-       this.startDriving();
+       this.drivingSystem.startDriving();
        console.log('Auto-restarted driving after resume');
      }
    }
@@ -2373,30 +2392,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ===== SAVE SYSTEM =====
-  public showSaveMenu() {
-    // Show save menu via MenuScene
-    const menuScene = this.getMenuScene();
-    if (menuScene) {
-      menuScene.events.emit('showSaveMenu');
-      this.scene.bringToTop('MenuScene');
-    }
-  }
+  public showSaveMenu() { this.menuBridge.showSaveMenu(); }
 
   public loadGame(steps: number) {
     console.log(`Loading game from step ${steps}`);
-    
-    // Restore the step counter to the saved value
-    const appScene = this.getAppScene();
-    if (appScene) {
-      (appScene as any).setStep(steps);
-    }
-    
-    // Restore game state based on saved steps
-    // For now, just start the game if it hasn't been started
-    if (!this.gameStarted) {
-      this.startGame();
-    }
-    
+    this.saveLoadBridge.loadSteps(steps);
+    if (!this.gameStarted) { this.startGame(); }
     // TODO: Implement proper game state restoration based on steps
     // This would involve restoring:
     // - Game time
@@ -2428,71 +2429,28 @@ export class GameScene extends Phaser.Scene {
      return this.currentSteeringValue;
    }
 
-   private toggleDrivingMode() {
-     if (this.drivingMode) {
-       this.stopDriving();
-     } else {
-       this.startDriving();
-     }
-   }
+  private toggleDrivingMode() {
+    if (this.drivingMode) {
+      this.drivingSystem.stopDriving();
+    } else {
+      this.drivingSystem.startDriving();
+    }
+  }
 
-   private startDriving() {
-     this.drivingMode = true;
-     this.shouldAutoRestartDriving = true; // Set flag to auto-restart on resume
-     console.log('Starting driving...');
-     
-     // Reset car state
-     this.carSpeed = 0;
-     this.carX = this.cameras.main.width / 2;
-     if (this.drivingCar) {
-       this.drivingCar.setX(this.carX);
-     }
-     
-     // Start forward movement timer
-     this.startForwardMovementTimer();
-     
-         // Start neutral return timer
-    this.startNeutralReturnTimer();
-    
-    // Start obstacle spawning
-    this.startObstacleSpawning();
-   }
+  private startDriving() {
+    this.drivingSystem.startDriving();
+  }
 
-   private stopDriving() {
-     this.drivingMode = false;
-     console.log('Stopping driving...');
-     
-     // Stop car movement
-     this.carSpeed = 0;
-     
-     // Stop forward movement timer
-     this.stopForwardMovementTimer();
-     
-         // Stop neutral return timer
-    this.stopNeutralReturnTimer();
-    
-    // Stop obstacle spawning and clear obstacles
-    this.stopObstacleSpawning();
-     }
+  private stopDriving() {
+    this.drivingSystem.stopDriving();
+  }
 
   private pauseDriving() {
-    console.log('Pausing driving...');
-    
-    // Set paused flag
-    this.drivingPaused = true;
-    
-    // Keep driving mode active but paused
-    // Don't update button text - we're just pausing
+    this.drivingSystem.pauseDriving();
   }
 
   private resumeDriving() {
-    console.log('Resuming driving...');
-    
-    // Clear paused flag
-    this.drivingPaused = false;
-    
-    // Reset auto-resume flag
-    this.shouldAutoResumeAfterCollision = false;
+    this.drivingSystem.resumeDriving();
   }
 
   private startNeutralReturnTimer() {
@@ -2602,9 +2560,10 @@ export class GameScene extends Phaser.Scene {
      private updateCarPosition() {
     if (!this.drivingMode || !this.drivingCar || this.drivingPaused) return;
     
-    // Only allow steering when speed crank is at 40% or higher
+    // Only allow steering when speed crank is at configured threshold or higher
     const crankPercentage = this.getSpeedCrankPercentage();
-    if (crankPercentage < 40) {
+    const minCrank = this.config.driving.steering.minCrankPercentForSteering ?? 40;
+    if (crankPercentage < minCrank) {
       console.log('Position update blocked - crank below 40%:', crankPercentage, 'carStarted:', this.carStarted);
       // Reset steering value to prevent any position changes
       this.currentSteeringValue = 0;
@@ -2612,7 +2571,8 @@ export class GameScene extends Phaser.Scene {
     }
     
     // Don't update position if car is not moving (with small tolerance for floating point)
-    if (this.carSpeed < 0.01) {
+    const minSpeed = this.config.driving.steering.minSpeedForSteering ?? 0.01;
+    if (this.carSpeed < minSpeed) {
       console.log('Position update blocked - car speed too low:', this.carSpeed, 'crank:', crankPercentage);
       // Reset steering value to prevent any position changes
       this.currentSteeringValue = 0;
@@ -2653,30 +2613,38 @@ export class GameScene extends Phaser.Scene {
      
     // Create driving container that will move with the camera but stay behind UI
     this.drivingBackground = this.add.container(0, 0);
+    const viewYOffsetPercent = this.config.driving.roadVisual?.viewYOffsetPercent ?? 0;
+    if (viewYOffsetPercent !== 0) {
+      this.drivingBackground.setY(gameHeight * viewYOffsetPercent);
+    }
     this.drivingBackground.setDepth(-10000); // Very low depth to ensure it's behind everything
      
          // Create sky
-    const sky = this.add.rectangle(0, 0, gameWidth, gameHeight / 2, 0x87CEEB);
+    const skyColor = parseInt((this.config.driving.roadVisual?.skyColor ?? '0x87CEEB').replace('0x',''), 16);
+    const roadColor = parseInt((this.config.driving.roadVisual?.roadColor ?? '0x333333').replace('0x',''), 16);
+    const lineColor = parseInt((this.config.driving.roadVisual?.lineColor ?? '0xffffff').replace('0x',''), 16);
+    const boundaryPadding = this.config.driving.roadVisual?.boundaryPadding ?? 50;
+    const sky = this.add.rectangle(0, 0, gameWidth, gameHeight / 2, skyColor);
     sky.setOrigin(0);
     sky.setDepth(-10000); // Ensure sky is behind everything
     this.drivingBackground.add(sky);
      
          // Create road
-    this.drivingRoad = this.add.rectangle(0, gameHeight / 2, gameWidth, gameHeight / 2, 0x333333);
+    this.drivingRoad = this.add.rectangle(0, gameHeight / 2, gameWidth, gameHeight / 2, roadColor);
     this.drivingRoad.setOrigin(0);
-    this.drivingRoad.setDepth(-10000); // Ensure road is behind everything
+    this.drivingRoad.setDepth(this.config.driving.roadVisual?.roadDepth ?? -10000); // Ensure road is behind everything
     this.drivingBackground.add(this.drivingRoad);
      
      // Create road lines - proper center lines like a real road
-     const lineWidth = 4;
-     const lineHeight = 30;
-     const lineGap = 40;
-     const centerLineY = gameHeight / 2 + 50;
+     const lineWidth = this.config.driving.roadVisual?.lineWidth ?? 4;
+     const lineHeight = this.config.driving.roadVisual?.lineHeight ?? 30;
+     const lineGap = this.config.driving.roadVisual?.lineGap ?? 40;
+     const centerLineY = gameHeight / 2 + (this.config.driving.roadVisual?.centerLineYOffset ?? 50);
      
          // Create center line segments
     for (let y = centerLineY; y < gameHeight; y += lineGap + lineHeight) {
-      const line = this.add.rectangle(gameWidth / 2, y, lineWidth, lineHeight, 0xffffff);
-      line.setDepth(-10000); // Ensure road lines are behind everything
+      const line = this.add.rectangle(gameWidth / 2, y, lineWidth, lineHeight, lineColor);
+      line.setDepth(this.config.driving.roadVisual?.lineDepth ?? -10000); // Ensure road lines are behind everything
       this.drivingRoadLines.push(line);
       this.drivingBackground.add(line);
     }
@@ -2824,210 +2792,17 @@ export class GameScene extends Phaser.Scene {
     //console.log('Mask updated with two cutouts');
   }
 
-  private createCrankTutorialOverlay() {
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    
-    console.log('Creating crank tutorial overlay with dimensions:', gameWidth, gameHeight);
-    
-    // Create tutorial overlay container
-    this.crankTutorialOverlay = this.add.container(0, 0);
-    this.crankTutorialOverlay.setDepth(50000); // Above everything
-    
-    // Create 50% transparent black overlay covering the screen
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, gameWidth, gameHeight);
-    this.crankTutorialOverlay.add(overlay);
-    
-    // Create mask for cutout
-    const maskGraphics = this.make.graphics();
-    
-    // Store reference to mask graphics for updates
-    this.crankTutorialMaskGraphics = maskGraphics;
-    
-    // Fill the mask with white (this will be the cutout area)
-    maskGraphics.fillStyle(0xffffff);
-    
-    // Create BitmapMask with inverted alpha (white areas become cutouts)
-    const mask = new Phaser.Display.Masks.BitmapMask(this, maskGraphics);
-    mask.invertAlpha = true; // This makes white areas transparent (cutouts)
-    
-    // Apply the mask to the overlay
-    overlay.setMask(mask);
-    
-    // Initially hidden
-    this.crankTutorialOverlay.setVisible(false);
-    
-    console.log('Crank tutorial overlay created');
-  }
+  private createCrankTutorialOverlay() { this.overlaySystem.createCrankTutorialOverlay(); }
 
-  private updateCrankTutorialOverlay() {
-    if (!this.crankTutorialOverlay) {
-      console.log('Crank tutorial overlay not found');
-      return;
-    }
-    
-    // Show overlay when car is started and crank is at 0%
-    const shouldShowCrankTutorial = this.carStarted && this.currentSpeedCrankPercentage === 0;
-    
-    console.log('Crank overlay check - carStarted:', this.carStarted, 'crankPercentage:', this.currentSpeedCrankPercentage, 'shouldShow:', shouldShowCrankTutorial);
-    
-    this.crankTutorialOverlay.setVisible(shouldShowCrankTutorial);
-    
-    if (shouldShowCrankTutorial) {
-      this.updateCrankTutorialMask();
-    }
-    
-    console.log('Crank tutorial overlay visibility:', shouldShowCrankTutorial ? 'shown' : 'hidden');
-  }
+  private updateCrankTutorialOverlay() { this.overlaySystem.updateCrankTutorialOverlay(); }
 
-  private updateCrankTutorialMask() {
-    if (!this.crankTutorialOverlay || !this.speedCrankArea) {
-      console.log('Cannot update crank mask - overlay or crank area not found');
-      return;
-    }
-    
-    if (!this.crankTutorialMaskGraphics) {
-      return;
-    }
-    
-    // Clear and redraw the mask
-    this.crankTutorialMaskGraphics.clear();
-    
-    // Fill the mask with white (this will be the cutout area)
-    this.crankTutorialMaskGraphics.fillStyle(0xffffff);
-    
-    // Get crank position and size
-    const crankX = this.speedCrankArea.x;
-    const crankY = this.speedCrankArea.y;
-    const crankWidth = this.speedCrankArea.width;
-    const crankHeight = this.speedCrankArea.height;
-    
-    // Create cutout around the speed crank area
-    const cutoutPadding = 10; // Extra padding around the crank
-    const cutoutX = crankX - crankWidth/2 - cutoutPadding;
-    const cutoutY = crankY - crankHeight/2 - cutoutPadding;
-    const cutoutWidth = crankWidth + (cutoutPadding * 2);
-    const cutoutHeight = crankHeight + (cutoutPadding * 2);
-    
-    this.crankTutorialMaskGraphics.beginPath();
-    this.crankTutorialMaskGraphics.fillRoundedRect(cutoutX, cutoutY, cutoutWidth, cutoutHeight, 8);
-    this.crankTutorialMaskGraphics.closePath();
-    this.crankTutorialMaskGraphics.fill();
-    
-    console.log('Crank mask updated with cutout at:', crankX, crankY);
-  }
+  private updateCrankTutorialMask() { this.overlaySystem.updateCrankTutorialMask(); }
 
-  private createIgnitionTutorialOverlay() {
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    
-    console.log('Creating ignition tutorial overlay with dimensions:', gameWidth, gameHeight);
-    
-    // Create tutorial overlay container
-    this.ignitionTutorialOverlay = this.add.container(0, 0);
-    this.ignitionTutorialOverlay.setDepth(50000); // Above everything
-    
-    // Create 50% transparent black overlay covering the screen
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.5).fillRect(0, 0, gameWidth, gameHeight);
-    this.ignitionTutorialOverlay.add(overlay);
-    
-    // Create mask for cutout
-    const maskGraphics = this.make.graphics();
-    
-    // Store reference to mask graphics for updates
-    this.ignitionTutorialMaskGraphics = maskGraphics;
-    
-    // Fill the mask with white (this will be the cutout area)
-    maskGraphics.fillStyle(0xffffff);
-    
-    // Create BitmapMask with inverted alpha (white areas become cutouts)
-    const mask = new Phaser.Display.Masks.BitmapMask(this, maskGraphics);
-    mask.invertAlpha = true; // This makes white areas transparent (cutouts)
-    
-    // Apply the mask to the overlay
-    overlay.setMask(mask);
-    
-    // Initially hidden
-    this.ignitionTutorialOverlay.setVisible(false);
-    
-    // Set depth to be above everything else
-    this.ignitionTutorialOverlay.setDepth(1000);
-    
-    console.log('Ignition tutorial overlay created with depth:', this.ignitionTutorialOverlay.depth);
-    console.log('Ignition tutorial overlay mask applied:', !!overlay.mask);
-    console.log('Ignition tutorial overlay mask invertAlpha:', mask.invertAlpha);
-  }
+  private createIgnitionTutorialOverlay() { this.overlaySystem.createIgnitionTutorialOverlay(); }
 
-  private updateIgnitionTutorialOverlay() {
-    if (!this.ignitionTutorialOverlay) {
-      console.log('Ignition tutorial overlay not found');
-      return;
-    }
-    
-    // Show overlay when ignition menu is open
-    const shouldShowIgnitionTutorial = this.ignitionMenuShown;
-    
-    console.log('Ignition overlay check - ignitionMenuShown:', this.ignitionMenuShown, 'shouldShow:', shouldShowIgnitionTutorial);
-    console.log('Ignition overlay exists:', !!this.ignitionTutorialOverlay);
-    console.log('Ignition overlay visible before:', this.ignitionTutorialOverlay.visible);
-    
-    this.ignitionTutorialOverlay.setVisible(shouldShowIgnitionTutorial);
-    
-    console.log('Ignition overlay visible after:', this.ignitionTutorialOverlay.visible);
-    console.log('Ignition overlay depth:', this.ignitionTutorialOverlay.depth);
-    console.log('Ignition overlay alpha:', this.ignitionTutorialOverlay.alpha);
-    
-    if (shouldShowIgnitionTutorial) {
-      this.updateIgnitionTutorialMask();
-      console.log('Ignition mask updated');
-    }
-    
-    console.log('Ignition tutorial overlay visibility:', shouldShowIgnitionTutorial ? 'shown' : 'hidden');
-  }
+  private updateIgnitionTutorialOverlay() { this.overlaySystem.updateIgnitionTutorialOverlay(); }
 
-  private updateIgnitionTutorialMask() {
-    if (!this.ignitionTutorialOverlay) {
-      console.log('Cannot update ignition mask - overlay not found');
-      return;
-    }
-    
-    if (!this.ignitionTutorialMaskGraphics) {
-      return;
-    }
-    
-    // Clear and redraw the mask
-    this.ignitionTutorialMaskGraphics.clear();
-    
-    // Fill the mask with white (this will be the cutout area)
-    this.ignitionTutorialMaskGraphics.fillStyle(0xffffff);
-    
-    // Get ignition menu position and size (approximate center of screen)
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    const menuX = gameWidth / 2;
-    const menuY = gameHeight / 2;
-    
-    // Create cutout around the ignition menu area (1.2x size as requested)
-    const menuWidth = 300; // Approximate menu width
-    const menuHeight = 200; // Approximate menu height
-    const scaleFactor = 1.2; // 1.2x size as requested
-    const cutoutWidth = menuWidth * scaleFactor;
-    const cutoutHeight = menuHeight * scaleFactor;
-    
-    const cutoutX = menuX - cutoutWidth/2;
-    const cutoutY = menuY - cutoutHeight/2;
-    
-    this.ignitionTutorialMaskGraphics.beginPath();
-    this.ignitionTutorialMaskGraphics.fillRoundedRect(cutoutX, cutoutY, cutoutWidth, cutoutHeight, 12);
-    this.ignitionTutorialMaskGraphics.closePath();
-    this.ignitionTutorialMaskGraphics.fill();
-    
-    console.log('Ignition mask updated with cutout at:', menuX, menuY, 'size:', cutoutWidth, 'x', cutoutHeight);
-    console.log('Ignition mask cutout position:', cutoutX, cutoutY);
-    console.log('Ignition mask graphics exists:', !!this.ignitionTutorialMaskGraphics);
-  }
+  private updateIgnitionTutorialMask() { this.overlaySystem.updateIgnitionTutorialMask(); }
 
 
   private handleDrivingSteeringInput(steeringValue: number) {
@@ -3079,36 +2854,11 @@ export class GameScene extends Phaser.Scene {
 
   // ===== DRIVING SYSTEM =====
   private startDriving() {
-    this.drivingMode = true;
-    this.shouldAutoRestartDriving = true; // Set flag to auto-restart on resume
-    console.log('Starting driving...');
-    
-    // Reset car state
-    this.carSpeed = 0;
-    this.carX = this.cameras.main.width / 2;
-    if (this.drivingCar) {
-      this.drivingCar.setX(this.carX);
-    }
-    
-    // Start forward movement timer
-    this.startForwardMovementTimer();
-    
-    // Start obstacle spawning
-    this.startObstacleSpawning();
+    this.drivingSystem.startDriving();
   }
 
   private stopDriving() {
-    this.drivingMode = false;
-    console.log('Stopping driving...');
-    
-    // Stop car movement
-    this.carSpeed = 0;
-    
-    // Stop forward movement timer
-    this.stopForwardMovementTimer();
-    
-    // Stop obstacle spawning
-    this.stopObstacleSpawning();
+    this.drivingSystem.stopDriving();
   }
 
   // ===== OBSTACLE SYSTEM =====
@@ -3119,10 +2869,14 @@ export class GameScene extends Phaser.Scene {
     let obstacle: Phaser.GameObjects.Rectangle;
     
     if (type === this.obstacleTypes.POTHOLE) {
-      // Pothole: configured width/height percentages, always on right side, slow speed
+      // Pothole: configured width/height percentages, random X between min/max, slow speed
       const width = gameWidth * this.config.obstacles.pothole.width;
       const height = gameHeight * this.config.obstacles.pothole.height;
-      const x = gameWidth * this.config.obstacles.pothole.position; // Right side of road
+      const minPos = this.config.obstacles.pothole.minPos;
+      const maxPos = this.config.obstacles.pothole.maxPos;
+      const spawnPos = Phaser.Math.FloatBetween(minPos, maxPos);
+      console.log('Pothole spawn range:', minPos, maxPos, 'chosen:', spawnPos);
+      const x = gameWidth * spawnPos; // Random horizontal between min/max
       const y = gameHeight * this.config.obstacles.pothole.spawnY; // Spawn lower on screen
       
       obstacle = this.add.rectangle(x, y, width, height, parseInt(this.config.obstacles.pothole.color));
@@ -3186,30 +2940,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private startObstacleSpawning() {
-    // Create obstacle spawning timers
-    // Potholes at configured interval
-    this.time.addEvent({
-      delay: this.config.obstacles.pothole.spawnInterval,
-      callback: () => {
-        if (this.drivingMode && !this.drivingPaused) {
-          this.createObstacle(this.obstacleTypes.POTHOLE);
-        }
-      },
-      callbackScope: this,
-      loop: true
-    });
-    
-    // Exits at configured interval
-    this.time.addEvent({
-      delay: this.config.obstacles.exit.spawnInterval,
-      callback: () => {
-        if (this.drivingMode && !this.drivingPaused) {
-          this.createObstacle(this.obstacleTypes.EXIT);
-        }
-      },
-      callbackScope: this,
-      loop: true
-    });
+    // Single spawner that randomly chooses obstacle type and delay
+    const spawnNext = () => {
+      if (!this.drivingMode || this.drivingPaused) {
+        // Try again soon when driving resumes
+        this.time.delayedCall(500, spawnNext, undefined, this);
+        return;
+      }
+      const minDelay = this.config.obstacles.spawner?.minDelayMs ?? 5000;
+      const maxDelay = this.config.obstacles.spawner?.maxDelayMs ?? 12000;
+      const potholeProb = this.config.obstacles.spawner?.potholeProbability ?? 0.8;
+      const isPothole = Math.random() < potholeProb;
+      const type = isPothole ? this.obstacleTypes.POTHOLE : this.obstacleTypes.EXIT;
+      this.createObstacle(type);
+      const nextDelay = Phaser.Math.Between(minDelay, maxDelay);
+      this.time.delayedCall(nextDelay, spawnNext, undefined, this);
+    };
+    spawnNext();
   }
 
   private stopObstacleSpawning() {
@@ -3266,11 +3013,7 @@ export class GameScene extends Phaser.Scene {
     console.log(`Showing ${obstacleType} menu`);
     
     // Show obstacle menu via MenuScene
-    const menuScene = this.scene.get('MenuScene');
-    if (menuScene) {
-      menuScene.events.emit('showObstacleMenu', obstacleType);
-      this.scene.bringToTop('MenuScene');
-    }
+    this.menuBridge.showObstacleMenu(obstacleType);
   }
 
   private onTurnKey() {
@@ -3292,14 +3035,14 @@ export class GameScene extends Phaser.Scene {
     this.updateNavigationButtonVisibility();
     
     // Update crank tutorial overlay when car starts
-    this.updateCrankTutorialOverlay();
+    this.overlaySystem.updateCrankTutorialOverlay();
   }
 
   private onIgnitionMenuShown() {
     console.log('Ignition menu shown - updating overlay');
     this.ignitionMenuShown = true;
     console.log('ignitionMenuShown set to:', this.ignitionMenuShown);
-    this.updateIgnitionTutorialOverlay();
+    this.overlaySystem.updateIgnitionTutorialOverlay();
   }
 
   private onIgnitionMenuHidden() {
@@ -3314,46 +3057,8 @@ export class GameScene extends Phaser.Scene {
    * Handles the complete key removal process - consolidates all key removal logic
    */
   private handleKeyRemoval(reason: string = 'unknown') {
-    console.log(`Keys removed from ignition - reason: ${reason}`);
-    
-    // Remove the constraint to release the keys
-    if (this.keysConstraint) {
-      this.matter.world.remove(this.keysConstraint);
-      this.keysConstraint = null;
-      
-      // Reset all car-related state
-      this.resetCarState();
-      
-      // Set cooldown to prevent immediate re-snapping
-      this.keysRemovalCooldown = 1000; // 1 second cooldown
-      
-      // Reset keys scroll factor
-      if (this.frontseatKeys && this.frontseatKeys.gameObject) {
-        this.frontseatKeys.gameObject.setScrollFactor(1, 0);
-      }
-      
-      // Reset magnetic target color - redraw with green stroke
-      if (this.magneticTarget) {
-        this.magneticTarget.clear();
-        this.magneticTarget.lineStyle(2, 0x00ff00);
-        this.magneticTarget.strokeCircle(0, 0, 20);
-      }
-      
-      // Return camera to front seat
-      this.switchToFrontseat();
-      
-      // Hide navigation buttons until car is started again
-      this.updateNavigationButtonVisibility();
-      
-      // Close the turn key menu since keys are no longer in ignition
-      const menuScene = this.scene.get('MenuScene');
-      if (menuScene) {
-        console.log('GameScene: Emitting closeCurrentMenu event to MenuScene');
-        menuScene.events.emit('closeCurrentMenu');
-      } else {
-        console.log('GameScene: MenuScene not found when trying to emit closeCurrentMenu');
-      }
-    }
+    // Delegate to KeySystem (behavior unchanged)
+    this.keySystem.handleKeyRemoval(reason);
   }
 
   /**
@@ -3453,38 +3158,18 @@ export class GameScene extends Phaser.Scene {
     this.handleKeyRemoval('menu button');
   }
 
-  private updateNavigationButtonVisibility() {
-    // Show/hide navigation buttons based on car started state AND crank position
-    // Buttons only visible when car is started AND crank is at 40% or higher
-    const crankPercentage = this.getSpeedCrankPercentage();
-    const shouldShowButtons = this.carStarted && crankPercentage >= 40;
-    
-    console.log('Updating navigation button visibility - carStarted:', this.carStarted, 'crankPercentage:', crankPercentage, 'shouldShow:', shouldShowButtons);
-    
-    if (this.frontseatButton) {
-      this.frontseatButton.setVisible(shouldShowButtons);
-      console.log('Frontseat button visibility set to:', shouldShowButtons);
-    }
-    if (this.backseatButton) {
-      this.backseatButton.setVisible(shouldShowButtons);
-      console.log('Backseat button visibility set to:', shouldShowButtons);
-    }
-    if (this.mapToggleButton) {
-      this.mapToggleButton.setVisible(shouldShowButtons);
-      console.log('Map toggle button visibility set to:', shouldShowButtons);
-    }
-    if (this.inventoryToggleButton) {
-      this.inventoryToggleButton.setVisible(shouldShowButtons);
-      console.log('Inventory toggle button visibility set to:', shouldShowButtons);
-    }
-    if (this.mapToggleText) {
-      this.mapToggleText.setVisible(shouldShowButtons);
-      console.log('Map toggle text visibility set to:', shouldShowButtons);
-    }
-    if (this.inventoryToggleText) {
-      this.inventoryToggleText.setVisible(shouldShowButtons);
-      console.log('Inventory toggle text visibility set to:', shouldShowButtons);
-    }
+  private updateNavigationButtonVisibility() { this.navigationUI.updateVisibility(); }
+
+  public resumeAfterCollision(): void {
+    // Resume driving after an obstacle/collision menu
+    this.drivingSystem.resumeDriving();
+  }
+
+  public takeExit(): void {
+    // Pause driving and handle exit flow
+    this.pauseDriving();
+    // If there is a dedicated exit menu, show it; otherwise reuse obstacle menu path
+    this.showObstacleMenu(this.obstacleTypes.EXIT);
   }
 }
 

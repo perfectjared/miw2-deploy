@@ -24,14 +24,40 @@ export interface GameConfig {
     carSpeed: {
       acceleration: number;
       maxSpeed: number;
+      tuning?: {
+        baseAccelScale: number;
+        decelScale: number;
+        stopDecelScale: number;
+      };
     };
     steering: {
       sensitivity: number;
       returnSpeed: number;
+      minCrankPercentForSteering?: number;
+      minSpeedForSteering?: number;
     };
     knob: {
       maxAngle: number;
       returnSpeed: number;
+    };
+    roadVisual?: {
+      lineWidth: number;
+      lineHeight: number;
+      lineGap: number;
+      centerLineYOffset: number;
+      backgroundDepth: number;
+      roadDepth: number;
+      lineDepth: number;
+      roadColor: string;
+      lineColor: string;
+      skyColor: string;
+      boundaryPadding: number;
+      viewYOffsetPercent?: number;
+    };
+    progress?: {
+      scale: number;
+      misalignThreshold: number;
+      misalignPenaltyScale: number;
     };
   };
   
@@ -42,7 +68,8 @@ export interface GameConfig {
       speed: number;
       width: number; // percentage of screen width
       height: number; // percentage of screen height
-      position: number; // percentage from left (0-1)
+      minPos: number; // min percentage from left (0-1)
+      maxPos: number; // max percentage from left (0-1)
       spawnY: number; // percentage from top (0-1)
       color: string;
     };
@@ -54,6 +81,11 @@ export interface GameConfig {
       position: number; // percentage from left (0-1)
       spawnY: number; // percentage from top (0-1)
       color: string;
+    };
+    spawner?: {
+      minDelayMs: number;
+      maxDelayMs: number;
+      potholeProbability: number; // 0-1
     };
   };
   
@@ -163,10 +195,28 @@ export interface GameConfig {
     };
   };
   
+  // Tutorial overlays
+  overlays: {
+    tutorial: {
+      alpha: number;
+      depth: number;
+      crank: {
+        cutoutPadding: number;
+        cornerRadius: number;
+      };
+      ignition: {
+        depth: number;
+        cutoutScale: number;
+        cornerRadius: number;
+      };
+    };
+  };
+  
   // Camera and navigation
   navigation: {
     animationDuration: number;
     overlayOffsetPercent: number;
+    minCrankPercentForNavButtons?: number;
   };
   
   // Physics system
@@ -215,6 +265,7 @@ export interface GameConfig {
           color: string;
           magneticStrength: number;
           magneticRange: number;
+          snapThreshold: number;
         };
   };
 }
@@ -290,14 +341,40 @@ export class ConfigLoader {
         carSpeed: {
           acceleration: data.driving?.carSpeed?.acceleration ?? 0.1,
           maxSpeed: data.driving?.carSpeed?.maxSpeed ?? 5,
+          tuning: {
+            baseAccelScale: data.driving?.carSpeed?.tuning?.baseAccelScale ?? 0.3,
+            decelScale: data.driving?.carSpeed?.tuning?.decelScale ?? 1.5,
+            stopDecelScale: data.driving?.carSpeed?.tuning?.stopDecelScale ?? 0.5,
+          },
         },
         steering: {
           sensitivity: data.driving?.steering?.sensitivity ?? 2.0,
           returnSpeed: data.driving?.steering?.returnSpeed ?? 2,
+          minCrankPercentForSteering: data.driving?.steering?.minCrankPercentForSteering ?? 40,
+          minSpeedForSteering: data.driving?.steering?.minSpeedForSteering ?? 0.01,
         },
         knob: {
           maxAngle: data.driving?.knob?.maxAngle ?? 45,
           returnSpeed: data.driving?.knob?.returnSpeed ?? 3,
+        },
+        roadVisual: {
+          lineWidth: data.driving?.roadVisual?.lineWidth ?? 4,
+          lineHeight: data.driving?.roadVisual?.lineHeight ?? 30,
+          lineGap: data.driving?.roadVisual?.lineGap ?? 40,
+          centerLineYOffset: data.driving?.roadVisual?.centerLineYOffset ?? 50,
+          backgroundDepth: data.driving?.roadVisual?.backgroundDepth ?? -10000,
+          roadDepth: data.driving?.roadVisual?.roadDepth ?? -10000,
+          lineDepth: data.driving?.roadVisual?.lineDepth ?? -10000,
+          roadColor: data.driving?.roadVisual?.roadColor ?? '0x333333',
+          lineColor: data.driving?.roadVisual?.lineColor ?? '0xffffff',
+          skyColor: data.driving?.roadVisual?.skyColor ?? '0x87CEEB',
+          boundaryPadding: data.driving?.roadVisual?.boundaryPadding ?? 50,
+          viewYOffsetPercent: data.driving?.roadVisual?.viewYOffsetPercent ?? 0,
+        },
+        progress: {
+          scale: data.driving?.progress?.scale ?? 2,
+          misalignThreshold: data.driving?.progress?.misalignThreshold ?? 0.1,
+          misalignPenaltyScale: data.driving?.progress?.misalignPenaltyScale ?? 0.1,
         },
       },
       obstacles: {
@@ -306,7 +383,8 @@ export class ConfigLoader {
           speed: data.obstacles?.pothole?.speed ?? 1,
           width: data.obstacles?.pothole?.width ?? 0.15,
           height: data.obstacles?.pothole?.height ?? 0.02,
-          position: data.obstacles?.pothole?.position ?? 0.75,
+          minPos: data.obstacles?.pothole?.minPos ?? 0.55,
+          maxPos: data.obstacles?.pothole?.maxPos ?? 0.9,
           spawnY: data.obstacles?.pothole?.spawnY ?? 0.8,
           color: data.obstacles?.pothole?.color ?? '0x8B4513',
         },
@@ -318,6 +396,11 @@ export class ConfigLoader {
           position: data.obstacles?.exit?.position ?? 0.75,
           spawnY: data.obstacles?.exit?.spawnY ?? 0.8,
           color: data.obstacles?.exit?.color ?? '0x00ff00',
+        },
+        spawner: {
+          minDelayMs: data.obstacles?.spawner?.minDelayMs ?? 5000,
+          maxDelayMs: data.obstacles?.spawner?.maxDelayMs ?? 12000,
+          potholeProbability: data.obstacles?.spawner?.potholeProbability ?? 0.8,
         },
       },
       ui: {
@@ -432,9 +515,25 @@ export class ConfigLoader {
           buttonStartOffset: data.menus?.positions?.buttonStartOffset ?? 20,
         },
       },
+      overlays: {
+        tutorial: {
+          alpha: data.overlays?.tutorial?.alpha ?? 0.5,
+          depth: data.overlays?.tutorial?.depth ?? 50000,
+          crank: {
+            cutoutPadding: data.overlays?.tutorial?.crank?.cutoutPadding ?? 10,
+            cornerRadius: data.overlays?.tutorial?.crank?.cornerRadius ?? 8,
+          },
+          ignition: {
+            depth: data.overlays?.tutorial?.ignition?.depth ?? 1000,
+            cutoutScale: data.overlays?.tutorial?.ignition?.cutoutScale ?? 1.2,
+            cornerRadius: data.overlays?.tutorial?.ignition?.cornerRadius ?? 12,
+          },
+        },
+      },
       navigation: {
         animationDuration: data.navigation?.animationDuration ?? 500,
         overlayOffsetPercent: data.navigation?.overlayOffsetPercent ?? 0.33,
+        minCrankPercentForNavButtons: data.navigation?.minCrankPercentForNavButtons ?? 40,
       },
       physics: {
         gravity: {
@@ -481,6 +580,7 @@ export class ConfigLoader {
           color: data.physics?.magneticTarget?.color ?? '0x00ff00',
           magneticStrength: data.physics?.magneticTarget?.magneticStrength ?? 0.01,
           magneticRange: data.physics?.magneticTarget?.magneticRange ?? 100,
+          snapThreshold: data.physics?.magneticTarget?.snapThreshold ?? 20,
         },
       },
     };
