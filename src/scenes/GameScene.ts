@@ -2919,9 +2919,17 @@ export class GameScene extends Phaser.Scene {
   private updateObstacles() {
     if (!this.drivingMode || this.drivingPaused) return;
     
+    // Only move obstacles if player is driving (crank 40%+)
+    const minCrankForObstacleMovement = this.config.driving?.steering?.minCrankPercentForSteering ?? 40;
+    if (this.currentSpeedCrankPercentage < minCrankForObstacleMovement) {
+      return;
+    }
+    
     this.obstacles.forEach((obstacle, index) => {
-      const speed = (obstacle as any).speed || 1;
-      obstacle.y += speed;
+      const baseSpeed = (obstacle as any).speed || 1;
+      // Scale obstacle speed by car speed (0 speed = 0 obstacle movement)
+      const scaledSpeed = baseSpeed * (this.carSpeed || 0);
+      obstacle.y += scaledSpeed;
       
       // Check for collision with car
       if (this.checkCollisionWithCar(obstacle)) {
