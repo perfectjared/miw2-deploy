@@ -30,13 +30,13 @@ export class AppScene extends Phaser.Scene {
     this.stepText.setDepth(25000);
 
     // Launch scenes in the correct layer order (bottom to top)
-    // 4. Background (bottom layer)
+    // 3. Background (bottom layer)
     this.scene.launch('BackgroundScene');
     
-    // 3. Game (main game logic)
+    // 2. Game (main game logic with driving visualization)
     this.scene.launch('GameScene');
     
-    // 2. Menu (launch by default)
+    // 1. Menu (top layer)
     this.scene.launch('MenuScene');
     this.scene.bringToTop('MenuScene');
     

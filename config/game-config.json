@@ -3,7 +3,194 @@
   "playerStats": {
     "initialMoney": 108, "initialHealth": 10, "initialSkill": 0,
     "initialDifficulty": 0, "initialMomentum": 0, "initialPlotA": 0,
-    "initialPlotB": 0, "initialPlotC": 0
+    "initialPlotB": 0, "initialPlotC": 0, "initialPosition": 50
+  },
+  "gameState": {
+    "initialKnobValue": 0,
+    "keysRemovalCooldown": 0,
+    "momentumMultiplier": 0.5,
+    "velocityMultiplier": 0.5
+  },
+  "ui": {
+    "gameLayer": {
+      "text": "GAME LAYER",
+      "position": { "x": 10, "y": 40 },
+      "fontSize": "16px",
+      "color": "#ffff00",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000
+    },
+    "countdown": {
+      "fontSize": "48px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 16, "y": 8 },
+      "depth": 10000,
+      "positionOffset": { "x": 0, "y": 0.28 }
+    },
+    "stops": {
+      "text": "Stops: {value}",
+      "fontSize": "24px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000,
+      "positionOffset": { "x": 0, "y": 0.35 }
+    },
+    "progress": {
+      "text": "Progress: {value}%",
+      "fontSize": "24px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000,
+      "positionOffset": { "x": 0, "y": 0.42 }
+    },
+    "position": {
+      "text": "Position: {value}%",
+      "fontSize": "24px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000,
+      "positionOffset": { "x": 0, "y": 0.49 }
+    },
+    "speed": {
+      "text": "Speed: {value}%",
+      "fontSize": "20px",
+      "color": "#00ff00",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000,
+      "positionOffset": { "x": 0, "y": 0.56 }
+    },
+    "money": {
+      "text": "Money: ${value}",
+      "position": { "x": 20, "y": 0.9 },
+      "fontSize": "18px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000
+    },
+    "health": {
+      "text": "Health: {value}",
+      "position": { "x": 20, "y": 0.95 },
+      "fontSize": "18px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000
+    },
+    "managerValues": {
+      "position": { "x": 0.95, "y": 0.9 },
+      "fontSize": "14px",
+      "color": "#ffffff",
+      "backgroundColor": "#000000",
+      "padding": { "x": 8, "y": 4 },
+      "depth": 10000,
+      "labels": {
+        "skill": "Skill: {value}%",
+        "difficulty": "Difficulty: {value}%",
+        "momentum": "Momentum: {value}%",
+        "plotA": "Plot A: {value}%",
+        "plotB": "Plot B: {value}%",
+        "plotC": "Plot C: {value}%"
+      },
+      "colors": {
+        "skill": "#00ffff",
+        "difficulty": "#ff00ff",
+        "momentum": "#ffff00",
+        "plotA": "#ff8800",
+        "plotB": "#8800ff",
+        "plotC": "#00ff88"
+      }
+    }
+  },
+  "visual": {
+    "steeringWheel": {
+      "radius": 60,
+      "position": { "x": 0.5, "y": 0.3 },
+      "depth": 1000,
+      "pointer": {
+        "width": 6,
+        "height": 20,
+        "offset": 10,
+        "color": "#ffffff"
+      }
+    },
+    "speedCrank": {
+      "position": { "x": 0.5, "y": 0.3, "offsetX": 120 },
+      "size": { "width": 40, "height": 200 },
+      "handle": { "width": 36, "height": 20 },
+      "text": {
+        "text": "{value}%",
+        "fontSize": "16px",
+        "color": "#ffffff",
+        "offset": { "x": 10, "y": 0 }
+      },
+      "depths": { "track": 1000, "handle": 1001, "indicator": 1002, "text": 1003, "area": 1004 },
+      "snapPositions": [0, 0.4, 0.7, 1.0]
+    },
+    "overlays": {
+      "map": {
+        "text": "MAP OVERLAY",
+        "position": { "x": 0.25, "y": 0.5, "offsetY": 320 },
+        "fontSize": "36px",
+        "color": "#ffffff",
+        "depth": 1000
+      },
+      "inventory": {
+        "text": "INVENTORY OVERLAY",
+        "position": { "x": 0.75, "y": 0.5, "offsetY": 320 },
+        "fontSize": "36px",
+        "color": "#ffffff",
+        "depth": 1000
+      },
+      "buttons": {
+        "size": { "width": 120, "height": 40 },
+        "position": { "offsetY": 200 },
+        "text": {
+          "lookDown": "LOOK DOWN",
+          "lookUp": "LOOK UP",
+          "fontSize": "14px",
+          "color": "#ffffff"
+        },
+        "depths": { "button": 1000, "text": 1001 }
+      }
+    },
+    "seatTitles": {
+      "frontseat": {
+        "text": "FRONT SEAT",
+        "position": { "x": 0.25, "y": 0.5, "offsetY": -30 },
+        "fontSize": "36px",
+        "color": "#ffffff",
+        "depth": 1000
+      },
+      "backseat": {
+        "text": "BACK SEAT",
+        "position": { "x": 0.75, "y": 0.5, "offsetY": -30 },
+        "fontSize": "36px",
+        "color": "#ffffff",
+        "depth": 1000
+      }
+    },
+    "physics": {
+      "bufferZone": 100,
+      "teleportBounds": { "min": 50, "max": 50 },
+      "magneticTarget": {
+        "snappedColor": "0x88ff88",
+        "closeColor": "0x44ff44",
+        "snappedLineWidth": 5,
+        "closeLineWidth": 4
+      }
+    },
+    "timing": {
+      "frameRate": 60,
+      "cooldownFrameTime": 16,
+      "knobReturnSpeed": 3
+    }
   },
   "driving": {
     "carSpeed": {
@@ -31,6 +218,11 @@
       "skyColor": "0x87CEEB",
       "boundaryPadding": 50,
       "viewYOffsetPercent": -0.3
+    },
+    "camera": {
+      "smoothingFactor": 0.15,
+      "maxOffset": 100,
+      "enabled": true
     },
     "progress": { "scale": 2, "misalignThreshold": 0.1, "misalignPenaltyScale": 0.1 }
   },
@@ -99,6 +291,120 @@
       "depth": 50000,
       "crank": { "cutoutPadding": 10, "cornerRadius": 8 },
       "ignition": { "depth": 1000, "cutoutScale": 1.2, "cornerRadius": 12 }
+    }
+  },
+  "menuManager": {
+    "slider": {
+      "width": 20,
+      "height": 200,
+      "yOffset": -20,
+      "trackColor": "0x333333",
+      "handleWidth": 30,
+      "handleHeight": 20,
+      "handleColor": "0xf39c12",
+      "cornerRadius": 10,
+      "handleCornerRadius": 5
+    },
+    "labels": {
+      "startLabelOffset": 30,
+      "turnKeyLabelOffset": -30,
+      "fontSize": "18px",
+      "color": "#ffffff"
+    },
+    "meter": {
+      "width": 120,
+      "height": 20,
+      "yOffset": 60,
+      "backgroundColor": "0x333333",
+      "fillColor": "0x00ff00",
+      "cornerRadius": 5,
+      "textOffset": 25
+    },
+    "depths": {
+      "sliderTrack": 50001,
+      "sliderHandle": 50001,
+      "labels": 50001,
+      "meter": 50001
+    },
+    "physics": {
+      "momentumDecay": 0.9,
+      "maxVelocity": 0.1,
+      "gravity": 0.0015,
+      "sensitivity": 7.2,
+      "startThreshold": 0.8,
+      "startIncrement": 1.2
+    },
+    "buttonStyles": {
+      "resume": { "backgroundColor": "#27ae60", "color": "#ffffff" },
+      "startFresh": { "backgroundColor": "#e74c3c", "color": "#ffffff" },
+      "startGame": { "backgroundColor": "#27ae60", "color": "#ffffff" },
+      "restart": { "backgroundColor": "#e74c3c", "color": "#ffffff" },
+      "save": { "backgroundColor": "#3498db", "color": "#ffffff" },
+      "load": { "backgroundColor": "#f39c12", "color": "#ffffff" },
+      "clear": { "backgroundColor": "#e74c3c", "color": "#ffffff" },
+      "back": { "backgroundColor": "#95a5a6", "color": "#ffffff" }
+    }
+  },
+  "gameScene": {
+    "ui": {
+      "mapToggleButton": {
+        "fillColor": "0x888888",
+        "fillAlpha": 0.7,
+        "strokeColor": "0xffffff",
+        "strokeWidth": 2,
+        "strokeAlpha": 1
+      },
+      "inventoryToggleButton": {
+        "fillColor": "0x888888",
+        "fillAlpha": 0.7,
+        "strokeColor": "0xffffff",
+        "strokeWidth": 2,
+        "strokeAlpha": 1
+      },
+      "knob": {
+        "fillColor": "0x666666",
+        "strokeColor": "0xffffff",
+        "strokeWidth": 3,
+        "strokeAlpha": 1,
+        "activeFillColor": "0x00ff00"
+      },
+      "speedCrank": {
+        "trackColor": "0x333333",
+        "trackAlpha": 0.8,
+        "trackStrokeColor": "0xffffff",
+        "trackStrokeWidth": 2,
+        "trackStrokeAlpha": 1,
+        "handleColor": "0x00ff00",
+        "handleAlpha": 0.9,
+        "handleStrokeColor": "0xffffff",
+        "handleStrokeWidth": 1,
+        "handleStrokeAlpha": 1,
+        "valueIndicatorColor": "0xffffff",
+        "valueIndicatorAlpha": 1,
+        "valueIndicatorStrokeColor": "0x000000",
+        "valueIndicatorStrokeWidth": 1,
+        "valueIndicatorStrokeAlpha": 1,
+        "interactionAreaAlpha": 0
+      },
+      "debugBorders": {
+        "frontseatColor": "0xff0000",
+        "frontseatWidth": 3,
+        "frontseatAlpha": 1,
+        "backseatColor": "0x00ff00",
+        "backseatWidth": 3,
+        "backseatAlpha": 1
+      },
+      "magneticTarget": {
+        "activeColor": "0x88ff88",
+        "activeWidth": 5,
+        "activeAlpha": 1,
+        "inactiveColor": "0x44ff44",
+        "inactiveWidth": 4,
+        "inactiveAlpha": 1
+      },
+      "dragDial": {
+        "fillColor": "0x666666"
+      }
     }
   }
 }

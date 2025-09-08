@@ -18,9 +18,15 @@ export class DrivingSystem {
     console.log('Starting driving...');
     host.carSpeed = 0;
     host.carX = host.cameras.main.width / 2;
+    
+    // Reset camera to center position when starting
+    if (typeof host.resetDrivingCamera === 'function') host.resetDrivingCamera();
+    
+    // Update car position in GameScene
     if (host.drivingCar) {
       host.drivingCar.setX(host.carX);
     }
+    
     if (typeof host.startForwardMovementTimer === 'function') host.startForwardMovementTimer();
     if (typeof host.startNeutralReturnTimer === 'function') host.startNeutralReturnTimer();
     if (typeof host.startObstacleSpawning === 'function') host.startObstacleSpawning();
@@ -31,6 +37,10 @@ export class DrivingSystem {
     host.drivingMode = false;
     console.log('Stopping driving...');
     host.carSpeed = 0;
+    
+    // Reset camera to center position
+    if (typeof host.resetDrivingCamera === 'function') host.resetDrivingCamera();
+    
     if (typeof host.stopForwardMovementTimer === 'function') host.stopForwardMovementTimer();
     if (typeof host.stopNeutralReturnTimer === 'function') host.stopNeutralReturnTimer();
     if (typeof host.stopObstacleSpawning === 'function') host.stopObstacleSpawning();

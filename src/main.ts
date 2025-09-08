@@ -5,7 +5,7 @@ import { AppScene } from './scenes/AppScene';
 import { MenuScene } from './scenes/MenuScene';
 import { StoryScene } from './scenes/StoryScene';
 import { GameScene } from './scenes/GameScene';
-import { DrivingScene } from './scenes/DrivingScene';
+//import { DrivingScene } from './scenes/DrivingScene'; // No longer used
 //import { FrontseatScene } from './scenes/FrontseatScene';
 //import { BackseatScene } from './scenes/BackseatScene';
 //import { MapScene } from './scenes/MapScene';
@@ -20,7 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
   height: 640,
   parent: 'game',
   backgroundColor: '#facade',
-  scene: [PreloadScene, BackgroundScene, AppScene, MenuScene, StoryScene, GameScene, DrivingScene],
+  scene: [PreloadScene, BackgroundScene, AppScene, MenuScene, StoryScene, GameScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

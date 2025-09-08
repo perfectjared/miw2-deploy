@@ -57,10 +57,7 @@ export class MenuManager {
                 (gameScene as any).loadGame(saveData.steps);
               }
             },
-            style: {
-              backgroundColor: '#27ae60',
-              color: '#ffffff'
-            }
+            style: this.config.menuManager.buttonStyles.resume
           },
           {
             text: 'Start Fresh',
@@ -73,10 +70,7 @@ export class MenuManager {
                 (appScene as any).startGame();
               }
             },
-            style: {
-              backgroundColor: '#e74c3c',
-              color: '#ffffff'
-            }
+            style: this.config.menuManager.buttonStyles.startFresh
           }
         ]
       };
@@ -95,10 +89,7 @@ export class MenuManager {
                 (appScene as any).startGame();
               }
             },
-            style: {
-              backgroundColor: '#27ae60',
-              color: '#ffffff'
-            }
+            style: this.config.menuManager.buttonStyles.resume
           }
         ]
       };
@@ -131,10 +122,7 @@ export class MenuManager {
               }
             }
           },
-          style: {
-            backgroundColor: '#27ae60',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.startGame
         },
         {
           text: 'Restart',
@@ -142,10 +130,7 @@ export class MenuManager {
             this.closeDialog();
             window.location.reload();
           },
-          style: {
-            backgroundColor: '#e74c3c',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.restart
         }
       ]
     };
@@ -175,10 +160,7 @@ export class MenuManager {
               this.closeDialog();
             }
           },
-          style: {
-            backgroundColor: '#3498db',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.save
         },
         {
           text: 'Load Game',
@@ -192,10 +174,7 @@ export class MenuManager {
             }
             this.closeDialog();
           },
-          style: {
-            backgroundColor: '#f39c12',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.load
         },
         {
           text: 'Clear Save',
@@ -203,20 +182,14 @@ export class MenuManager {
             this.saveManager.clearSave();
             this.closeDialog();
           },
-          style: {
-            backgroundColor: '#e74c3c',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.restart
         },
         {
           text: 'Close',
           onClick: () => {
             this.closeDialog();
           },
-          style: {
-            backgroundColor: '#95a5a6',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.back
         }
       ]
     };
@@ -240,10 +213,7 @@ export class MenuManager {
               (gameScene as any).resumeAfterCollision();
             }
           },
-          style: {
-            backgroundColor: '#27ae60',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.startGame
         }
       ]
     };
@@ -267,10 +237,7 @@ export class MenuManager {
               (gameScene as any).takeExit();
             }
           },
-          style: {
-            backgroundColor: '#27ae60',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.startGame
         },
         {
           text: 'Continue Driving',
@@ -281,10 +248,7 @@ export class MenuManager {
               (gameScene as any).resumeAfterCollision();
             }
           },
-          style: {
-            backgroundColor: '#3498db',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.save
         }
       ]
     };
@@ -325,74 +289,74 @@ export class MenuManager {
     const centerY = gameHeight / 2;
     
     // Create vertical slider
-    const sliderWidth = 20;
-    const sliderHeight = 200;
+    const sliderWidth = this.config.menuManager.slider.width;
+    const sliderHeight = this.config.menuManager.slider.height;
     const sliderX = centerX;
-    const sliderY = centerY - 20;
+    const sliderY = centerY + this.config.menuManager.slider.yOffset;
     
     // Create slider track (background)
     const sliderTrack = this.scene.add.graphics();
-    sliderTrack.fillStyle(0x333333);
-    sliderTrack.fillRoundedRect(sliderX - sliderWidth/2, sliderY - sliderHeight/2, sliderWidth, sliderHeight, 10);
+    sliderTrack.fillStyle(parseInt(this.config.menuManager.slider.trackColor.replace('0x', ''), 16));
+    sliderTrack.fillRoundedRect(sliderX - sliderWidth/2, sliderY - sliderHeight/2, sliderWidth, sliderHeight, this.config.menuManager.slider.cornerRadius);
     sliderTrack.setScrollFactor(0);
-    sliderTrack.setDepth(50001);
+    sliderTrack.setDepth(this.config.menuManager.depths.sliderTrack);
     
     // Create slider handle
-    const handleWidth = 30;
-    const handleHeight = 20;
+    const handleWidth = this.config.menuManager.slider.handleWidth;
+    const handleHeight = this.config.menuManager.slider.handleHeight;
     const handle = this.scene.add.graphics();
-    handle.fillStyle(0xf39c12);
-    handle.fillRoundedRect(sliderX - handleWidth/2, sliderY + sliderHeight/2 - handleHeight, handleWidth, handleHeight, 5);
+    handle.fillStyle(parseInt(this.config.menuManager.slider.handleColor.replace('0x', ''), 16));
+    handle.fillRoundedRect(sliderX - handleWidth/2, sliderY + sliderHeight/2 - handleHeight, handleWidth, handleHeight, this.config.menuManager.slider.handleCornerRadius);
     handle.setScrollFactor(0);
-    handle.setDepth(50001);
+    handle.setDepth(this.config.menuManager.depths.sliderHandle);
     
     // Add text labels
-    const startLabel = this.scene.add.text(centerX, centerY + sliderHeight/2 + 30, 'START', {
-      fontSize: '12px',
-      color: '#ffffff',
+    const startLabel = this.scene.add.text(centerX, centerY + sliderHeight/2 + this.config.menuManager.labels.startLabelOffset, 'START', {
+      fontSize: this.config.menuManager.labels.fontSize,
+      color: this.config.menuManager.labels.color,
       fontStyle: 'bold'
     });
     startLabel.setOrigin(0.5);
     startLabel.setScrollFactor(0);
-    startLabel.setDepth(50001);
+    startLabel.setDepth(this.config.menuManager.depths.labels);
     
-    const turnKeyLabel = this.scene.add.text(centerX, centerY - sliderHeight/2 - 30, 'Turn Key', {
-      fontSize: '14px',
-      color: '#ffffff',
+    const turnKeyLabel = this.scene.add.text(centerX, centerY - sliderHeight/2 + this.config.menuManager.labels.turnKeyLabelOffset, 'Turn Key', {
+      fontSize: this.config.menuManager.labels.fontSize,
+      color: this.config.menuManager.labels.color,
       fontStyle: 'bold'
     });
     turnKeyLabel.setOrigin(0.5);
     turnKeyLabel.setScrollFactor(0);
-    turnKeyLabel.setDepth(50001);
+    turnKeyLabel.setDepth(this.config.menuManager.depths.labels);
     
     // Add start value meter
-    const meterWidth = 120;
-    const meterHeight = 20;
+    const meterWidth = this.config.menuManager.meter.width;
+    const meterHeight = this.config.menuManager.meter.height;
     const meterX = centerX;
-    const meterY = centerY + sliderHeight/2 + 60;
+    const meterY = centerY + sliderHeight/2 + this.config.menuManager.meter.yOffset;
     
     // Meter background
     const meterBackground = this.scene.add.graphics();
-    meterBackground.fillStyle(0x333333);
-    meterBackground.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, meterWidth, meterHeight, 5);
+    meterBackground.fillStyle(parseInt(this.config.menuManager.meter.backgroundColor.replace('0x', ''), 16));
+    meterBackground.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, meterWidth, meterHeight, this.config.menuManager.meter.cornerRadius);
     meterBackground.setScrollFactor(0);
-    meterBackground.setDepth(50001);
+    meterBackground.setDepth(this.config.menuManager.depths.meter);
     
     // Meter fill
     const meterFill = this.scene.add.graphics();
-    meterFill.fillStyle(0x00ff00); // Green when accumulating
+    meterFill.fillStyle(parseInt(this.config.menuManager.meter.fillColor.replace('0x', ''), 16)); // Green when accumulating
     meterFill.setScrollFactor(0);
-    meterFill.setDepth(50001);
+    meterFill.setDepth(this.config.menuManager.depths.meter);
     
     // Meter text
-    const meterText = this.scene.add.text(centerX, meterY + 25, 'START: 0%', {
-      fontSize: '12px',
-      color: '#ffffff',
+    const meterText = this.scene.add.text(centerX, meterY + this.config.menuManager.meter.textOffset, 'START: 0%', {
+      fontSize: this.config.menuManager.labels.fontSize,
+      color: this.config.menuManager.labels.color,
       fontStyle: 'bold'
     });
     meterText.setOrigin(0.5);
     meterText.setScrollFactor(0);
-    meterText.setDepth(50001);
+    meterText.setDepth(this.config.menuManager.depths.meter);
     
     // Track slider state
     let isDragging = false;
@@ -402,15 +366,15 @@ export class MenuManager {
     let lastPointerX = 0;
     let lastUpdateTime = 0;
     let velocity = 0;
-    const momentumDecay = 0.9; // How quickly momentum fades
-    const maxVelocity = 0.1; // Increased maximum velocity per frame
-    const gravity = 0.0015; // How much the slider falls each frame
-    const sensitivity = 7.2; // How sensitive the slider is to mouse movement (higher = more sensitive)
+    const momentumDecay = this.config.menuManager.physics.momentumDecay; // How quickly momentum fades
+    const maxVelocity = this.config.menuManager.physics.maxVelocity; // Increased maximum velocity per frame
+    const gravity = this.config.menuManager.physics.gravity; // How much the slider falls each frame
+    const sensitivity = this.config.menuManager.physics.sensitivity; // How sensitive the slider is to mouse movement (higher = more sensitive)
     
     // Start value system
     let startValue = 0; // 0-100, accumulates when slider > 90%
-    const startThreshold = 0.8; // 90% slider position to start accumulating
-    const startIncrement = 1.2; // How much to add per frame when over threshold
+    const startThreshold = this.config.menuManager.physics.startThreshold; // 90% slider position to start accumulating
+    const startIncrement = this.config.menuManager.physics.startIncrement; // How much to add per frame when over threshold
     //.4 is slow, .8 is medium, 1.2 is fast
     const startMax = 100; // Maximum start value to trigger ignition
     let carStarted = false; // Track if car has been started
@@ -483,16 +447,16 @@ export class MenuManager {
       const handleY = sliderY + sliderHeight/2 - (currentProgress * sliderHeight) - handleHeight/2;
       
       handle.clear();
-      handle.fillStyle(0xf39c12);
-      handle.fillRoundedRect(sliderX - handleWidth/2, handleY, handleWidth, handleHeight, 5);
+      handle.fillStyle(parseInt(this.config.menuManager.slider.handleColor.replace('0x', ''), 16));
+      handle.fillRoundedRect(sliderX - handleWidth/2, handleY, handleWidth, handleHeight, this.config.menuManager.slider.handleCornerRadius);
     };
     
     // Update meter visual
     const updateMeter = () => {
       const fillWidth = (startValue / startMax) * meterWidth;
       meterFill.clear();
-      meterFill.fillStyle(0x00ff00);
-      meterFill.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, fillWidth, meterHeight, 5);
+      meterFill.fillStyle(parseInt(this.config.menuManager.meter.fillColor.replace('0x', ''), 16));
+      meterFill.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, fillWidth, meterHeight, this.config.menuManager.meter.cornerRadius);
       
       meterText.setText(`START: ${Math.floor(startValue)}%`);
     };
@@ -591,10 +555,7 @@ export class MenuManager {
             this.closeDialog();
             window.location.reload();
           },
-          style: {
-            backgroundColor: '#e74c3c',
-            color: '#ffffff'
-          }
+            style: this.config.menuManager.buttonStyles.restart
         }
       ]
     };
