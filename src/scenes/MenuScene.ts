@@ -29,6 +29,8 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showSaveMenu', this.showSaveMenu, this);
     this.events.on('showGameOverMenu', this.showGameOverMenu, this);
     this.events.on('showStartMenu', this.showStartMenu, this);
+    this.events.on('showTurnKeyMenu', this.showTurnKeyMenu, this);
+    this.events.on('closeCurrentMenu', this.closeCurrentMenu, this);
     
     // Don't create any default menu - wait for events
     console.log('MenuScene ready - waiting for menu events');
@@ -72,5 +74,13 @@ export class MenuScene extends Phaser.Scene {
     } else if (obstacleType === 'exit') {
       this.menuManager.showExitMenu();
     }
+  }
+
+  private showTurnKeyMenu() {
+    this.menuManager.showTurnKeyMenu();
+  }
+
+  private closeCurrentMenu() {
+    this.menuManager.closeCurrentDialog();
   }
 }

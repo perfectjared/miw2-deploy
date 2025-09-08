@@ -159,12 +159,7 @@ export class AppScene extends Phaser.Scene {
   public setStep(step: number): void {
     this.step = step;
     this.stepText.setText(`Step: ${this.step}`);
-    
-    // Emit step event to GameScene to update any dependent systems
-    const gameScene = this.scene.get('GameScene');
-    if (gameScene) {
-      gameScene.events.emit('step', this.step);
-    }
+    console.log(`Step counter set to: ${this.step}`);
   }
 
   private togglePauseMenu() {

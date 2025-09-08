@@ -292,6 +292,7 @@ class Keys implements PhysicsObject {
     this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       console.log('Keys pointerdown - starting manual drag');
       isDragging = true;
+      (this.gameObject as any).isDragging = true; // Set flag on game object
       dragStartX = pointer.x;
       dragStartY = pointer.y;
       lastPointerX = pointer.x;
@@ -304,6 +305,21 @@ class Keys implements PhysicsObject {
         console.log('Breaking constraint - Keys being dragged away');
         (this.scene as any).matter.world.remove((this.scene as any).keysConstraint);
         (this.scene as any).keysConstraint = null;
+        
+        // Set cooldown to prevent immediate re-snapping
+        (this.scene as any).keysRemovalCooldown = 1000; // 1 second cooldown
+        
+        // Reset car started state since keys are removed
+        (this.scene as any).carStarted = false;
+        
+        // Hide navigation buttons until car is started again
+        (this.scene as any).updateNavigationButtonVisibility();
+        
+        // Close ignition menu if open
+        const menuScene = (this.scene as any).scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('closeCurrentMenu');
+        }
         
         // Reset magnetic target color
         if ((this.scene as any).magneticTarget) {
@@ -349,6 +365,7 @@ class Keys implements PhysicsObject {
       
       console.log('Keys pointerup - ending manual drag with momentum');
       isDragging = false;
+      (this.gameObject as any).isDragging = false; // Clear flag on game object
       this.gameObject.setFillStyle(originalColor);
       (this.scene as any).isDraggingObject = false;
       
@@ -416,8 +433,27 @@ export class GameScene extends Phaser.Scene {
   private frontseatKeys!: Keys;
   private magneticTarget!: Phaser.GameObjects.Graphics;
   private keysConstraint!: MatterJS.Constraint | null; // Constraint for snapping Keys to target
+  private keysRemovalCooldown: number = 0; // Cooldown to prevent immediate re-snapping after removal
+  private carStarted: boolean = false; // Track if car has been started
+  private countdownStarted: boolean = false; // Track if countdown has ever started
+  private ignitionMenuShown: boolean = false; // Track if ignition menu has ever been shown
   private tutorialOverlay!: Phaser.GameObjects.Container; // Tutorial overlay with masking
   private tutorialMaskGraphics!: Phaser.GameObjects.Graphics; // Reference to mask graphics for updates
+  private backseatButton!: Phaser.GameObjects.Graphics; // Reference to backseat button
+  private frontseatButton!: Phaser.GameObjects.Graphics; // Reference to frontseat button
+  private mapToggleButton!: Phaser.GameObjects.Graphics; // Reference to map toggle button
+  private inventoryToggleButton!: Phaser.GameObjects.Graphics; // Reference to inventory toggle button
+  private mapToggleText!: Phaser.GameObjects.Text; // Reference to map toggle text
+  private inventoryToggleText!: Phaser.GameObjects.Text; // Reference to inventory toggle text
+  private speedCrankTrack!: Phaser.GameObjects.Graphics; // Reference to speed crank track
+  private speedCrankHandle!: Phaser.GameObjects.Graphics; // Reference to speed crank handle
+  private speedCrankValueIndicator!: Phaser.GameObjects.Graphics; // Reference to speed crank value indicator
+  private speedCrankArea!: Phaser.GameObjects.Rectangle; // Reference to speed crank interaction area
+  private speedCrankPercentageText!: Phaser.GameObjects.Text; // Reference to speed crank percentage text
+  private updateSpeedCrank!: () => void; // Function to update speed crank display
+  private resetSpeedCrank!: () => void; // Function to reset speed crank to 0
+  private currentSpeedCrankPercentage: number = 0; // Current speed crank percentage (0-100)
+  private speedDisplayText!: Phaser.GameObjects.Text; // Debug display for current car speed
    private frontseatDragDial!: any; // RexUI drag dial
      private drivingMode: boolean = false; // Track if driving mode is active
   private shouldAutoRestartDriving: boolean = false; // Track if driving should restart on resume
@@ -524,6 +560,10 @@ export class GameScene extends Phaser.Scene {
     // Listen for pause/resume events from AppScene
     this.events.on('gamePaused', this.onGamePaused, this);
     this.events.on('gameResumed', this.onGameResumed, this);
+    
+    // Listen for turn key menu events
+    this.events.on('turnKey', this.onTurnKey, this);
+    this.events.on('removeKeys', this.onRemoveKeys, this);
 
     // Set up automatic pause when window loses focus
     this.setupAutoPause();
@@ -652,6 +692,9 @@ export class GameScene extends Phaser.Scene {
      
      // Create all content in this scene
      this.createGameContent();
+    
+    // Initialize navigation button visibility (hidden until car starts)
+    this.updateNavigationButtonVisibility();
      
      console.log('Game camera set up with content container');
    }
@@ -669,6 +712,7 @@ export class GameScene extends Phaser.Scene {
      
      // Frontseat button
      const frontseatButton = this.add.graphics();
+    this.frontseatButton = frontseatButton; // Store reference
      frontseatButton.fillStyle(0x4444ff, 0.7);
      frontseatButton.fillRect(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2);
      frontseatButton.lineStyle(2, 0xffffff, 1);
@@ -676,6 +720,11 @@ export class GameScene extends Phaser.Scene {
      frontseatButton.setInteractive(new Phaser.Geom.Rectangle(frontseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.2), Phaser.Geom.Rectangle.Contains);
      frontseatButton.on('pointerup', () => {
        if (this.gameStarted) {
+         // Don't allow switching to backseat if keys are not in ignition
+         if (!this.keysConstraint) {
+           console.log('Cannot switch to backseat - keys not in ignition!');
+           return;
+         }
          this.switchToBackseat();
        }
      });
@@ -693,6 +742,7 @@ export class GameScene extends Phaser.Scene {
      
      // Backseat button
      const backseatButton = this.add.graphics();
+    this.backseatButton = backseatButton; // Store reference
      backseatButton.fillStyle(0x44ff44, 0.7);
      backseatButton.fillRect(backseatCenterX - (gameWidth * 0.4), 20, gameWidth * 0.8, gameHeight * 0.1);
      backseatButton.lineStyle(2, 0xffffff, 1);
@@ -722,6 +772,7 @@ export class GameScene extends Phaser.Scene {
       
              // Map toggle button (small button at top of map overlay)
        const mapToggleButton = this.add.graphics();
+      this.mapToggleButton = mapToggleButton; // Store reference
        mapToggleButton.fillStyle(0x888888, 0.7);
        mapToggleButton.fillRect(frontseatCenterX - 60, frontseatCenterY + 200, 120, 40);
        mapToggleButton.lineStyle(2, 0xffffff, 1);
@@ -729,6 +780,11 @@ export class GameScene extends Phaser.Scene {
        mapToggleButton.setInteractive(new Phaser.Geom.Rectangle(frontseatCenterX - 60, frontseatCenterY + 200, 120, 40), Phaser.Geom.Rectangle.Contains);
        mapToggleButton.on('pointerdown', () => {
          if (this.gameStarted) {
+           // Don't allow overlay if keys are not in ignition
+           if (!this.keysConstraint) {
+             console.log('Cannot access overlay - keys not in ignition!');
+             return;
+           }
            if (this.currentView === 'main') {
              this.showOverlay();
            } else {
@@ -743,6 +799,7 @@ export class GameScene extends Phaser.Scene {
          color: '#ffffff',
          fontStyle: 'bold'
        }).setOrigin(0.5);
+      this.mapToggleText = mapToggleText; // Store reference
        mapToggleText.setName('mapToggleText');
       
       // Inventory overlay (right side, positioned below backseat)
@@ -754,6 +811,7 @@ export class GameScene extends Phaser.Scene {
       
              // Inventory toggle button (small button at top of inventory overlay)
        const inventoryToggleButton = this.add.graphics();
+      this.inventoryToggleButton = inventoryToggleButton; // Store reference
        inventoryToggleButton.fillStyle(0x888888, 0.7);
        inventoryToggleButton.fillRect(backseatCenterX - 60, backseatCenterY + 200, 120, 40);
        inventoryToggleButton.lineStyle(2, 0xffffff, 1);
@@ -761,6 +819,11 @@ export class GameScene extends Phaser.Scene {
        inventoryToggleButton.setInteractive(new Phaser.Geom.Rectangle(backseatCenterX - 60, backseatCenterY + 200, 120, 40), Phaser.Geom.Rectangle.Contains);
        inventoryToggleButton.on('pointerdown', () => {
          if (this.gameStarted) {
+           // Don't allow overlay if keys are not in ignition
+           if (!this.keysConstraint) {
+             console.log('Cannot access overlay - keys not in ignition!');
+             return;
+           }
            if (this.currentView === 'main') {
              this.showOverlay();
            } else {
@@ -775,6 +838,7 @@ export class GameScene extends Phaser.Scene {
          color: '#ffffff',
          fontStyle: 'bold'
        }).setOrigin(0.5);
+      this.inventoryToggleText = inventoryToggleText; // Store reference
        inventoryToggleText.setName('inventoryToggleText');
       
       // Add all content to the container
@@ -894,6 +958,163 @@ export class GameScene extends Phaser.Scene {
      // Don't disable initially - we'll control it through event handlers
      
      console.log('Front seat steering wheel created at position:', dialX, dialY);
+     
+     // Create the speed crank to the right of the steering wheel
+     this.createSpeedCrank(dialX, dialY, gameWidth, gameHeight);
+   }
+
+   private createSpeedCrank(dialX: number, dialY: number, gameWidth: number, gameHeight: number) {
+     // Position the speed crank to the right of the steering wheel
+     const crankX = dialX + 120; // Offset to the right
+     const crankY = dialY;
+     const crankWidth = 40;
+     const crankHeight = 200;
+     
+     // Create crank track (background) - styled like RexUI
+     const crankTrack = this.add.graphics();
+     crankTrack.fillStyle(0x333333, 0.8);
+     crankTrack.fillRoundedRect(crankX - crankWidth/2, crankY - crankHeight/2, crankWidth, crankHeight, 5);
+     crankTrack.lineStyle(2, 0xffffff, 1);
+     crankTrack.strokeRoundedRect(crankX - crankWidth/2, crankY - crankHeight/2, crankWidth, crankHeight, 5);
+     
+     // Create crank handle - styled like RexUI with visible value indicator
+     const handleWidth = crankWidth - 4;
+     const handleHeight = 20;
+     const crankHandle = this.add.graphics();
+     
+     // Create visible value indicator on the handle
+     const valueIndicator = this.add.graphics();
+     
+     // Function to redraw handle at current position
+     const redrawHandle = (y: number) => {
+       crankHandle.clear();
+       crankHandle.fillStyle(0x00ff00, 0.9);
+       crankHandle.fillRoundedRect(crankX - handleWidth/2, y - handleHeight/2, handleWidth, handleHeight, 3);
+       crankHandle.lineStyle(1, 0xffffff, 1);
+       crankHandle.strokeRoundedRect(crankX - handleWidth/2, y - handleHeight/2, handleWidth, handleHeight, 3);
+       
+       valueIndicator.clear();
+       valueIndicator.fillStyle(0xffffff, 1);
+       valueIndicator.fillCircle(crankX, y, 3);
+       valueIndicator.lineStyle(1, 0x000000, 1);
+       valueIndicator.strokeCircle(crankX, y, 3);
+     };
+     
+     // Create percentage text
+     this.speedCrankPercentageText = this.add.text(crankX + crankWidth/2 + 10, crankY, '50%', {
+       fontSize: '16px',
+       color: '#ffffff',
+       fontStyle: 'bold'
+     }).setOrigin(0, 0.5);
+     
+     // Add to game content container
+     this.gameContentContainer.add([crankTrack, crankHandle, valueIndicator, this.speedCrankPercentageText]);
+     crankTrack.setDepth(1000);
+     crankHandle.setDepth(1001);
+     valueIndicator.setDepth(1002);
+     this.speedCrankPercentageText.setDepth(1003);
+     
+     // Make crank interactive
+     const crankArea = this.add.rectangle(crankX, crankY, crankWidth, crankHeight, 0x000000, 0);
+     crankArea.setInteractive();
+     this.gameContentContainer.add(crankArea);
+     crankArea.setDepth(1004);
+     
+     // Store references for later use
+     this.speedCrankTrack = crankTrack;
+     this.speedCrankHandle = crankHandle;
+     this.speedCrankValueIndicator = valueIndicator;
+     this.speedCrankArea = crankArea;
+     
+     // Add interaction logic with snapping
+     let isDragging = false;
+     let currentProgress = 0; // Start at 0 (bottom)
+     
+     // Define snap positions: 0%, 40%, 70%, 100%
+     const snapPositions = [0, 0.4, 0.7, 1.0];
+     
+     // Function to find closest snap position
+     const findClosestSnap = (progress: number) => {
+       let closest = snapPositions[0];
+       let minDistance = Math.abs(progress - closest);
+       
+       for (let i = 1; i < snapPositions.length; i++) {
+         const distance = Math.abs(progress - snapPositions[i]);
+         if (distance < minDistance) {
+           minDistance = distance;
+           closest = snapPositions[i];
+         }
+       }
+       
+       return closest;
+     };
+     
+     const updateCrank = () => {
+       const handleY = crankY - crankHeight/2 + (currentProgress * crankHeight);
+       redrawHandle(handleY);
+       
+       // Update percentage text and store current percentage
+       const percentage = Math.round(currentProgress * 100);
+       this.speedCrankPercentageText.setText(`${percentage}%`);
+       this.currentSpeedCrankPercentage = percentage; // Store for driving system
+       console.log('Speed crank value:', percentage);
+     };
+     
+     crankArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+       // Only allow interaction if car is started
+       if (!this.carStarted) {
+         console.log('Speed crank disabled - car not started');
+         return;
+       }
+       
+       console.log('Speed crank pointer down - car started:', this.carStarted);
+       isDragging = true;
+       const localY = pointer.y - (crankY - crankHeight/2);
+       currentProgress = Phaser.Math.Clamp(localY / crankHeight, 0, 1);
+       updateCrank();
+     });
+     
+     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+       if (!isDragging || !this.carStarted) return;
+       
+       const localY = pointer.y - (crankY - crankHeight/2);
+       currentProgress = Phaser.Math.Clamp(localY / crankHeight, 0, 1);
+       updateCrank();
+     });
+     
+     this.input.on('pointerup', () => {
+       if (isDragging) {
+         // Snap to closest position when releasing
+         currentProgress = findClosestSnap(currentProgress);
+         updateCrank();
+         console.log('Snapped to:', Math.round(currentProgress * 100) + '%');
+       }
+       isDragging = false;
+     });
+     
+     // Store the update function for external use
+     this.updateSpeedCrank = () => {
+       updateCrank();
+     };
+     
+     // Store the reset function for external use
+     this.resetSpeedCrank = () => {
+       currentProgress = 0;
+       this.currentSpeedCrankPercentage = 0; // Reset stored percentage
+       updateCrank();
+     };
+     
+     // Initialize crank position
+     updateCrank();
+     
+     console.log('Speed crank created at position:', crankX, crankY);
+   }
+
+   // Method to get current speed crank percentage
+   private getSpeedCrankPercentage(): number {
+     // This will be set by the speed crank interaction logic
+     console.log('Getting speed crank percentage:', this.currentSpeedCrankPercentage);
+     return this.currentSpeedCrankPercentage || 0;
    }
 
    private createStopsAndProgressText() {
@@ -936,13 +1157,24 @@ export class GameScene extends Phaser.Scene {
        padding: { x: 8, y: 4 }
      }).setOrigin(0.5);
      
+     // Create speed display text for debugging
+     const speedDisplayY = (gameHeight * 0.2) + (gameHeight * 0.40); // Below position
+     this.speedDisplayText = this.add.text(positionX, speedDisplayY, 'Speed: 0%', {
+       fontSize: '20px',
+       color: '#00ff00', // Green color to distinguish from other text
+       fontStyle: 'bold',
+       backgroundColor: '#000000',
+       padding: { x: 8, y: 4 }
+     }).setOrigin(0.5);
+     
      // Add all texts to the container so they move with the content
-     this.gameContentContainer.add([this.stopsText, this.progressText, this.positionText]);
+     this.gameContentContainer.add([this.stopsText, this.progressText, this.positionText, this.speedDisplayText]);
      
      // Set depth to ensure they're on top
      this.stopsText.setDepth(1000);
      this.progressText.setDepth(1000);
      this.positionText.setDepth(1000);
+     this.speedDisplayText.setDepth(1000);
      
          // Create player values text in bottom left (visible to player)
     this.createMoneyAndHealthText();
@@ -1375,6 +1607,17 @@ export class GameScene extends Phaser.Scene {
         }
       }
       
+      // Check if a menu dialog is currently open
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene && menuScene.scene.isActive()) {
+        // Check if MenuManager has a current dialog
+        const menuManager = (menuScene as any).menuManager;
+        if (menuManager && menuManager.currentDialog) {
+          console.log('Swipe detection blocked - menu dialog is open');
+          return;
+        }
+      }
+      
       // Only start swipe tracking if we're not clicking on interactive objects
       startX = pointer.x;
       startY = pointer.y;
@@ -1402,6 +1645,17 @@ export class GameScene extends Phaser.Scene {
         );
         if (hasInteractiveObject) {
           console.log('Swipe detection blocked by interactive object on pointerup');
+          return;
+        }
+      }
+      
+      // Check if a menu dialog is currently open
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene && menuScene.scene.isActive()) {
+        // Check if MenuManager has a current dialog
+        const menuManager = (menuScene as any).menuManager;
+        if (menuManager && menuManager.currentDialog) {
+          console.log('Swipe detection blocked on pointerup - menu dialog is open');
           return;
         }
       }
@@ -1489,6 +1743,12 @@ export class GameScene extends Phaser.Scene {
   }
 
          private switchToBackseat() {
+      // Don't allow switching to backseat if keys are not in ignition
+      if (!this.keysConstraint) {
+        console.log('Cannot switch to backseat - keys not in ignition!');
+        return;
+      }
+      
       if (this.currentPosition === 'frontseat') {
         // Move the entire content container to the left to show backseat
         const gameWidth = this.cameras.main.width;
@@ -1647,7 +1907,7 @@ export class GameScene extends Phaser.Scene {
      private updateHealth(health: number) {
     this.health = Phaser.Math.Clamp(health, 1, 10); // Clamp between 1-10
     if (this.healthText) {
-      this.healthText.setText(`Health: ${this.health * 10}%`);
+      this.healthText.setText(`Health: ${Math.round(this.health * 10)}%`);
     }
   }
 
@@ -1705,6 +1965,17 @@ export class GameScene extends Phaser.Scene {
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) return;
     if (!this.magneticTarget || !(this.magneticTarget as any).magneticBody) return;
     
+    // Don't apply magnetic attraction if we're in cooldown after removing keys
+    if (this.keysRemovalCooldown > 0) {
+      this.keysRemovalCooldown -= 16; // Decrease cooldown (assuming 60fps, ~16ms per frame)
+      return;
+    }
+    
+    // Don't apply magnetic attraction if key is being actively dragged
+    if ((this.frontseatKeys.gameObject as any).isDragging) {
+      return;
+    }
+    
     const magneticConfig = this.config.physics.magneticTarget;
     const keysBody = this.frontseatKeys.gameObject.body;
     const magneticBody = (this.magneticTarget as any).magneticBody;
@@ -1724,12 +1995,21 @@ export class GameScene extends Phaser.Scene {
     if (distance <= snapThreshold && !this.keysConstraint) {
       // Create constraint to snap Keys to the center of magnetic target
       console.log('Keys snapped to magnetic target!');
-      this.keysConstraint = this.matter.add.constraint(keysBody, magneticBody, 0, 0.1, {
+      this.keysConstraint = this.matter.add.constraint(keysBody, magneticBody as any, 0, 0.1, {
         pointA: { x: 0, y: 0 },
         pointB: { x: 0, y: 0 },
         stiffness: 1,
         damping: 0.1
       });
+      
+      // Show turn key menu only if car hasn't been started yet AND key is in ignition
+      if (!this.carStarted && this.keysConstraint) {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showTurnKeyMenu');
+          this.scene.bringToTop('MenuScene');
+        }
+      }
       
       // Make Keys move vertically with camera when snapped
       this.frontseatKeys.gameObject.setScrollFactor(1, 1);
@@ -1747,6 +2027,18 @@ export class GameScene extends Phaser.Scene {
       console.log('Keys released from magnetic target');
       this.matter.world.remove(this.keysConstraint);
       this.keysConstraint = null;
+      
+      // Reset car started state since keys are removed
+      this.carStarted = false;
+      
+      // Hide navigation buttons until car is started again
+      this.updateNavigationButtonVisibility();
+      
+      // Close ignition menu if open
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('closeCurrentMenu');
+      }
       
       // Reset Keys scroll factor to horizontal only
       this.frontseatKeys.gameObject.setScrollFactor(1, 0);
@@ -1892,6 +2184,9 @@ export class GameScene extends Phaser.Scene {
     this.gameStarted = true;
     console.log('GameScene: Game started! Controls are now enabled.');
     
+    // Hide navigation buttons initially (car not started yet)
+    this.updateNavigationButtonVisibility();
+    
     // Update tutorial overlay visibility now that game has started
     this.updateTutorialOverlay();
     
@@ -1943,6 +2238,11 @@ export class GameScene extends Phaser.Scene {
        return;
      }
      
+     // Only count down if countdown has been started
+     if (!this.countdownStarted) {
+       return;
+     }
+     
      if (this.gameTime > 0) {
        this.gameTime--;
        console.log(`Countdown step: ${this.gameTime}, countdownText exists: ${!!this.countdownText}`);
@@ -1978,10 +2278,26 @@ export class GameScene extends Phaser.Scene {
    public stepCountdown() {
      this.updateCountdown();
      
-     // Add progress if driving mode is active
-     if (this.drivingMode) {
-       this.updateProgress(this.progress + 1);
-       console.log(`Progress increased to ${this.progress}% while driving`);
+     // Add progress based on car speed (not just driving mode)
+     if (this.drivingMode && this.carSpeed > 0) {
+       // Calculate progress increment based on car speed
+       const speedCrankPercentage = this.getSpeedCrankPercentage();
+       const maxSpeed = this.config.driving.carSpeed.maxSpeed;
+       const speedRatio = this.carSpeed / maxSpeed; // Current speed as ratio of max speed
+       const crankRatio = speedCrankPercentage / 100; // Crank position as ratio
+       
+       // Base progress increment
+       let progressIncrement = speedRatio * 2; // Scale factor for progress speed
+       
+       // If crank is misaligned with actual speed, slow down progress significantly
+       const speedDifference = Math.abs(speedRatio - crankRatio);
+       if (speedDifference > 0.1) { // More than 10% difference
+         progressIncrement *= 0.1; // Very slow progress when misaligned
+         console.log(`Progress slowed due to crank misalignment - speed: ${Math.round(speedRatio * 100)}%, crank: ${speedCrankPercentage}%`);
+       }
+       
+       this.updateProgress(this.progress + progressIncrement);
+       console.log(`Progress increased by ${progressIncrement.toFixed(2)} to ${this.progress.toFixed(1)}% (speed: ${Math.round(speedRatio * 100)}%)`);
      }
    }
 
@@ -2023,8 +2339,8 @@ export class GameScene extends Phaser.Scene {
    private updateProgress(newProgress: number) {
      this.progress = Math.max(0, Math.min(100, newProgress));
      if (this.progressText) {
-       this.progressText.setText(`Progress: ${this.progress}%`);
-          }
+       this.progressText.setText(`Progress: ${Math.round(this.progress)}%`);
+     }
    }
 
      private keepPhysicsContainersInPlace() {
@@ -2059,14 +2375,40 @@ export class GameScene extends Phaser.Scene {
    }
 
    // ===== SAVE SYSTEM =====
-   public showSaveMenu() {
-     // Show save menu via MenuScene
-     const menuScene = this.scene.get('MenuScene');
-     if (menuScene) {
-       menuScene.events.emit('showSaveMenu');
-       this.scene.bringToTop('MenuScene');
-     }
-   }
+  public showSaveMenu() {
+    // Show save menu via MenuScene
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('showSaveMenu');
+      this.scene.bringToTop('MenuScene');
+    }
+  }
+
+  public loadGame(steps: number) {
+    console.log(`Loading game from step ${steps}`);
+    
+    // Restore the step counter to the saved value
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).setStep(steps);
+    }
+    
+    // Restore game state based on saved steps
+    // For now, just start the game if it hasn't been started
+    if (!this.gameStarted) {
+      this.startGame();
+    }
+    
+    // TODO: Implement proper game state restoration based on steps
+    // This would involve restoring:
+    // - Game time
+    // - Player position
+    // - Money, health, etc.
+    // - Car state
+    // - Current view/position
+    
+    console.log('Game loaded successfully');
+  }
 
    public setDragDialValue(value: number): void {
      if (this.frontseatDragDial) {
@@ -2208,8 +2550,40 @@ export class GameScene extends Phaser.Scene {
      private updateForwardMovement() {
     if (!this.drivingMode || this.drivingPaused) return;
      
-         // Gradually increase car speed
-    this.carSpeed = Math.min(this.carSpeed + this.config.driving.carSpeed.acceleration, this.config.driving.carSpeed.maxSpeed);
+         // Get speed crank percentage (0-100) and convert to speed multiplier
+    const speedCrankPercentage = this.getSpeedCrankPercentage();
+    const speedMultiplier = speedCrankPercentage / 100; // Convert to 0-1 range
+    const maxSpeed = this.config.driving.carSpeed.maxSpeed;
+    const currentSpeedRatio = this.carSpeed / maxSpeed; // Current speed as ratio
+    
+    console.log('Forward movement update - crank:', speedCrankPercentage + '%', 'multiplier:', speedMultiplier, 'current speed:', this.carSpeed);
+    
+    // Only move if speed crank is above 0%
+    if (speedCrankPercentage > 0) {
+      // Calculate target speed based on crank percentage
+      const targetSpeed = maxSpeed * speedMultiplier;
+      
+      // Use much more gradual speed changes
+      const baseAcceleration = this.config.driving.carSpeed.acceleration * 0.3; // Much slower base acceleration
+      const speedDifference = Math.abs(targetSpeed - this.carSpeed);
+      
+      if (this.carSpeed < targetSpeed) {
+        // Gradual acceleration towards target
+        const accelerationRate = baseAcceleration * (1 + speedDifference / maxSpeed); // Slightly faster when far from target
+        this.carSpeed = Math.min(this.carSpeed + accelerationRate, targetSpeed);
+        console.log('Gradual acceleration to target speed:', targetSpeed.toFixed(2), 'current:', this.carSpeed.toFixed(2), 'rate:', accelerationRate.toFixed(3));
+      } else if (this.carSpeed > targetSpeed) {
+        // Gradual deceleration towards target
+        const decelerationRate = baseAcceleration * 1.5; // Slightly faster deceleration than acceleration
+        this.carSpeed = Math.max(this.carSpeed - decelerationRate, targetSpeed);
+        console.log('Gradual deceleration to target speed:', targetSpeed.toFixed(2), 'current:', this.carSpeed.toFixed(2), 'rate:', decelerationRate.toFixed(3));
+      }
+    } else {
+      // If crank is at 0%, gradually slow down to complete stop
+      const stopDecelerationRate = this.config.driving.carSpeed.acceleration * 0.5; // Moderate deceleration to stop
+      this.carSpeed = Math.max(this.carSpeed - stopDecelerationRate, 0);
+      console.log('Gradual stop deceleration, current speed:', this.carSpeed.toFixed(2), 'rate:', stopDecelerationRate.toFixed(3));
+    }
      
          // Move road lines to create forward motion effect
     this.updateRoadLines();
@@ -2219,6 +2593,12 @@ export class GameScene extends Phaser.Scene {
     
     // Update car position based on current steering value
     this.updateCarPosition();
+    
+    // Update speed display for debugging
+    if (this.speedDisplayText) {
+      const speedPercentage = Math.round((this.carSpeed / maxSpeed) * 100);
+      this.speedDisplayText.setText(`Speed: ${speedPercentage}%`);
+    }
    }
 
      private updateCarPosition() {
@@ -2607,6 +2987,94 @@ export class GameScene extends Phaser.Scene {
     if (menuScene) {
       menuScene.events.emit('showObstacleMenu', obstacleType);
       this.scene.bringToTop('MenuScene');
+    }
+  }
+
+  private onTurnKey() {
+    console.log('Turn Key clicked! Car is now started.');
+    this.carStarted = true;
+    
+    // Start countdown timer if it hasn't started yet
+    if (!this.countdownStarted) {
+      this.countdownStarted = true;
+      console.log('Countdown timer started!');
+    }
+    
+    // Start driving mode when car is started
+    if (!this.drivingMode) {
+      this.startDriving();
+      console.log('Driving mode started with car ignition');
+    }
+    
+    this.updateNavigationButtonVisibility();
+  }
+
+  private onRemoveKeys() {
+    console.log('Remove Keys clicked! Removing keys from ignition.');
+    // Remove the constraint to release the keys
+    if (this.keysConstraint) {
+      this.matter.world.remove(this.keysConstraint);
+      this.keysConstraint = null;
+      
+      // Reset car started state since keys are removed
+      this.carStarted = false;
+      
+      // Reset speed crank to 0 when car stops being started
+      if (this.resetSpeedCrank) {
+        this.resetSpeedCrank();
+      }
+      
+      // Set cooldown to prevent immediate re-snapping
+      this.keysRemovalCooldown = 1000; // 1 second cooldown
+      
+      // Reset keys scroll factor
+      if (this.frontseatKeys && this.frontseatKeys.gameObject) {
+        this.frontseatKeys.gameObject.setScrollFactor(1, 0);
+      }
+      
+      // Reset magnetic target color - redraw with green stroke
+      if (this.magneticTarget) {
+        this.magneticTarget.clear();
+        this.magneticTarget.lineStyle(2, 0x00ff00);
+        this.magneticTarget.strokeCircle(0, 0, 20);
+      }
+      
+      // Return camera to front seat
+      this.switchToFrontseat();
+      
+      // Hide navigation buttons until car is started again
+      this.updateNavigationButtonVisibility();
+      
+      // Close the turn key menu since keys are no longer in ignition
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('closeCurrentMenu');
+      }
+    }
+  }
+
+  private updateNavigationButtonVisibility() {
+    // Show/hide navigation buttons based on car started state
+    // Simple logic: buttons only visible when car is fully started
+    const shouldShowButtons = this.carStarted;
+    
+    if (this.frontseatButton) {
+      this.frontseatButton.setVisible(shouldShowButtons);
+    }
+    if (this.backseatButton) {
+      this.backseatButton.setVisible(shouldShowButtons);
+    }
+    if (this.mapToggleButton) {
+      this.mapToggleButton.setVisible(shouldShowButtons);
+    }
+    if (this.inventoryToggleButton) {
+      this.inventoryToggleButton.setVisible(shouldShowButtons);
+    }
+    if (this.mapToggleText) {
+      this.mapToggleText.setVisible(shouldShowButtons);
+    }
+    if (this.inventoryToggleText) {
+      this.inventoryToggleText.setVisible(shouldShowButtons);
     }
   }
 }
