@@ -74,7 +74,6 @@ export class PreloadScene extends Phaser.Scene {
 
     // Load your assets here
     // Load the game configuration file
-    this.load.json('gameConfig', 'config/game-config.json');
     
     // For now, we'll just add a small delay to simulate loading
     this.time.delayedCall(2000, () => {

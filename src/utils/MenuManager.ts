@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { SaveManager } from './SaveManager';
-import { GameConfig } from '../config/ConfigLoader';
 
 export interface MenuButton {
   text: string;
@@ -17,19 +16,197 @@ export interface MenuConfig {
 }
 
 export class MenuManager {
+  // ============================================================================
+  // MENU PARAMETERS - Easy to modify values
+  // ============================================================================
+  
+  // Slider Parameters
+  private readonly SLIDER_WIDTH = 200;
+  private readonly SLIDER_HEIGHT = 20;
+  private readonly SLIDER_Y_OFFSET = 50;
+  private readonly SLIDER_TRACK_COLOR = 0x333333;
+  private readonly SLIDER_CORNER_RADIUS = 10;
+  private readonly SLIDER_HANDLE_WIDTH = 20;
+  private readonly SLIDER_HANDLE_HEIGHT = 20;
+  private readonly SLIDER_HANDLE_COLOR = 0x666666;
+  private readonly SLIDER_HANDLE_CORNER_RADIUS = 10;
+  
+  // Depths
+  private readonly SLIDER_TRACK_DEPTH = 1000;
+  private readonly SLIDER_HANDLE_DEPTH = 1001;
+  private readonly LABELS_DEPTH = 1002;
+  private readonly METER_DEPTH = 1003;
+  
+  // Labels
+  private readonly START_LABEL_OFFSET = 30;
+  private readonly TURN_KEY_LABEL_OFFSET = -30;
+  private readonly LABELS_FONT_SIZE = "16px";
+  private readonly LABELS_COLOR = "#ffffff";
+  
+  // Meter Parameters
+  private readonly METER_WIDTH = 150;
+  private readonly METER_HEIGHT = 10;
+  private readonly METER_Y_OFFSET = 80;
+  private readonly METER_BACKGROUND_COLOR = 0x222222;
+  private readonly METER_CORNER_RADIUS = 5;
+  private readonly METER_FILL_COLOR = 0x00ff00;
+  private readonly METER_TEXT_OFFSET = 20;
+  
+  // Physics Parameters
+  private readonly MOMENTUM_DECAY = 0.95;
+  private readonly MAX_VELOCITY = 15;
+  private readonly GRAVITY = 0.3;
+  private readonly SENSITIVITY = 0.5;
+  private readonly START_THRESHOLD = 0.9;
+  private readonly START_INCREMENT = 0.5;
+  
+  // ============================================================================
+  // CLASS PROPERTIES
+  // ============================================================================
+  
+  // Menu Hierarchy System
+  private readonly MENU_PRIORITIES = {
+    START: 100,      // Highest priority - start menu
+    PAUSE: 80,        // High priority - pause menu
+    GAME_OVER: 70,    // High priority - game over menu
+    OBSTACLE: 60,     // Medium priority - obstacle collision menu
+    SAVE: 50,         // Medium priority - save menu
+    TURN_KEY: 30      // Lowest priority - ignition menu
+  };
+  
   private scene: Phaser.Scene;
-  private config: GameConfig;
   private saveManager: SaveManager;
   private currentDialog: any = null;
+  private menuStack: Array<{type: string, priority: number, config?: any}> = []; // Track menu hierarchy
+  private currentDisplayedMenuType: string | null = null; // Track what menu is actually being displayed
+  private userDismissedMenuType: string | null = null; // Track which specific menu was dismissed by user action
 
-  constructor(scene: Phaser.Scene, config: GameConfig) {
+  constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.config = config;
     this.saveManager = SaveManager.getInstance();
   }
 
+  /**
+   * Menu Hierarchy Management Methods
+   */
+  private canShowMenu(menuType: string): boolean {
+    const newPriority = this.MENU_PRIORITIES[menuType as keyof typeof this.MENU_PRIORITIES];
+    if (!newPriority) return true;
+    
+    // Check if there's a higher priority menu already showing
+    const currentMenu = this.menuStack[this.menuStack.length - 1];
+    console.log(`MenuManager: canShowMenu(${menuType}) - newPriority: ${newPriority}, currentMenu:`, currentMenu ? `${currentMenu.type}(${currentMenu.priority})` : 'none');
+    
+    if (currentMenu && currentMenu.priority > newPriority) {
+      console.log(`MenuManager: Cannot show ${menuType} (priority ${newPriority}) - higher priority menu ${currentMenu.type} (priority ${currentMenu.priority}) is active`);
+      return false;
+    }
+    
+    console.log(`MenuManager: Can show ${menuType} (priority ${newPriority})`);
+    return true;
+  }
+  
+  private pushMenu(menuType: string, config?: any) {
+    const priority = this.MENU_PRIORITIES[menuType as keyof typeof this.MENU_PRIORITIES];
+    if (priority) {
+      this.menuStack.push({ type: menuType, priority, config });
+      console.log(`MenuManager: Pushed ${menuType} to stack (priority ${priority}). Stack:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+    }
+  }
+  
+  private popMenu(): {type: string, priority: number, config?: any} | null {
+    const popped = this.menuStack.pop();
+    console.log(`MenuManager: Popped ${popped?.type} from stack. Remaining:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+    return popped || null;
+  }
+  
+  private popSpecificMenu(menuType: string): {type: string, priority: number, config?: any} | null {
+    // Find and remove the specific menu type from the stack
+    const index = this.menuStack.findIndex(menu => menu.type === menuType);
+    if (index !== -1) {
+      const popped = this.menuStack.splice(index, 1)[0];
+      console.log(`MenuManager: Popped specific ${popped.type} from stack. Remaining:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+      return popped;
+    }
+    console.log(`MenuManager: Could not find ${menuType} in stack to pop`);
+    return null;
+  }
+  
+  public getCurrentMenuType(): string | null {
+    const current = this.menuStack[this.menuStack.length - 1];
+    return current ? current.type : null;
+  }
+  
+  private shouldRestorePreviousMenu(): boolean {
+    // Only restore if there's a menu in the stack, no current dialog, and the menu being restored wasn't user-dismissed
+    if (this.menuStack.length === 0 || this.currentDialog) return false;
+    
+    const menuToRestore = this.menuStack[this.menuStack.length - 1];
+    const shouldRestore = menuToRestore.type !== this.userDismissedMenuType;
+    
+    console.log('MenuManager: shouldRestorePreviousMenu - stack length:', this.menuStack.length, 'currentDialog:', !!this.currentDialog, 'menuToRestore:', menuToRestore.type, 'userDismissed:', this.userDismissedMenuType, 'shouldRestore:', shouldRestore);
+    if (this.menuStack.length > 0) {
+      console.log('MenuManager: Stack contents:', this.menuStack.map(m => `${m.type}(${m.priority})`));
+    }
+    return shouldRestore;
+  }
+  
+  private restorePreviousMenu() {
+    if (this.menuStack.length === 0) return;
+    
+    const previousMenu = this.menuStack[this.menuStack.length - 1];
+    console.log(`MenuManager: Restoring previous menu: ${previousMenu.type}`);
+    
+    switch (previousMenu.type) {
+      case 'START':
+        this.popMenu();
+        this.showStartMenu();
+        break;
+      case 'PAUSE':
+        this.popMenu();
+        this.showPauseMenu();
+        break;
+      case 'TURN_KEY':
+        // Check if keys are still in ignition before restoring ignition menu
+        const gameScene = this.scene.scene.get('GameScene');
+        console.log('MenuManager: Attempting to restore TURN_KEY menu, keysInIgnition:', gameScene ? (gameScene as any).keysInIgnition : 'no gameScene');
+        if (gameScene && (gameScene as any).keysInIgnition) {
+          // Pop the menu from stack first, then show it
+          console.log('MenuManager: Popping TURN_KEY from stack and showing it');
+          this.popMenu();
+          this.showTurnKeyMenu();
+        } else {
+          console.log('MenuManager: Not restoring ignition menu - keys not in ignition');
+          this.popMenu(); // Remove from stack since it shouldn't be restored
+        }
+        break;
+      case 'SAVE':
+        this.popMenu();
+        this.showSaveMenu();
+        break;
+      case 'OBSTACLE':
+        if (previousMenu.config) {
+          this.popMenu();
+          this.showObstacleMenu(previousMenu.config.type, previousMenu.config.damage);
+        }
+        break;
+      case 'GAME_OVER':
+        this.popMenu();
+        this.showGameOverMenu();
+        break;
+    }
+  }
+
   public showStartMenu() {
+    console.log('=== MenuManager: showStartMenu called ===');
+    if (!this.canShowMenu('START')) {
+      console.log('MenuManager: canShowMenu(START) returned false, returning early');
+      return;
+    }
+    console.log('MenuManager: canShowMenu(START) returned true, proceeding');
+    
     this.clearCurrentDialog();
+    this.pushMenu('START');
     
     // Check if there's existing save data
     const saveData = this.saveManager.load();
@@ -57,7 +234,7 @@ export class MenuManager {
                 (gameScene as any).loadGame(saveData.steps);
               }
             },
-            style: this.config.menuManager.buttonStyles.resume
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
           },
           {
             text: 'Start Fresh',
@@ -70,7 +247,7 @@ export class MenuManager {
                 (appScene as any).startGame();
               }
             },
-            style: this.config.menuManager.buttonStyles.startFresh
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
           }
         ]
       };
@@ -89,17 +266,21 @@ export class MenuManager {
                 (appScene as any).startGame();
               }
             },
-            style: this.config.menuManager.buttonStyles.resume
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
           }
         ]
       };
     }
 
-    this.createDialog(menuConfig);
+    console.log('MenuManager: About to call createDialog with menuType: START');
+    this.createDialog(menuConfig, 'START');
   }
 
   public showPauseMenu() {
+    if (!this.canShowMenu('PAUSE')) return;
+    
     this.clearCurrentDialog();
+    this.pushMenu('PAUSE');
     
     const menuConfig: MenuConfig = {
       title: 'PAUSE MENU',
@@ -122,7 +303,7 @@ export class MenuManager {
               }
             }
           },
-            style: this.config.menuManager.buttonStyles.startGame
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'Restart',
@@ -130,16 +311,19 @@ export class MenuManager {
             this.closeDialog();
             window.location.reload();
           },
-            style: this.config.menuManager.buttonStyles.restart
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         }
       ]
     };
 
-    this.createDialog(menuConfig);
+    this.createDialog(menuConfig, 'PAUSE');
   }
 
   public showSaveMenu() {
+    if (!this.canShowMenu('SAVE')) return;
+    
     this.clearCurrentDialog();
+    this.pushMenu('SAVE');
     
     const saveData = this.saveManager.load();
     const hasSaveData = saveData && saveData.steps > 0;
@@ -160,7 +344,7 @@ export class MenuManager {
               this.closeDialog();
             }
           },
-            style: this.config.menuManager.buttonStyles.save
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'Load Game',
@@ -174,7 +358,7 @@ export class MenuManager {
             }
             this.closeDialog();
           },
-            style: this.config.menuManager.buttonStyles.load
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'Clear Save',
@@ -182,19 +366,19 @@ export class MenuManager {
             this.saveManager.clearSave();
             this.closeDialog();
           },
-            style: this.config.menuManager.buttonStyles.restart
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'Close',
           onClick: () => {
             this.closeDialog();
           },
-            style: this.config.menuManager.buttonStyles.back
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         }
       ]
     };
 
-    this.createDialog(menuConfig);
+    this.createDialog(menuConfig, 'SAVE');
   }
 
   public showPotholeMenu() {
@@ -213,7 +397,7 @@ export class MenuManager {
               (gameScene as any).resumeAfterCollision();
             }
           },
-            style: this.config.menuManager.buttonStyles.startGame
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         }
       ]
     };
@@ -237,7 +421,7 @@ export class MenuManager {
               (gameScene as any).takeExit();
             }
           },
-            style: this.config.menuManager.buttonStyles.startGame
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'Continue Driving',
@@ -248,7 +432,7 @@ export class MenuManager {
               (gameScene as any).resumeAfterCollision();
             }
           },
-            style: this.config.menuManager.buttonStyles.save
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         }
       ]
     };
@@ -257,7 +441,23 @@ export class MenuManager {
   }
 
   public showTurnKeyMenu() {
+    console.log('MenuManager: showTurnKeyMenu called');
+    console.log('MenuManager: Current stack before showTurnKeyMenu:', this.menuStack.map(m => `${m.type}(${m.priority})`));
+    console.log('MenuManager: Current dialog exists:', !!this.currentDialog);
+    console.log('MenuManager: Current displayed menu type:', this.currentDisplayedMenuType);
+    
+    if (!this.canShowMenu('TURN_KEY')) {
+      console.log('MenuManager: Ignition menu blocked by higher priority menu - will show when hierarchy allows');
+      // Still push to stack so it can be restored when the blocking menu closes
+      this.pushMenu('TURN_KEY');
+      console.log('MenuManager: Pushed TURN_KEY to stack. Stack now:', this.menuStack.map(m => `${m.type}(${m.priority})`));
+      return; // Don't show the menu, but the tutorial overlay will still be controlled by keysInIgnition
+    }
+    
+    console.log('MenuManager: Showing ignition menu');
     this.clearCurrentDialog();
+    this.pushMenu('TURN_KEY');
+    console.log('MenuManager: Pushed TURN_KEY to stack. Stack now:', this.menuStack.map(m => `${m.type}(${m.priority})`));
     
     const menuConfig: MenuConfig = {
       title: 'IGNITION',
@@ -265,7 +465,7 @@ export class MenuManager {
       buttons: [] // No buttons - swipe down to remove keys
     };
 
-    this.createDialog(menuConfig);
+    this.createDialog(menuConfig, 'TURN_KEY');
     
     // Add drag dial after creating the dialog
     this.addTurnKeyDial();
@@ -289,74 +489,74 @@ export class MenuManager {
     const centerY = gameHeight / 2;
     
     // Create vertical slider
-    const sliderWidth = this.config.menuManager.slider.width;
-    const sliderHeight = this.config.menuManager.slider.height;
+    const sliderWidth = this.SLIDER_WIDTH;
+    const sliderHeight = this.SLIDER_HEIGHT;
     const sliderX = centerX;
-    const sliderY = centerY + this.config.menuManager.slider.yOffset;
+    const sliderY = centerY + this.SLIDER_Y_OFFSET;
     
     // Create slider track (background)
     const sliderTrack = this.scene.add.graphics();
-    sliderTrack.fillStyle(parseInt(this.config.menuManager.slider.trackColor.replace('0x', ''), 16));
-    sliderTrack.fillRoundedRect(sliderX - sliderWidth/2, sliderY - sliderHeight/2, sliderWidth, sliderHeight, this.config.menuManager.slider.cornerRadius);
+    sliderTrack.fillStyle(this.SLIDER_TRACK_COLOR);
+    sliderTrack.fillRoundedRect(sliderX - sliderWidth/2, sliderY - sliderHeight/2, sliderWidth, sliderHeight, this.SLIDER_CORNER_RADIUS);
     sliderTrack.setScrollFactor(0);
-    sliderTrack.setDepth(this.config.menuManager.depths.sliderTrack);
+    sliderTrack.setDepth(this.SLIDER_TRACK_DEPTH);
     
     // Create slider handle
-    const handleWidth = this.config.menuManager.slider.handleWidth;
-    const handleHeight = this.config.menuManager.slider.handleHeight;
+    const handleWidth = this.SLIDER_HANDLE_WIDTH;
+    const handleHeight = this.SLIDER_HANDLE_HEIGHT;
     const handle = this.scene.add.graphics();
-    handle.fillStyle(parseInt(this.config.menuManager.slider.handleColor.replace('0x', ''), 16));
-    handle.fillRoundedRect(sliderX - handleWidth/2, sliderY + sliderHeight/2 - handleHeight, handleWidth, handleHeight, this.config.menuManager.slider.handleCornerRadius);
+    handle.fillStyle(this.SLIDER_HANDLE_COLOR);
+    handle.fillRoundedRect(sliderX - handleWidth/2, sliderY + sliderHeight/2 - handleHeight, handleWidth, handleHeight, this.SLIDER_HANDLE_CORNER_RADIUS);
     handle.setScrollFactor(0);
-    handle.setDepth(this.config.menuManager.depths.sliderHandle);
+    handle.setDepth(this.SLIDER_HANDLE_DEPTH);
     
     // Add text labels
-    const startLabel = this.scene.add.text(centerX, centerY + sliderHeight/2 + this.config.menuManager.labels.startLabelOffset, 'START', {
-      fontSize: this.config.menuManager.labels.fontSize,
-      color: this.config.menuManager.labels.color,
+    const startLabel = this.scene.add.text(centerX, centerY + sliderHeight/2 + this.START_LABEL_OFFSET, 'START', {
+      fontSize: this.LABELS_FONT_SIZE,
+      color: this.LABELS_COLOR,
       fontStyle: 'bold'
     });
     startLabel.setOrigin(0.5);
     startLabel.setScrollFactor(0);
-    startLabel.setDepth(this.config.menuManager.depths.labels);
+    startLabel.setDepth(this.LABELS_DEPTH);
     
-    const turnKeyLabel = this.scene.add.text(centerX, centerY - sliderHeight/2 + this.config.menuManager.labels.turnKeyLabelOffset, 'Turn Key', {
-      fontSize: this.config.menuManager.labels.fontSize,
-      color: this.config.menuManager.labels.color,
+    const turnKeyLabel = this.scene.add.text(centerX, centerY - sliderHeight/2 + this.TURN_KEY_LABEL_OFFSET, 'Turn Key', {
+      fontSize: this.LABELS_FONT_SIZE,
+      color: this.LABELS_COLOR,
       fontStyle: 'bold'
     });
     turnKeyLabel.setOrigin(0.5);
     turnKeyLabel.setScrollFactor(0);
-    turnKeyLabel.setDepth(this.config.menuManager.depths.labels);
+    turnKeyLabel.setDepth(this.LABELS_DEPTH);
     
     // Add start value meter
-    const meterWidth = this.config.menuManager.meter.width;
-    const meterHeight = this.config.menuManager.meter.height;
+    const meterWidth = this.METER_WIDTH;
+    const meterHeight = this.METER_HEIGHT;
     const meterX = centerX;
-    const meterY = centerY + sliderHeight/2 + this.config.menuManager.meter.yOffset;
+    const meterY = centerY + sliderHeight/2 + this.METER_Y_OFFSET;
     
     // Meter background
     const meterBackground = this.scene.add.graphics();
-    meterBackground.fillStyle(parseInt(this.config.menuManager.meter.backgroundColor.replace('0x', ''), 16));
-    meterBackground.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, meterWidth, meterHeight, this.config.menuManager.meter.cornerRadius);
+    meterBackground.fillStyle(this.METER_BACKGROUND_COLOR);
+    meterBackground.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, meterWidth, meterHeight, this.METER_CORNER_RADIUS);
     meterBackground.setScrollFactor(0);
-    meterBackground.setDepth(this.config.menuManager.depths.meter);
+    meterBackground.setDepth(this.METER_DEPTH);
     
     // Meter fill
     const meterFill = this.scene.add.graphics();
-    meterFill.fillStyle(parseInt(this.config.menuManager.meter.fillColor.replace('0x', ''), 16)); // Green when accumulating
+    meterFill.fillStyle(this.METER_FILL_COLOR); // Green when accumulating
     meterFill.setScrollFactor(0);
-    meterFill.setDepth(this.config.menuManager.depths.meter);
+    meterFill.setDepth(this.METER_DEPTH);
     
     // Meter text
-    const meterText = this.scene.add.text(centerX, meterY + this.config.menuManager.meter.textOffset, 'START: 0%', {
-      fontSize: this.config.menuManager.labels.fontSize,
-      color: this.config.menuManager.labels.color,
+    const meterText = this.scene.add.text(centerX, meterY + this.METER_TEXT_OFFSET, 'START: 0%', {
+      fontSize: this.LABELS_FONT_SIZE,
+      color: this.LABELS_COLOR,
       fontStyle: 'bold'
     });
     meterText.setOrigin(0.5);
     meterText.setScrollFactor(0);
-    meterText.setDepth(this.config.menuManager.depths.meter);
+    meterText.setDepth(this.METER_DEPTH);
     
     // Track slider state
     let isDragging = false;
@@ -366,15 +566,15 @@ export class MenuManager {
     let lastPointerX = 0;
     let lastUpdateTime = 0;
     let velocity = 0;
-    const momentumDecay = this.config.menuManager.physics.momentumDecay; // How quickly momentum fades
-    const maxVelocity = this.config.menuManager.physics.maxVelocity; // Increased maximum velocity per frame
-    const gravity = this.config.menuManager.physics.gravity; // How much the slider falls each frame
-    const sensitivity = this.config.menuManager.physics.sensitivity; // How sensitive the slider is to mouse movement (higher = more sensitive)
+    const momentumDecay = this.MOMENTUM_DECAY; // How quickly momentum fades
+    const maxVelocity = this.MAX_VELOCITY; // Increased maximum velocity per frame
+    const gravity = this.GRAVITY; // How much the slider falls each frame
+    const sensitivity = this.SENSITIVITY; // How sensitive the slider is to mouse movement (higher = more sensitive)
     
     // Start value system
     let startValue = 0; // 0-100, accumulates when slider > 90%
-    const startThreshold = this.config.menuManager.physics.startThreshold; // 90% slider position to start accumulating
-    const startIncrement = this.config.menuManager.physics.startIncrement; // How much to add per frame when over threshold
+    const startThreshold = this.START_THRESHOLD; // 90% slider position to start accumulating
+    const startIncrement = this.START_INCREMENT; // How much to add per frame when over threshold
     //.4 is slow, .8 is medium, 1.2 is fast
     const startMax = 100; // Maximum start value to trigger ignition
     let carStarted = false; // Track if car has been started
@@ -447,16 +647,16 @@ export class MenuManager {
       const handleY = sliderY + sliderHeight/2 - (currentProgress * sliderHeight) - handleHeight/2;
       
       handle.clear();
-      handle.fillStyle(parseInt(this.config.menuManager.slider.handleColor.replace('0x', ''), 16));
-      handle.fillRoundedRect(sliderX - handleWidth/2, handleY, handleWidth, handleHeight, this.config.menuManager.slider.handleCornerRadius);
+      handle.fillStyle(this.SLIDER_HANDLE_COLOR);
+      handle.fillRoundedRect(sliderX - handleWidth/2, handleY, handleWidth, handleHeight, this.SLIDER_HANDLE_CORNER_RADIUS);
     };
     
     // Update meter visual
     const updateMeter = () => {
       const fillWidth = (startValue / startMax) * meterWidth;
       meterFill.clear();
-      meterFill.fillStyle(parseInt(this.config.menuManager.meter.fillColor.replace('0x', ''), 16));
-      meterFill.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, fillWidth, meterHeight, this.config.menuManager.meter.cornerRadius);
+      meterFill.fillStyle(this.METER_FILL_COLOR);
+      meterFill.fillRoundedRect(meterX - meterWidth/2, meterY - meterHeight/2, fillWidth, meterHeight, this.METER_CORNER_RADIUS);
       
       meterText.setText(`START: ${Math.floor(startValue)}%`);
     };
@@ -542,8 +742,39 @@ export class MenuManager {
     (this.currentDialog as any).startMeter = { meterBackground, meterFill, meterText };
   }
 
-  public showGameOverMenu() {
+  public showObstacleMenu(obstacleType: string, damage: number) {
+    if (!this.canShowMenu('OBSTACLE')) return;
+    
     this.clearCurrentDialog();
+    this.pushMenu('OBSTACLE', { type: obstacleType, damage });
+    
+    const menuConfig: MenuConfig = {
+      title: 'COLLISION!',
+      content: `You hit a ${obstacleType}! Damage: ${damage}%`,
+      buttons: [
+        {
+          text: 'Continue',
+          onClick: () => {
+            this.closeDialog();
+            // Resume driving after collision
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene) {
+              (gameScene as any).resumeAfterCollision();
+            }
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+
+    this.createDialog(menuConfig, 'OBSTACLE');
+  }
+
+  public showGameOverMenu() {
+    if (!this.canShowMenu('GAME_OVER')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('GAME_OVER');
     
     const menuConfig: MenuConfig = {
       title: 'GAME OVER',
@@ -555,15 +786,16 @@ export class MenuManager {
             this.closeDialog();
             window.location.reload();
           },
-            style: this.config.menuManager.buttonStyles.restart
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         }
       ]
     };
 
-    this.createDialog(menuConfig);
+    this.createDialog(menuConfig, 'GAME_OVER');
   }
 
-  private createDialog(menuConfig: MenuConfig) {
+  private createDialog(menuConfig: MenuConfig, menuType?: string) {
+    console.log('=== MenuManager: createDialog called for menuType:', menuType, '===');
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
@@ -572,10 +804,27 @@ export class MenuManager {
     this.currentDialog.setScrollFactor(0);
     this.currentDialog.setDepth(50000);
     
-    // Background
-    const background = this.scene.add.rectangle(0, 0, menuConfig.width || 300, menuConfig.height || (menuConfig.buttons.length > 1 ? 350 : 200), 0x000000, 0.8);
-    background.setStrokeStyle(2, 0xffffff);
-    this.currentDialog.add(background);
+    // Track what menu type is being displayed
+    this.currentDisplayedMenuType = menuType || null;
+    
+    // Background - use unified overlay system
+    const background = this.createOverlayBackground(gameWidth, gameHeight, [
+      { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
+    ]);
+    
+    // Store reference for cleanup
+    (this.currentDialog as any).background = background;
+    
+    console.log('MenuManager: Menu background created with cutout for dialog area');
+    
+    // Dialog background (visible background for the dialog itself)
+    const dialogBackground = this.scene.add.graphics();
+    dialogBackground.fillStyle(0x333333, 0.9);
+    dialogBackground.fillRoundedRect(-150, -175, 300, 350, 10);
+    dialogBackground.lineStyle(2, 0xffffff, 1);
+    dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
+    dialogBackground.setDepth(-1); // Behind other dialog content
+    this.currentDialog.add(dialogBackground);
     
     // Title
     const title = this.scene.add.text(0, -80, menuConfig.title, {
@@ -585,6 +834,8 @@ export class MenuManager {
     });
     title.setOrigin(0.5);
     this.currentDialog.add(title);
+    
+    console.log('MenuManager: Dialog background and title added. Dialog children count:', this.currentDialog.list.length);
     
     // Content
     if (menuConfig.content) {
@@ -636,6 +887,18 @@ export class MenuManager {
       
       this.currentDialog.add(buttonText);
     });
+    
+    console.log('MenuManager: All buttons added. Dialog children count:', this.currentDialog.list.length);
+    console.log('MenuManager: Dialog children:', this.currentDialog.list.map(child => child.constructor.name));
+    
+    // Notify GameScene that a menu is now open
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene && gameScene.updateAllTutorialOverlays) {
+      gameScene.updateAllTutorialOverlays();
+    }
+    
+    console.log('MenuManager: After GameScene notification. Dialog children count:', this.currentDialog.list.length);
+    console.log('MenuManager: Dialog children after notification:', this.currentDialog.list.map(child => child.constructor.name));
   }
 
   private createActionButtons(buttons: MenuButton[]) {
@@ -670,10 +933,48 @@ export class MenuManager {
       
       return buttonText;
     });
+    
+    console.log('MenuManager: createDialog completed. Final dialog children count:', this.currentDialog.list.length);
+    console.log('MenuManager: Dialog depth:', this.currentDialog.depth);
+    console.log('MenuManager: Dialog visible:', this.currentDialog.visible);
+  }
+
+  private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>) {
+    // Create overlay container
+    const overlay = this.scene.add.container(0, 0);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(49999);
+    
+    // Create semi-transparent black background covering the screen (same as tutorial overlay)
+    const background = this.scene.add.graphics();
+    background.fillStyle(0x000000, 0.7); // Black, 70% opacity
+    background.fillRect(0, 0, gameWidth, gameHeight);
+    overlay.add(background);
+    
+    // Create mask graphics for cutouts
+    const maskGraphics = this.scene.make.graphics();
+    
+    // Draw cutouts (white areas become transparent)
+    cutouts.forEach(cutout => {
+      maskGraphics.fillStyle(0xffffff);
+      maskGraphics.fillRect(cutout.x, cutout.y, cutout.width, cutout.height);
+    });
+    
+    // Create BitmapMask with inverted alpha (white areas become cutouts)
+    const mask = new Phaser.Display.Masks.BitmapMask(this.scene, maskGraphics);
+    mask.invertAlpha = true;
+    background.setMask(mask);
+    
+    return overlay;
   }
 
   private clearCurrentDialog() {
     if (this.currentDialog) {
+      // Clean up background if it exists
+      if ((this.currentDialog as any).background) {
+        (this.currentDialog as any).background.destroy();
+      }
+      
       // Clean up turn key slider if it exists
       if ((this.currentDialog as any).turnKeyDial) {
         const slider = (this.currentDialog as any).turnKeyDial;
@@ -711,25 +1012,67 @@ export class MenuManager {
       this.currentDialog.destroy();
       this.currentDialog = null;
       
-      // Emit event to notify GameScene that menu is hidden
-      console.log('MenuManager: Emitting ignitionMenuHidden event');
-      this.scene.events.emit('ignitionMenuHidden');
+      // Only emit ignitionMenuHidden if the current menu was actually an ignition menu
+      if (this.currentDisplayedMenuType === 'TURN_KEY') {
+        console.log('MenuManager: Emitting ignitionMenuHidden event');
+        this.scene.events.emit('ignitionMenuHidden');
+        
+        // Also emit on GameScene
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
+          gameScene.events.emit('ignitionMenuHidden');
+        }
+      }
       
-      // Also emit on GameScene
+      // Clear the displayed menu type
+      this.currentDisplayedMenuType = null;
+      
+      // Check if we should restore a previous menu
+      if (this.shouldRestorePreviousMenu()) {
+        // Add a small delay to ensure cleanup is complete
+        this.scene.time.delayedCall(100, () => {
+          this.restorePreviousMenu();
+          // Reset the user dismissed flag after restoration is complete
+          this.userDismissedMenuType = null;
+        });
+      } else {
+        // Reset the user dismissed flag if no restoration is needed
+        this.userDismissedMenuType = null;
+      }
+      
+      // Notify GameScene that menu state has changed
       const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene) {
-        console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
-        gameScene.events.emit('ignitionMenuHidden');
+      if (gameScene && gameScene.updateAllTutorialOverlays) {
+        gameScene.updateAllTutorialOverlays();
       }
     }
   }
 
   private closeDialog() {
+    // Mark the current menu as user dismissed to prevent its restoration
+    this.userDismissedMenuType = this.currentDisplayedMenuType;
+    
+    // Pop the current displayed menu from the stack (not necessarily the top)
+    if (this.currentDisplayedMenuType) {
+      this.popSpecificMenu(this.currentDisplayedMenuType);
+    }
+    
     this.clearCurrentDialog();
+    // Don't reset the flag immediately - let clearCurrentDialog handle it after restoration
   }
 
   public closeCurrentDialog() {
     console.log('MenuManager: closeCurrentDialog called');
+    // Mark the current menu as user dismissed to prevent its restoration
+    this.userDismissedMenuType = this.currentDisplayedMenuType;
+    
+    // Pop the current displayed menu from the stack (not necessarily the top)
+    if (this.currentDisplayedMenuType) {
+      this.popSpecificMenu(this.currentDisplayedMenuType);
+    }
+    
     this.clearCurrentDialog();
+    // Don't reset the flag immediately - let clearCurrentDialog handle it after restoration
   }
 }

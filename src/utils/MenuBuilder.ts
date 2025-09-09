@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { GameConfig } from '../config/ConfigLoader';
 
 export interface MenuButton {
   text: string;
@@ -29,12 +28,10 @@ export interface MenuConfig {
 
 export class MenuBuilder {
   private scene: Phaser.Scene;
-  private config: GameConfig;
   private elements: Phaser.GameObjects.GameObject[] = [];
 
-  constructor(scene: Phaser.Scene, config: GameConfig) {
+  constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.config = config;
   }
 
   /**
@@ -60,8 +57,8 @@ export class MenuBuilder {
 
     // Create title if specified
     if (menuConfig.title) {
-      const titleX = centerX + this.config.menus.positions.titleOffset.x;
-      const titleY = centerY + this.config.menus.positions.titleOffset.y;
+      const titleX = centerX + 0;
+      const titleY = centerY + -100;
       const title = this.createTitle(menuConfig.title, titleX, titleY);
       this.elements.push(title);
     }
@@ -96,11 +93,11 @@ export class MenuBuilder {
    */
   private createBackground(x: number, y: number, width: number, height: number): Phaser.GameObjects.Rectangle {
     const background = this.scene.add.rectangle(x, y, width, height, 
-      parseInt(this.config.menus.background.color.replace('0x', ''), 16), 
-      this.config.menus.background.alpha
+      0x000000, 
+      0.5
     );
     background.setScrollFactor(0);
-    background.setDepth(this.config.menus.depths.background);
+    background.setDepth(1000);
     return background;
   }
 
@@ -109,13 +106,13 @@ export class MenuBuilder {
    */
   private createLayerText(text: string): Phaser.GameObjects.Text {
     const layerText = this.scene.add.text(
-      this.config.menus.positions.layerText.x, 
-      this.config.menus.positions.layerText.y, 
+      0, 
+      0, 
       text, 
-      this.config.menus.styles.layerText
+      { fontSize: '14px', color: '#ffffff', fontStyle: 'bold' }
     );
     layerText.setScrollFactor(0);
-    layerText.setDepth(this.config.menus.depths.content);
+    layerText.setDepth(1001);
     return layerText;
   }
 
@@ -123,10 +120,10 @@ export class MenuBuilder {
    * Creates a title text
    */
   private createTitle(text: string, x: number, y: number): Phaser.GameObjects.Text {
-    const title = this.scene.add.text(x, y, text, this.config.menus.styles.title);
+    const title = this.scene.add.text(x, y, text, { fontSize: '24px', color: '#ffffff', fontStyle: 'bold' });
     title.setOrigin(0.5);
     title.setScrollFactor(0);
-    title.setDepth(this.config.menus.depths.content);
+    title.setDepth(1001);
     return title;
   }
 
@@ -136,13 +133,13 @@ export class MenuBuilder {
   private createText(textConfig: MenuText): Phaser.GameObjects.Text {
     const x = textConfig.x || this.scene.cameras.main.width / 2;
     const y = textConfig.y || this.scene.cameras.main.height / 2;
-    const style = textConfig.style || this.config.menus.styles.bodyText;
+    const style = textConfig.style || { fontSize: '16px', color: '#ffffff' };
     const origin = textConfig.origin || { x: 0.5, y: 0.5 };
 
     const text = this.scene.add.text(x, y, textConfig.text, style);
     text.setOrigin(origin.x, origin.y);
     text.setScrollFactor(0);
-    text.setDepth(this.config.menus.depths.content);
+    text.setDepth(1001);
     return text;
   }
 
@@ -156,28 +153,28 @@ export class MenuBuilder {
     const centerY = gameHeight / 2;
 
     // Calculate button position (stacked vertically)
-    const buttonSpacing = this.config.menus.positions.buttonSpacing;
-    const startY = centerY + this.config.menus.positions.buttonStartOffset;
+    const buttonSpacing = 60;
+    const startY = centerY + 50;
     const x = buttonConfig.x || centerX;
     const y = buttonConfig.y || (startY + (index * buttonSpacing));
 
     const button = this.scene.add.text(x, y, buttonConfig.text, 
-      buttonConfig.style || this.config.menus.styles.button
+      buttonConfig.style || { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
     );
     button.setOrigin(0.5);
     button.setScrollFactor(0);
-    button.setDepth(this.config.menus.depths.content);
+    button.setDepth(1001);
 
     // Make button interactive
     button.setInteractive({ useHandCursor: true });
 
     // Add hover effects
     button.on('pointerover', () => {
-      button.setStyle(this.config.menus.styles.buttonHover);
+      button.setStyle({ fontSize: '18px', color: '#ffffff', backgroundColor: '#555555', padding: { x: 10, y: 5 } });
     });
 
     button.on('pointerout', () => {
-      button.setStyle(buttonConfig.style || this.config.menus.styles.button);
+      button.setStyle(buttonConfig.style || { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } });
     });
 
     // Add click handler

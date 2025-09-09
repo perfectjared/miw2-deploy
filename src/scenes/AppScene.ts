@@ -19,7 +19,7 @@ export class AppScene extends Phaser.Scene {
 
 
     // Add step counter
-    this.stepText = this.add.text(10, 10, 'App Layer; Step: 0', {
+    this.stepText = this.add.text(10, 10, '(app) step 0', {
       fontSize: '16px',
       color: '#00ff00',
       fontStyle: 'bold',
@@ -30,15 +30,25 @@ export class AppScene extends Phaser.Scene {
     this.stepText.setDepth(25000);
 
     // Launch scenes in the correct layer order (bottom to top)
-    // 3. Background (bottom layer)
+    // 4. Background (bottom layer)
     this.scene.launch('BackgroundScene');
     
-    // 2. Game (main game logic with driving visualization)
+    // 3. Driving (driving background with separate camera) - TEMPORARILY DISABLED
+    // this.scene.launch('DrivingScene');
+    
+    // 2. Game (main game logic with physics)
     this.scene.launch('GameScene');
     
     // 1. Menu (top layer)
     this.scene.launch('MenuScene');
     this.scene.bringToTop('MenuScene');
+    
+    // Ensure proper scene ordering
+    this.time.delayedCall(50, () => {
+      this.scene.bringToTop('MenuScene');
+      this.scene.bringToTop('GameScene');
+      this.scene.bringToTop('AppScene');
+    });
     
     // Show start menu after a small delay to ensure MenuScene is ready
     this.time.delayedCall(100, () => {

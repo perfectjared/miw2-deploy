@@ -5,7 +5,6 @@ import { AppScene } from './scenes/AppScene';
 import { MenuScene } from './scenes/MenuScene';
 import { StoryScene } from './scenes/StoryScene';
 import { GameScene } from './scenes/GameScene';
-//import { DrivingScene } from './scenes/DrivingScene'; // No longer used
 //import { FrontseatScene } from './scenes/FrontseatScene';
 //import { BackseatScene } from './scenes/BackseatScene';
 //import { MapScene } from './scenes/MapScene';
@@ -50,7 +49,21 @@ const config: Phaser.Types.Core.GameConfig = {
         mapping: 'rexUI'
       }
     ]
-  }
+  },
+  // Add proper tab visibility handling
+  fps: {
+    target: 60,
+    forceSetTimeOut: true,
+    // Add more robust timing settings
+    limit: 60,
+    deltaHistory: 10
+  },
+  // Pause the game when tab loses focus to prevent infinite loops
+  pauseOnBlur: true,
+  pauseOnMinimize: true,
+  // Add additional stability settings
+  disableContextMenu: true,
+  powerPreference: 'high-performance'
 };
 
 new Phaser.Game(config);

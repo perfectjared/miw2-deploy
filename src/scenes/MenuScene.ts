@@ -1,10 +1,8 @@
 import Phaser from 'phaser';
 import { MenuManager } from '../utils/MenuManager';
-import { ConfigLoader, GameConfig } from '../config/ConfigLoader';
 
 export class MenuScene extends Phaser.Scene {
   private menuManager!: MenuManager;
-  private config!: GameConfig;
 
   constructor() {
     super({ key: 'MenuScene' });
@@ -13,15 +11,11 @@ export class MenuScene extends Phaser.Scene {
   async create() {
     console.log('MenuScene create() called'); // Debug log
     
-    // Load configuration
-    const configLoader = ConfigLoader.getInstance();
-    this.config = await configLoader.loadConfig(this);
-    
     // Set up overlay camera for this scene
     this.setupOverlayCamera();
     
     // Initialize menu manager
-    this.menuManager = new MenuManager(this, this.config);
+    this.menuManager = new MenuManager(this);
     
     // Listen for different menu events
     this.events.on('showObstacleMenu', this.showObstacleMenu, this);
