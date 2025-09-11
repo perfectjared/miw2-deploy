@@ -874,6 +874,11 @@ export class GameScene extends Phaser.Scene {
     this.gameState.loadGame(steps);
   }
 
+  /** Expose the virtual pet to systems (for interactions like feeding) */
+  public getVirtualPet(): VirtualPet | undefined {
+    return this.virtualPet;
+  }
+
   /** Resume gameplay after a non-blocking collision menu (e.g., pothole) */
   public resumeAfterCollision(): void {
     // Resume driving and unpause app if it was paused

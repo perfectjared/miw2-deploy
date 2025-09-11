@@ -146,4 +146,27 @@ export class VirtualPet {
 		this.foodValue = value;
 		this.refreshFoodBar();
 	}
+
+	/** Gradually add food over a short duration */
+	public feedOverTime(amount: number, ms: number, onTick?: (pct: number) => void, onDone?: () => void) {
+		const start = this.foodValue;
+		const target = Phaser.Math.Clamp(start + amount, 0, 100);
+		const duration = Math.max(50, ms);
+		const startTime = this.scene.time.now;
+		const timer = this.scene.time.addEvent({
+			delay: 16,
+			loop: true,
+			callback: () => {
+				const t = Phaser.Math.Clamp((this.scene.time.now - startTime) / duration, 0, 1);
+				const eased = Phaser.Math.Easing.Quadratic.Out(t);
+				const value = Phaser.Math.Linear(start, target, eased);
+				this.setFood(value);
+				if (onTick) onTick(eased);
+				if (t >= 1) {
+					timer.remove(false);
+					if (onDone) onDone();
+				}
+			}
+		});
+	}
 }

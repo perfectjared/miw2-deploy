@@ -158,6 +158,7 @@ export class Trash implements PhysicsObject {
 export class Item implements PhysicsObject {
   public gameObject!: Phaser.GameObjects.Arc;
   private scene: Phaser.Scene;
+  private feedingTimer?: Phaser.Time.TimerEvent;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -231,6 +232,36 @@ export class Item implements PhysicsObject {
         // Convert screen coordinates to container-relative coordinates for Item
         this.gameObject.x = pointer.x;
         this.gameObject.y = pointer.y;
+
+        // Feeding interaction: if over pet, start/continue feeding
+        const gameScene = this.scene.scene.get('GameScene');
+        const pet = gameScene && (gameScene as any).getVirtualPet?.();
+        const petRoot = pet && pet.getRoot?.();
+        if (petRoot) {
+          const petBounds = new Phaser.Geom.Rectangle(petRoot.x, petRoot.y, (petRoot as any).width || 0, (petRoot as any).height || 0);
+          // Fallback: use a simple proximity to pet ellipse center
+          const petEllipse: any = (pet as any).pet;
+          const px = petEllipse?.x ?? petRoot.x;
+          const py = petEllipse?.y ?? petRoot.y;
+          const dx = this.gameObject.x - px;
+          const dy = this.gameObject.y - py;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const near = dist < 60;
+          if (near && !this.feedingTimer) {
+            // Start feeding over time: grow pet food, shrink item scale
+            const feedMs = 1200;
+            const feedAmt = 20;
+            pet.feedOverTime?.(feedAmt, feedMs, (pct: number) => {
+              const s = Phaser.Math.Linear(1, 0.3, pct);
+              this.gameObject.setScale(s);
+            }, () => {
+              // Optionally destroy when fully consumed
+              // this.gameObject.destroy();
+            });
+            // Throttle feeding to one session at a time
+            this.feedingTimer = this.scene.time.delayedCall(feedMs + 50, () => { this.feedingTimer = undefined; });
+          }
+        }
       }
     });
 
