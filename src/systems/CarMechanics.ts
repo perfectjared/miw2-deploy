@@ -77,6 +77,8 @@ export class CarMechanics {
   private drivingCar!: Phaser.GameObjects.Rectangle;
   private roadLines: Phaser.GameObjects.Graphics[] = [];
   private obstacles: Phaser.GameObjects.Rectangle[] = [];
+  private roadLineGraphics!: Phaser.GameObjects.Graphics;
+  private roadOffset: number = 0;
   
   // Timers
   private forwardMovementTimer: Phaser.Time.TimerEvent | null = null;
@@ -87,6 +89,7 @@ export class CarMechanics {
   // Camera
   private cameraMaxOffset: number = 100;
   private roadViewYOffsetPercent: number = 0;
+  private cameraAngle: number = 0;
 
   constructor(scene: Phaser.Scene, config: CarMechanicsConfig) {
     this.scene = scene;
@@ -100,6 +103,9 @@ export class CarMechanics {
     this.createDrivingBackground();
     this.createDrivingCar();
     this.carX = this.scene.cameras.main.width / 2;
+    // Persistent graphics for dashed center line
+    this.roadLineGraphics = this.scene.add.graphics();
+    this.roadLineGraphics.setDepth(this.config.lineDepth);
   }
 
   /**
@@ -334,14 +340,14 @@ export class CarMechanics {
    */
   private updateForwardMovement() {
     if (!this.drivingMode || this.drivingPaused) return;
-    
-    // Gradually increase speed
-    this.carSpeed = Math.min(this.carSpeed + this.config.carAcceleration, this.config.carMaxSpeed);
-    
-    // Update speed display
+    // Car speed is driven by the speed crank; do not auto-accelerate here.
+    // Update speed display based on current speed
     const speedPercentage = Math.round((this.carSpeed / this.config.carMaxSpeed) * 100);
     // Emit speed update event for UI
     this.scene.events.emit('speedUpdate', speedPercentage);
+    
+    // Advance road offset proportionally to speed for dashed-line motion
+    this.roadOffset += this.carSpeed * 0.75; // motion factor for feel
   }
 
   /**
@@ -349,14 +355,7 @@ export class CarMechanics {
    */
   private updateNeutralReturn() {
     if (!this.drivingMode || this.drivingPaused) return;
-    
-    // Gradually return steering to neutral
-    if (Math.abs(this.currentSteeringValue) > 1) {
-      const returnSpeed = 2;
-      this.currentSteeringValue = this.currentSteeringValue > 0 ? 
-        Math.max(0, this.currentSteeringValue - returnSpeed) : 
-        Math.min(0, this.currentSteeringValue + returnSpeed);
-    }
+    // Do not auto-return while knob is being interacted with; rely on input stream
   }
 
   /**
@@ -390,7 +389,7 @@ export class CarMechanics {
       console.log('CarMechanics: Car position updated to', this.carX, 'Steering:', normalizedValue, 'Speed:', this.carSpeed);
     }
     
-    // Move camera horizontally for first-person effect
+    // Move camera horizontally and tilt for first-person effect
     this.updateDrivingCamera();
   }
 
@@ -409,6 +408,12 @@ export class CarMechanics {
     
     // Apply camera offset
     this.scene.cameras.main.setScroll(clampedOffset, 0);
+    
+    // Camera tilt based on steering and speed
+    const speedFactor = this.carSpeed / Math.max(1, this.config.carMaxSpeed);
+    const targetAngle = Phaser.Math.Clamp((this.currentSteeringValue / 100) * 6 * speedFactor, -6, 6);
+    this.cameraAngle = Phaser.Math.Linear(this.cameraAngle, targetAngle, 0.15);
+    (this.scene.cameras.main as any).setAngle?.(this.cameraAngle);
   }
 
   /**
@@ -422,26 +427,23 @@ export class CarMechanics {
    * Update road lines
    */
   private updateRoadLines() {
-    // Clear existing lines
-    this.roadLines.forEach(line => line.destroy());
-    this.roadLines = [];
-    
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     const roadY = gameHeight * 0.7;
     
-    // Draw center line
-    const centerLine = this.scene.add.graphics();
-    centerLine.lineStyle(this.config.lineWidth, this.config.lineColor);
-    
-    for (let y = roadY; y < gameHeight; y += this.config.lineGap) {
-      centerLine.moveTo(gameWidth / 2, y);
-      centerLine.lineTo(gameWidth / 2, y + this.config.lineHeight);
+    // Persistent dashed center line with offset for motion
+    this.roadLineGraphics.clear();
+    this.roadLineGraphics.lineStyle(this.config.lineWidth, this.config.lineColor);
+    const phase = this.roadOffset % (this.config.lineGap);
+    for (let y = roadY - phase; y < gameHeight; y += this.config.lineGap) {
+      const y1 = Math.max(y, roadY);
+      const y2 = y + this.config.lineHeight;
+      if (y2 >= roadY) {
+        this.roadLineGraphics.moveTo(gameWidth / 2, y1);
+        this.roadLineGraphics.lineTo(gameWidth / 2, Math.min(y2, gameHeight));
+      }
     }
-    
-    centerLine.stroke();
-    centerLine.setDepth(this.config.lineDepth);
-    this.roadLines.push(centerLine);
+    this.roadLineGraphics.strokePath();
   }
 
   /**

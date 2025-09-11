@@ -156,6 +156,8 @@ export class GameUI {
   
   // Drag Dial
   private frontseatDragDial!: any; // RexUI drag dial
+  private steeringDialIndicator!: Phaser.GameObjects.Graphics;
+  private steeringAngleText!: Phaser.GameObjects.Text;
   
   // State
   private currentSpeedCrankPercentage: number = 0;
@@ -543,15 +545,39 @@ export class GameUI {
     knob.lineStyle(2, 0xffffff, 1);
     knob.strokeCircle(0, 0, knobRadius);
     
-    // Add a pointer to show the value
-    knob.fillStyle(0x666666);
-    knob.fillRect(-3, -knobRadius + 10, 6, 20);
+    // Remove extraneous square; indicator line will represent value
     
     knob.setPosition(dialX, dialY);
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
     // Store reference to the knob
     this.frontseatDragDial = knob;
+    
+    // Visual feedback overlay: an indicator line and angle text
+    this.steeringDialIndicator = this.scene.add.graphics();
+    this.steeringDialIndicator.setDepth(999);
+    this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + 18, '0%', {
+      fontSize: '14px',
+      color: '#ffffff'
+    }).setOrigin(0.5).setDepth(999);
+    const updateDialIndicator = (value: number) => {
+      const angleDeg = Phaser.Math.Clamp((value / 100) * 60, -60, 60);
+      const angleRad = Phaser.Math.DegToRad(angleDeg - 90);
+      const lineLen = knobRadius + 6;
+      const endX = dialX + Math.cos(angleRad) * lineLen;
+      const endY = dialY + Math.sin(angleRad) * lineLen;
+      this.steeringDialIndicator.clear();
+      this.steeringDialIndicator.lineStyle(3, 0xffcc00, 1);
+      this.steeringDialIndicator.beginPath();
+      this.steeringDialIndicator.moveTo(dialX, dialY);
+      this.steeringDialIndicator.lineTo(endX, endY);
+      this.steeringDialIndicator.strokePath();
+      if (this.steeringAngleText) {
+        // Show 0..100% mapped from -100..100
+        const pct = Math.round((value + 100) / 2);
+        this.steeringAngleText.setText(`${pct}%`);
+      }
+    };
     
     // Add drag functionality (fixed version)
     let isDragging = false;
@@ -571,21 +597,17 @@ export class GameUI {
       knob.fillCircle(0, 0, knobRadius);
       knob.lineStyle(2, 0xffffff, 1);
       knob.strokeCircle(0, 0, knobRadius);
-      knob.fillStyle(0x888888);
-      knob.fillRect(-3, -knobRadius + 10, 6, 20);
+      // No square overlay; indicator line shows current value
     });
     
-    knob.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+    // Track pointer globally while dragging so it keeps responding even off the knob
+    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (isDragging) {
-        const deltaX = pointer.x - lastPointerX;
-        const deltaY = pointer.y - lastPointerY;
-        
-        // Calculate steering value based on horizontal movement
-        const steeringValue = Math.max(-100, Math.min(100, deltaX * 3));
-        
-        // Emit steering event
+        // Map absolute pointer position relative to dial center → steering (-100..100)
+        const relativeX = pointer.x - dialX;
+        const steeringValue = Phaser.Math.Clamp((relativeX / knobRadius) * 100, -100, 100);
         this.scene.events.emit('steeringInput', steeringValue);
-        
+        updateDialIndicator(steeringValue);
         lastPointerX = pointer.x;
         lastPointerY = pointer.y;
       }
@@ -602,11 +624,11 @@ export class GameUI {
         knob.fillCircle(0, 0, knobRadius);
         knob.lineStyle(2, 0xffffff, 1);
         knob.strokeCircle(0, 0, knobRadius);
-        knob.fillStyle(0x666666);
-        knob.fillRect(-3, -knobRadius + 10, 6, 20);
+        // No square overlay; indicator line shows current value
         
         // Reset steering
         this.scene.events.emit('steeringInput', 0);
+        updateDialIndicator(0);
       }
     });
   }
