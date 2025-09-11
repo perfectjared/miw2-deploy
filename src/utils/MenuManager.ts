@@ -174,6 +174,9 @@ export class MenuManager {
     this.currentDisplayedMenuType = 'STORY';
 
     const dialogBackground = this.scene.add.graphics();
+    // Window background (no screen overlay)
+    dialogBackground.fillStyle(0x1e1e1e, 0.9);
+    dialogBackground.fillRoundedRect(-150, -125, 300, 250, 10);
     dialogBackground.lineStyle(2, 0xffffff, 1);
     dialogBackground.strokeRoundedRect(-150, -125, 300, 250, 10);
     this.currentDialog.add(dialogBackground);

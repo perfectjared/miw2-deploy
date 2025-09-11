@@ -338,51 +338,52 @@ export class GameUI {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Frontseat button
-    const frontseatX = gameWidth * this.config.frontseatPositionX;
-    const frontseatY = gameHeight * this.config.frontseatPositionY;
-    
+    // Look Up / Look Down buttons (large, centered, 85% width)
+    const btnWidth = Math.floor(gameWidth * 0.85);
+    const btnHeight = 46;
+    const topY = Math.floor(gameHeight * 0.10);
+    const bottomY = Math.floor(gameHeight * 0.90);
+    const leftX = Math.floor((gameWidth - btnWidth) / 2);
+
+    // Look Up
     this.frontseatButton = this.scene.add.graphics();
-    this.frontseatButton.fillStyle(0x4444ff, 0.7);
-    this.frontseatButton.fillRoundedRect(frontseatX - 50, frontseatY - 15, 100, 30, 5);
+    this.frontseatButton.fillStyle(0x202020, 0.75);
+    this.frontseatButton.fillRoundedRect(leftX, topY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
     this.frontseatButton.lineStyle(2, 0xffffff, 1);
-    this.frontseatButton.strokeRoundedRect(frontseatX - 50, frontseatY - 15, 100, 30, 5);
+    this.frontseatButton.strokeRoundedRect(leftX, topY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
     this.frontseatButton.setScrollFactor(0);
     this.frontseatButton.setDepth(10000);
-    
-    this.frontseatButton.setInteractive(new Phaser.Geom.Rectangle(frontseatX - 50, frontseatY - 15, 100, 30), Phaser.Geom.Rectangle.Contains);
+    this.frontseatButton.setInteractive(new Phaser.Geom.Rectangle(leftX, topY - Math.floor(btnHeight / 2), btnWidth, btnHeight), Phaser.Geom.Rectangle.Contains);
     this.frontseatButton.on('pointerdown', () => {
-      this.scene.events.emit('switchToFrontseat');
+      const cam = this.scene.cameras.main;
+      const delta = cam.height * 0.3;
+      const targetY = cam.scrollY - delta;
+      this.scene.tweens.add({ targets: cam, scrollY: targetY, duration: 200, ease: 'Sine.easeOut' });
     });
-    
-    // Frontseat text
-    this.scene.add.text(frontseatX, frontseatY, this.config.frontseatText, {
-      fontSize: this.config.frontseatFontSize,
-      color: this.config.frontseatColor,
+    this.scene.add.text(gameWidth / 2, topY, 'LOOK UP', {
+      fontSize: '18px',
+      color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10001);
-    
-    // Backseat button
-    const backseatX = gameWidth * this.config.backseatPositionX;
-    const backseatY = gameHeight * this.config.backseatPositionY;
-    
+
+    // Look Down
     this.backseatButton = this.scene.add.graphics();
-    this.backseatButton.fillStyle(0x4444ff, 0.7);
-    this.backseatButton.fillRoundedRect(backseatX - 50, backseatY - 15, 100, 30, 5);
+    this.backseatButton.fillStyle(0x202020, 0.75);
+    this.backseatButton.fillRoundedRect(leftX, bottomY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
     this.backseatButton.lineStyle(2, 0xffffff, 1);
-    this.backseatButton.strokeRoundedRect(backseatX - 50, backseatY - 15, 100, 30, 5);
+    this.backseatButton.strokeRoundedRect(leftX, bottomY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
     this.backseatButton.setScrollFactor(0);
     this.backseatButton.setDepth(10000);
-    
-    this.backseatButton.setInteractive(new Phaser.Geom.Rectangle(backseatX - 50, backseatY - 15, 100, 30), Phaser.Geom.Rectangle.Contains);
+    this.backseatButton.setInteractive(new Phaser.Geom.Rectangle(leftX, bottomY - Math.floor(btnHeight / 2), btnWidth, btnHeight), Phaser.Geom.Rectangle.Contains);
     this.backseatButton.on('pointerdown', () => {
-      this.scene.events.emit('switchToBackseat');
+      const cam = this.scene.cameras.main;
+      const delta = cam.height * 0.3;
+      const targetY = cam.scrollY + delta;
+      this.scene.tweens.add({ targets: cam, scrollY: targetY, duration: 200, ease: 'Sine.easeOut' });
     });
-    
-    // Backseat text
-    this.scene.add.text(backseatX, backseatY, this.config.backseatText, {
-      fontSize: this.config.backseatFontSize,
-      color: this.config.backseatColor,
+    this.scene.add.text(gameWidth / 2, bottomY, 'LOOK DOWN', {
+      fontSize: '18px',
+      color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10001);
   }
