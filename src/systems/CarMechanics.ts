@@ -70,6 +70,8 @@ export interface CarMechanicsConfig {
   radarAlpha?: number;
   roadBendStrength?: number;
   lensStrength?: number; // outward bowing when not turning
+  useLowRes?: boolean; // render driving view at reduced resolution and scale up
+  lowResScale?: number; // e.g., 0.5 renders at half-res
 }
 
 export class CarMechanics {
@@ -134,6 +136,8 @@ export class CarMechanics {
     this.drivingContainer = this.scene.add.container(0, 0);
     this.drivingContainer.setDepth(this.config.roadDepth);
     this.drivingContainer.setScale(1, 0.5); // mash up toward top (half height)
+    // Scooch the entire driving view down ~10% screen height
+    this.drivingContainer.y = Math.floor(this.scene.cameras.main.height * 0.10);
 
     this.createDrivingBackground();
     this.createDrivingCar();
