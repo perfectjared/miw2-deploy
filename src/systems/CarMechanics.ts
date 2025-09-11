@@ -25,6 +25,9 @@ export interface CarMechanicsConfig {
   minCrankForSteering: number;
   minSpeedForSteering: number;
   steeringSensitivity: number;
+  maxTurn: number;
+  turnResetMultiplier: number;
+  centrifugal: number;
   
   // Road Parameters
   skyColor: number;
@@ -57,6 +60,15 @@ export interface CarMechanicsConfig {
   exitSpawnY: number;
   exitColor: number;
   exitSpeed: number;
+
+  // Optional Debug Radar
+  radarEnabled?: boolean;
+  radarX?: number;
+  radarY?: number;
+  radarWidth?: number;
+  radarHeight?: number;
+  radarAlpha?: number;
+  roadBendStrength?: number;
 }
 
 export class CarMechanics {
@@ -69,6 +81,7 @@ export class CarMechanics {
   private carSpeed: number = 0;
   private carX: number = 0;
   private currentSteeringValue: number = 0;
+  private turn: number = 0;
   private shouldAutoRestartDriving: boolean = false;
   private shouldAutoResumeAfterCollision: boolean = false;
   
@@ -79,6 +92,16 @@ export class CarMechanics {
   private obstacles: Phaser.GameObjects.Rectangle[] = [];
   private roadLineGraphics!: Phaser.GameObjects.Graphics;
   private roadOffset: number = 0;
+  private horizontalLinePhase: number = 0; // increments on countdown change
+  private laneIndices: number[] = [-1.7, -0.55, 0.55, 1.7];
+  private laneSpacingBottom: number = 130;
+
+  // Debug Radar
+  private radarContainer?: Phaser.GameObjects.Container;
+  private radarBG?: Phaser.GameObjects.Rectangle;
+  private radarGrid?: Phaser.GameObjects.Grid;
+  private radarGraphics?: Phaser.GameObjects.Graphics;
+  private radarPlayer?: Phaser.GameObjects.Rectangle;
   
   // Timers
   private forwardMovementTimer: Phaser.Time.TimerEvent | null = null;
@@ -90,6 +113,8 @@ export class CarMechanics {
   private cameraMaxOffset: number = 100;
   private roadViewYOffsetPercent: number = 0;
   private cameraAngle: number = 0;
+  private currentCurve: number = 0; // -1..1 simplified curve value derived from steering
+  private worldLateralOffset: number = 0; // world shift instead of moving the car
 
   constructor(scene: Phaser.Scene, config: CarMechanicsConfig) {
     this.scene = scene;
@@ -106,6 +131,13 @@ export class CarMechanics {
     // Persistent graphics for dashed center line
     this.roadLineGraphics = this.scene.add.graphics();
     this.roadLineGraphics.setDepth(this.config.lineDepth);
+
+    if (this.config.radarEnabled) {
+      this.createRadar();
+    }
+
+    // Listen for countdown changes to animate horizontal lines
+    this.scene.events.on('countdownChanged', this.onCountdownChanged, this);
   }
 
   /**
@@ -222,6 +254,7 @@ export class CarMechanics {
     this.updateCarPosition();
     this.updateRoadLines();
     this.updateObstacles();
+    this.updateRadar();
   }
 
   /**
@@ -239,14 +272,18 @@ export class CarMechanics {
    * Create driving car visual
    */
   private createDrivingCar() {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
     this.drivingCar = this.scene.add.rectangle(
-      this.scene.cameras.main.width / 2,
-      this.scene.cameras.main.height / 2,
+      gameWidth / 2,
+      Math.floor(gameHeight * 0.85), // move car up on screen while staying near bottom road area
       40,
       60,
       0xff0000
     );
     this.drivingCar.setDepth(this.config.roadDepth + 1);
+    // keep car fixed relative to screen while world scrolls
+    this.drivingCar.setScrollFactor(0, 0);
   }
 
   /**
@@ -259,12 +296,17 @@ export class CarMechanics {
     this.drivingBackground.clear();
     
     // Draw sky
+    const horizonY = gameHeight * 0.3; // moved horizon further up
     this.drivingBackground.fillStyle(this.config.skyColor);
-    this.drivingBackground.fillRect(0, 0, gameWidth, gameHeight * 0.7);
+    this.drivingBackground.fillRect(0, 0, gameWidth, horizonY);
     
     // Draw road
     this.drivingBackground.fillStyle(this.config.roadColor);
-    this.drivingBackground.fillRect(0, gameHeight * 0.7, gameWidth, gameHeight * 0.3);
+    this.drivingBackground.fillRect(0, horizonY, gameWidth, gameHeight - horizonY);
+
+    // Horizon line effect
+    this.drivingBackground.fillStyle(0x000000, 0.15);
+    this.drivingBackground.fillRect(0, horizonY - 2, gameWidth, 2);
   }
 
   /**
@@ -346,8 +388,8 @@ export class CarMechanics {
     // Emit speed update event for UI
     this.scene.events.emit('speedUpdate', speedPercentage);
     
-    // Advance road offset proportionally to speed for dashed-line motion
-    this.roadOffset += this.carSpeed * 0.75; // motion factor for feel
+    // Advance road offset proportionally to speed for dashed-line motion (reverse direction)
+    this.roadOffset -= this.carSpeed * 0.75; // motion factor for feel
   }
 
   /**
@@ -367,22 +409,46 @@ export class CarMechanics {
     // Only allow steering when speed is sufficient
     if (this.carSpeed < this.config.minSpeedForSteering) {
       this.currentSteeringValue = 0;
+      // decay turn to neutral when nearly stopped
+      this.turn = Math.abs(this.turn) < 0.01 ? 0 : Phaser.Math.Linear(this.turn, 0, this.config.turnResetMultiplier);
+      // still update camera to slowly recenter world
+      this.worldLateralOffset = Phaser.Math.Linear(this.worldLateralOffset, 0, 0.05);
       return;
     }
     
     // Use steering value to update car position
     const normalizedValue = this.currentSteeringValue / 100;
     const speedMultiplier = this.carSpeed / this.config.carMaxSpeed;
+    const dlt = (this.scene.game.loop.delta || 16) * 0.01;
     
-    // Update car position based on steering
-    this.carX += normalizedValue * this.config.steeringSensitivity * speedMultiplier;
+    // Ease a curve value based on steering to simulate track bend
+    // Opposite-to-steering road curvature for horizon bend
+    const targetCurve = Phaser.Math.Clamp(-normalizedValue * 0.8, -1, 1);
+    this.currentCurve = Phaser.Math.Linear(this.currentCurve, targetCurve, 0.08);
     
-    // Clamp car position to road boundaries
-    const gameWidth = this.scene.cameras.main.width;
-    this.carX = Phaser.Math.Clamp(this.carX, this.config.boundaryPadding, gameWidth - this.config.boundaryPadding);
+    // Turn accumulator similar to example handling
+    if (Math.abs(normalizedValue) > 0.001) {
+      const steeringDirection = normalizedValue > 0 ? 1 : -1;
+      const turnGain = Math.abs(this.currentCurve) > 0.1 ? 0.5 : 0.25;
+      this.turn += steeringDirection * dlt * turnGain;
+    } else {
+      this.turn = Math.abs(this.turn) < 0.01 ? 0 : Phaser.Math.Linear(this.turn, 0, this.config.turnResetMultiplier);
+    }
+    this.turn = Phaser.Math.Clamp(this.turn, -this.config.maxTurn, this.config.maxTurn);
+
+    const dx = dlt * (speedMultiplier <= 0 ? 0 : speedMultiplier);
+
+    // Apply lateral movement to world offset instead of moving the car
+    this.worldLateralOffset += this.turn * dx * this.config.steeringSensitivity;
+    // Apply centrifugal effect pushing outward on curves, scaled by speed
+    this.worldLateralOffset -= this.currentCurve * dx * speedMultiplier * this.config.centrifugal;
     
-    // Update car visual position
-    this.drivingCar.setX(this.carX);
+    // Clamp world lateral offset
+    this.worldLateralOffset = Phaser.Math.Clamp(this.worldLateralOffset, -this.cameraMaxOffset, this.cameraMaxOffset);
+    
+    // Ensure car stays fixed at screen center
+    const centerX = this.scene.cameras.main.width / 2;
+    this.drivingCar.setX(centerX);
     
     // Debug: Log car position changes
     if (Math.abs(normalizedValue) > 0.1) {
@@ -399,19 +465,17 @@ export class CarMechanics {
   private updateDrivingCamera() {
     if (!this.drivingMode || this.drivingPaused) return;
     
-    const gameWidth = this.scene.cameras.main.width;
-    const centerX = gameWidth / 2;
-    const offsetX = (this.carX - centerX) * 0.3; // Camera follows car with some lag
+    // Use world lateral offset (world moves, car stays)
+    let offsetX = -this.worldLateralOffset;
+    // Add slight curve sway to enhance bend sensation
+    offsetX += this.currentCurve * 12;
     
-    // Clamp camera offset
-    const clampedOffset = Phaser.Math.Clamp(offsetX, -this.cameraMaxOffset, this.cameraMaxOffset);
-    
-    // Apply camera offset
-    this.scene.cameras.main.setScroll(clampedOffset, 0);
+    // Do not pan the whole scene horizontally; keep scroll fixed
+    this.scene.cameras.main.setScroll(0, 0);
     
     // Camera tilt based on steering and speed
     const speedFactor = this.carSpeed / Math.max(1, this.config.carMaxSpeed);
-    const targetAngle = Phaser.Math.Clamp((this.currentSteeringValue / 100) * 6 * speedFactor, -6, 6);
+    const targetAngle = Phaser.Math.Clamp((this.turn + this.currentCurve * 0.6) * 6 * speedFactor, -6, 6);
     this.cameraAngle = Phaser.Math.Linear(this.cameraAngle, targetAngle, 0.15);
     (this.scene.cameras.main as any).setAngle?.(this.cameraAngle);
   }
@@ -429,21 +493,51 @@ export class CarMechanics {
   private updateRoadLines() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
-    const roadY = gameHeight * 0.7;
-    
-    // Persistent dashed center line with offset for motion
+    const roadY = gameHeight * 0.3 + 10; // align with raised horizon
+    const horizonY = gameHeight * 0.3;
+    const centerX = gameWidth / 2;
+
+    // Clear previous
     this.roadLineGraphics.clear();
-    this.roadLineGraphics.lineStyle(this.config.lineWidth, this.config.lineColor);
-    const phase = this.roadOffset % (this.config.lineGap);
-    for (let y = roadY - phase; y < gameHeight; y += this.config.lineGap) {
-      const y1 = Math.max(y, roadY);
-      const y2 = y + this.config.lineHeight;
-      if (y2 >= roadY) {
-        this.roadLineGraphics.moveTo(gameWidth / 2, y1);
-        this.roadLineGraphics.lineTo(gameWidth / 2, Math.min(y2, gameHeight));
+    // Vertical lane lines: thinner and black
+    this.roadLineGraphics.lineStyle(2, 0x000000, 1);
+
+    // Helper to compute bezier bend offset at a normalized t (0 at horizon -> 1 bottom)
+    const strength = this.config.roadBendStrength ?? 140;
+    const end = this.currentCurve * strength;
+    const control = end * 0.6;
+    const bez = (t: number) => ((1 - t) * (1 - t) * 0) + (2 * (1 - t) * t * control) + (t * t * end);
+
+    // Four lane lines like the overhead view
+    for (const lane of this.laneIndices) {
+      let started = false;
+      this.roadLineGraphics.beginPath();
+      for (let y = roadY; y <= gameHeight; y += 6) {
+        const t = Phaser.Math.Clamp((y - horizonY) / (gameHeight - horizonY), 0, 1);
+        const x = centerX + bez(t) + lane * (this.laneSpacingBottom * t);
+        if (!started) {
+          this.roadLineGraphics.moveTo(x, y);
+          started = true;
+        } else {
+          this.roadLineGraphics.lineTo(x, y);
+        }
       }
+      this.roadLineGraphics.strokePath();
     }
-    this.roadLineGraphics.strokePath();
+
+    // Horizontal lines (grid-like), thinner, black
+    this.roadLineGraphics.lineStyle(1, 0x000000, 1);
+    const horizontalSpacing = 28;
+    const phaseOffset = (this.horizontalLinePhase % horizontalSpacing);
+    for (let y = roadY + phaseOffset; y <= gameHeight; y += horizontalSpacing) {
+      const t = Phaser.Math.Clamp((y - horizonY) / (gameHeight - horizonY), 0, 1);
+      const leftX = centerX + bez(t) + this.laneIndices[0] * (this.laneSpacingBottom * t);
+      const rightX = centerX + bez(t) + this.laneIndices[this.laneIndices.length - 1] * (this.laneSpacingBottom * t);
+      this.roadLineGraphics.beginPath();
+      this.roadLineGraphics.moveTo(leftX, y);
+      this.roadLineGraphics.lineTo(rightX, y);
+      this.roadLineGraphics.strokePath();
+    }
   }
 
   /**
@@ -452,17 +546,75 @@ export class CarMechanics {
   private updateObstacles() {
     // Move existing obstacles
     this.obstacles.forEach(obstacle => {
-      obstacle.y += this.config.potholeSpeed;
+      // Advance logical position continuously
+      const prevLogicalY = obstacle.getData('logicalY');
+      const newLogicalY = (typeof prevLogicalY === 'number' ? prevLogicalY : obstacle.y) + this.config.potholeSpeed;
+      obstacle.setData('logicalY', newLogicalY);
+      // Apply lateral offset so obstacles follow road/world movement
+      const gameWidth = this.scene.cameras.main.width;
+      const gameHeight = this.scene.cameras.main.height;
+      const horizonY = gameHeight * 0.3;
+      // Quantize display Y to step with countdown, aligned to horizontal grid lines
+      const roadY = gameHeight * 0.3 + 10;
+      const horizontalSpacing = 28;
+      const phaseOffset = (this.horizontalLinePhase % horizontalSpacing);
+      const snappedY = roadY + Math.max(0, Math.floor(((newLogicalY - roadY) + phaseOffset) / horizontalSpacing)) * horizontalSpacing;
+      obstacle.y = snappedY;
+      const t = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+      const bendStrength = this.config.roadBendStrength ?? 140;
+      const centerX = gameWidth / 2;
+      const end = this.currentCurve * bendStrength;
+      const control = end * 0.6;
+      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+      const laneSpacingBottom = this.laneSpacingBottom;
+      // Ensure obstacle has a laneIndex; if not, derive nearest lane from baseX once
+      let laneIndex: number | undefined = obstacle.getData('laneIndex');
+      if (typeof laneIndex !== 'number') {
+        const baseX = obstacle.getData('baseX') ?? obstacle.x;
+        const approx = (baseX - centerX) / laneSpacingBottom;
+        // Snap to nearest from allowed lane indices
+        laneIndex = this.laneIndices.reduce((prev, curr) => Math.abs(curr - approx) < Math.abs(prev - approx) ? curr : prev, this.laneIndices[0]);
+        obstacle.setData('laneIndex', laneIndex);
+      }
+      const worldOffset = -this.worldLateralOffset;
+      const laneTerm = laneIndex * (laneSpacingBottom * t);
+      const xProjected = centerX + bez(t) + laneTerm + worldOffset;
+      obstacle.x = xProjected;
+
+      // Perspective taper: narrower near horizon, wider near bottom
+      const baseW = obstacle.getData('baseW') ?? obstacle.width;
+      const baseH = obstacle.getData('baseH') ?? obstacle.height;
+      const widthScale = 0.2 + 0.8 * t; // 20% at horizon -> 100% at bottom
+      const heightScale = 0.4 + 0.6 * t; // optional depth feel
+      obstacle.displayWidth = baseW * widthScale;
+      obstacle.displayHeight = baseH * heightScale;
       
       // Remove obstacles that are off screen
-      if (obstacle.y > this.scene.cameras.main.height) {
+      if (newLogicalY > this.scene.cameras.main.height) {
         obstacle.destroy();
         const index = this.obstacles.indexOf(obstacle);
         if (index > -1) {
           this.obstacles.splice(index, 1);
         }
       }
+
+      // Screen-space collision with fixed car representation
+      if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(this.drivingCar.getBounds(), obstacle.getBounds())) {
+        this.handleCollisionWithObstacle(obstacle);
+      }
     });
+  }
+
+  private handleCollisionWithObstacle(obstacle: Phaser.GameObjects.Rectangle) {
+    // Simple collision response: stop briefly and emit event
+    this.pauseDriving();
+    this.scene.time.delayedCall(500, () => this.resumeDriving(), [], this);
+    this.scene.events.emit('carCollision');
+    obstacle.destroy();
+    const index = this.obstacles.indexOf(obstacle);
+    if (index > -1) {
+      this.obstacles.splice(index, 1);
+    }
   }
 
   /**
@@ -473,6 +625,7 @@ export class CarMechanics {
     
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
     
     // Determine obstacle type
     const isPothole = Math.random() < this.config.potholeProbability;
@@ -488,7 +641,7 @@ export class CarMechanics {
       
       obstacle = this.scene.add.rectangle(
         x,
-        gameHeight * this.config.potholeSpawnY,
+        horizonY + 2,
         gameWidth * this.config.potholeWidth,
         gameHeight * this.config.potholeHeight,
         this.config.potholeColor
@@ -497,7 +650,7 @@ export class CarMechanics {
       // Create exit
       obstacle = this.scene.add.rectangle(
         gameWidth * this.config.exitPosition,
-        gameHeight * this.config.exitSpawnY,
+        horizonY + 2,
         this.config.exitWidth,
         this.config.exitHeight,
         this.config.exitColor
@@ -505,6 +658,15 @@ export class CarMechanics {
     }
     
     obstacle.setDepth(this.config.roadDepth + 0.5);
+    // Store baseX so we can offset later relative to road/world movement
+    obstacle.setData('baseX', obstacle.x);
+    // Store a normalized lane offset so we can project along curved lanes
+    const centerX = gameWidth / 2;
+    const laneSpacingBottom = 130;
+    obstacle.setData('laneOffset', (obstacle.x - centerX) / laneSpacingBottom);
+    obstacle.setData('baseW', obstacle.width);
+    obstacle.setData('baseH', obstacle.height);
+    obstacle.setData('logicalY', obstacle.y);
     this.obstacles.push(obstacle);
     
     // Schedule next obstacle
@@ -534,5 +696,78 @@ export class CarMechanics {
     
     this.roadLines.forEach(line => line.destroy());
     this.obstacles.forEach(obstacle => obstacle.destroy());
+
+    // Destroy radar
+    this.radarContainer?.destroy();
+    this.radarBG = undefined;
+    this.radarGrid = undefined;
+    this.radarGraphics = undefined;
+    this.radarPlayer = undefined;
+
+    this.scene.events.off('countdownChanged', this.onCountdownChanged, this);
+  }
+
+  /**
+   * Create a lightweight overhead debug radar similar to example TrackRadar
+   */
+  private createRadar() {
+    const gameWidth = this.scene.cameras.main.width;
+    const x = this.config.radarX ?? (gameWidth - 40);
+    const y = this.config.radarY ?? 10;
+    const width = this.config.radarWidth ?? 33;
+    const height = this.config.radarHeight ?? 163;
+    const alpha = this.config.radarAlpha ?? 0.75;
+
+    this.radarContainer = this.scene.add.container(x, y);
+    this.radarContainer.setDepth(10000);
+    this.radarBG = this.scene.add.rectangle(0, 0, width, height, 0xffffff, alpha).setOrigin(0, 0);
+    this.radarGrid = this.scene.add.grid(2, 2, width - 3, height - 3, (width - 3) / 3, (height - 3) / 5, 0x333333, 0.8).setOrigin(0, 0);
+    this.radarGraphics = this.scene.add.graphics();
+    this.radarPlayer = this.scene.add.rectangle(Math.floor(width / 2), height - 10, 3, 5, 0xffff00);
+    this.radarContainer.add([this.radarBG, this.radarGrid, this.radarPlayer, this.radarGraphics]);
+  }
+
+  private onCountdownChanged(payload: any) {
+    const keysInIgnition = !!payload?.keysInIgnition;
+    const crank = Number(payload?.speedCrankPercentage ?? 0);
+    // Only shift when car is effectively on
+    if (keysInIgnition && crank >= 40) {
+      // Increase shift amount per step for a more dramatic change
+      const stepShift = 10; // pixels per countdown step
+      this.horizontalLinePhase = (this.horizontalLinePhase + stepShift) % 1000000;
+    }
+  }
+
+  /** Update radar each frame */
+  private updateRadar() {
+    if (!this.config.radarEnabled || !this.radarGraphics || !this.radarPlayer) return;
+    const width = this.radarBG!.width;
+    const height = this.radarBG!.height;
+
+    // Clear previous cars/obstacles
+    this.radarGraphics.clear();
+
+    // Update player x on radar
+    // Blend between actual car X and steering-based position so the radar responds even at low speeds
+    const gameWidth = this.scene.cameras.main.width;
+    const carNormX = Phaser.Math.Clamp(this.carX / gameWidth, 0, 1);
+    const carRadarX = Phaser.Math.Clamp(2 + carNormX * (width - 4), 4, width - 3);
+    // Steering mapped from -100..100 -> 0..1
+    const steerNorm = Phaser.Math.Clamp((this.currentSteeringValue + 100) / 200, 0, 1);
+    const steerRadarX = Phaser.Math.Clamp(2 + steerNorm * (width - 4), 4, width - 3);
+    const speedFactor = Phaser.Math.Clamp(this.carSpeed / Math.max(1, this.config.carMaxSpeed), 0, 1);
+    const blendedRadarX = Phaser.Math.Linear(steerRadarX, carRadarX, speedFactor);
+    this.radarPlayer.setX(blendedRadarX);
+
+    // Draw obstacles as red rectangles. Map screen y -> radar y, approximate distance
+    this.obstacles.forEach(obstacle => {
+      const oNormX = Phaser.Math.Clamp(obstacle.x / gameWidth, 0, 1);
+      const oRadarX = Phaser.Math.Clamp(2 + oNormX * (width - 4), 4, width - 3);
+      // Map from screen y (spawn around ~0.8H) to radar range [2 .. height-7]
+      const gameHeight = this.scene.cameras.main.height;
+      const yNorm = Phaser.Math.Clamp(obstacle.y / gameHeight, 0, 1);
+      const oRadarY = Phaser.Math.Clamp(2 + yNorm * (height - 7), 2, height - 7);
+      this.radarGraphics!.fillStyle(0xff0000).fillRect(oRadarX, oRadarY, 3, 5);
+    });
   }
 }

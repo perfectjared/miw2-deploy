@@ -166,6 +166,9 @@ export class GameScene extends Phaser.Scene {
       minCrankForSteering: .40,
       minSpeedForSteering: 0.01, // Lower threshold so steering works immediately
       steeringSensitivity: 1.0,
+      maxTurn: 1.0,
+      turnResetMultiplier: 0.1,
+      centrifugal: 6.0,
       skyColor: 0x87CEEB,
       roadColor: 0x333333,
       lineColor: 0xffffff,
@@ -183,15 +186,22 @@ export class GameScene extends Phaser.Scene {
       potholeHeight: 0.05,
       potholeMinPos: 0.2,
       potholeMaxPos: 0.8,
-      potholeSpawnY: 0.8,
+      potholeSpawnY: 0.2,
       potholeColor: 0x8B4513,
-      potholeSpeed: 2,
+      potholeSpeed: 1.25,
       exitWidth: 30,
       exitHeight: 60,
       exitPosition: 0.9,
-      exitSpawnY: 0.7,
+      exitSpawnY: 0.1,
       exitColor: 0x00ff00,
-      exitSpeed: 1.5
+      exitSpeed: 1.0,
+      radarEnabled: true,
+      radarX: this.scale.gameSize.width - 40,
+      radarY: 10,
+      radarWidth: 33,
+      radarHeight: 163,
+      radarAlpha: 0.75,
+      roadBendStrength: 140
     };
     
     this.carMechanics = new CarMechanics(this, carConfig);
@@ -820,6 +830,18 @@ export class GameScene extends Phaser.Scene {
    */
   private onStepEvent(step: number) {
     this.gameState.updateState({ step });
+    // Step-based countdown: only when game and car have both started
+    const state = this.gameState.getState();
+    if (state.gameStarted && this.carStarted && state.gameTime > 0) {
+      const newTime = state.gameTime - 1;
+      this.gameState.updateState({ gameTime: newTime });
+      // Notify systems (e.g., driving scene) that countdown changed
+      this.events.emit('countdownChanged', {
+        time: newTime,
+        keysInIgnition: state.keysInIgnition,
+        speedCrankPercentage: state.speedCrankPercentage
+      });
+    }
   }
 
   private onGamePaused() {
