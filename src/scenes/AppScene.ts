@@ -175,6 +175,11 @@ export class AppScene extends Phaser.Scene {
     if (gameScene) {
       gameScene.events.emit('step', this.step);
     }
+    // Also emit step to MenuScene for non-blocking overlays (e.g., story window)
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('step', this.step);
+    }
   }
 
   /**

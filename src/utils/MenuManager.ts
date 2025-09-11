@@ -111,6 +111,8 @@ export class MenuManager {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.saveManager = SaveManager.getInstance();
+    // Listen for global step events to auto-hide ephemeral overlays
+    this.scene.events.on('step', this.onGlobalStep, this);
   }
 
   /**
@@ -157,6 +159,41 @@ export class MenuManager {
     }
     console.log(`MenuManager: Could not find ${menuType} in stack to pop`);
     return null;
+  }
+
+  // STORY OVERLAY -----------------------------------------------------------
+  public showStoryOverlay(title: string, content: string) {
+    // Non-blocking: don't use menu stack or overlay background
+    this.clearCurrentDialog();
+    // Create a lightweight dialog without blocking input
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    this.currentDialog = this.scene.add.container(gameWidth / 2, gameHeight / 2);
+    this.currentDialog.setScrollFactor(0);
+    this.currentDialog.setDepth(40000); // below regular menus
+    this.currentDisplayedMenuType = 'STORY';
+
+    const dialogBackground = this.scene.add.graphics();
+    dialogBackground.lineStyle(2, 0xffffff, 1);
+    dialogBackground.strokeRoundedRect(-150, -125, 300, 250, 10);
+    this.currentDialog.add(dialogBackground);
+
+    const titleText = this.scene.add.text(0, -70, title, { fontSize: '22px', color: '#ffffff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5);
+    const contentText = this.scene.add.text(0, 0, content, { fontSize: '16px', color: '#ffffff', wordWrap: { width: 260 }, align: 'center' }).setOrigin(0.5);
+    this.currentDialog.add([titleText, contentText]);
+
+    // Mark as ephemeral and set step countdown
+    (this.currentDialog as any).isStory = true;
+    (this.currentDialog as any).stepsRemaining = 10;
+  }
+
+  private onGlobalStep() {
+    if (this.currentDialog && (this.currentDialog as any).isStory) {
+      (this.currentDialog as any).stepsRemaining -= 1;
+      if ((this.currentDialog as any).stepsRemaining <= 0) {
+        this.clearCurrentDialog();
+      }
+    }
   }
   
   public getCurrentMenuType(): string | null {
@@ -835,9 +872,13 @@ export class MenuManager {
     this.currentDisplayedMenuType = menuType || null;
     
     // Background - use unified overlay system
-    const background = this.createOverlayBackground(gameWidth, gameHeight, [
-      { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
-    ]);
+    // For story-type overlay, skip grey background; otherwise use default overlay
+    let background: Phaser.GameObjects.Container | null = null;
+    if (menuType !== 'STORY') {
+      background = this.createOverlayBackground(gameWidth, gameHeight, [
+        { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
+      ]);
+    }
     
     // Store reference for cleanup
     (this.currentDialog as any).background = background;
@@ -846,10 +887,16 @@ export class MenuManager {
     
     // Dialog background (visible background for the dialog itself)
     const dialogBackground = this.scene.add.graphics();
-    dialogBackground.fillStyle(0x333333, 0.9);
-    dialogBackground.fillRoundedRect(-150, -175, 300, 350, 10);
-    dialogBackground.lineStyle(2, 0xffffff, 1);
-    dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
+    if (menuType === 'STORY') {
+      // No grey background; draw only border for story overlay
+      dialogBackground.lineStyle(2, 0xffffff, 1);
+      dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
+    } else {
+      dialogBackground.fillStyle(0x333333, 0.9);
+      dialogBackground.fillRoundedRect(-150, -175, 300, 350, 10);
+      dialogBackground.lineStyle(2, 0xffffff, 1);
+      dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
+    }
     dialogBackground.setDepth(-1); // Behind other dialog content
     this.currentDialog.add(dialogBackground);
     
