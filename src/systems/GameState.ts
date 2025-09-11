@@ -47,6 +47,7 @@ export interface GameStateData {
   // Car State
   carStarted: boolean;
   keysInIgnition: boolean;
+  hasOpenMenu: boolean;
   speedCrankPercentage: number;
   knobValue: number;
   
@@ -399,6 +400,7 @@ export class GameState {
       // Car State
       carStarted: false,
       keysInIgnition: false,
+      hasOpenMenu: false,
       speedCrankPercentage: 0,
       knobValue: this.config.initialKnobValue,
       

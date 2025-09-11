@@ -25,7 +25,7 @@ import { StoryScene } from './scenes/StoryScene';
 import { GameScene } from './scenes/GameScene';
 
 // Debug: Check if RexUI is available
-console.log('rexuiplugin available:', (window as any).rexuiplugin);
+//console.log('rexuiplugin available:', (window as any).rexuiplugin);
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,

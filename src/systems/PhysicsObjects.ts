@@ -72,6 +72,9 @@ export class Trash implements PhysicsObject {
       lastPointerY = pointer.y;
       this.gameObject.setFillStyle(dragColor);
       (this.scene as any).isDraggingObject = true;
+      // Track currently dragged item globally for GameScene hover logic
+      (this.scene as any).draggingItem = this.gameObject;
+      (this.gameObject as any)._hasFedWhileOver = false;
       // Move to drag overlay container if present, else raise depth
       const gameScene = this.scene.scene.get('GameScene');
       (this.gameObject as any)._originalDepth = this.gameObject.depth;
@@ -93,6 +96,14 @@ export class Trash implements PhysicsObject {
 
     // Use global pointer move instead of object-specific
     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.gameObject || !this.gameObject.scene) {
+        isDragging = false;
+        (this.scene as any).isDraggingObject = false;
+        if ((this.scene as any).draggingItem === this.gameObject) {
+          (this.scene as any).draggingItem = null;
+        }
+        return;
+      }
       if (isDragging) {
         // Calculate velocity for momentum
         velocityX = pointer.x - lastPointerX;
@@ -112,17 +123,18 @@ export class Trash implements PhysicsObject {
         isDragging = false;
         this.gameObject.setFillStyle(originalColor);
         (this.scene as any).isDraggingObject = false;
-        // Restore original parent/depth after drag ends
+        // Keep item in overlay until it either feeds or leaves pointer.
+        // If it still exists at pointerup (not fed), restore parent/depth.
+        if (!this.gameObject.scene) return; // destroyed by feed
         const originalParent: any = (this.gameObject as any)._originalParent;
         if (originalParent) {
           const overlayParent: any = (this.gameObject as any).parentContainer;
           if (overlayParent) overlayParent.remove(this.gameObject);
           originalParent.add(this.gameObject);
           (this.gameObject as any)._originalParent = null;
-        } else {
-          const od = (this.gameObject as any)._originalDepth;
-          if (typeof od === 'number') this.gameObject.setDepth(od);
         }
+        const od = (this.gameObject as any)._originalDepth;
+        if (typeof od === 'number') this.gameObject.setDepth(od);
         
         // Re-enable physics and apply momentum
         if (this.gameObject.body) {
@@ -229,37 +241,34 @@ export class Item implements PhysicsObject {
         lastPointerX = pointer.x;
         lastPointerY = pointer.y;
         
-        // Convert screen coordinates to container-relative coordinates for Item
+        // Convert screen coordinates to item position in overlay (screen space)
+        this.gameObject.setScrollFactor(0);
         this.gameObject.x = pointer.x;
         this.gameObject.y = pointer.y;
 
-        // Feeding interaction: if over pet, start/continue feeding
+        // Feeding interaction handled at GameScene level via pointer hover.
         const gameScene = this.scene.scene.get('GameScene');
         const pet = gameScene && (gameScene as any).getVirtualPet?.();
-        const petRoot = pet && pet.getRoot?.();
-        if (petRoot) {
-          const petBounds = new Phaser.Geom.Rectangle(petRoot.x, petRoot.y, (petRoot as any).width || 0, (petRoot as any).height || 0);
-          // Fallback: use a simple proximity to pet ellipse center
-          const petEllipse: any = (pet as any).pet;
-          const px = petEllipse?.x ?? petRoot.x;
-          const py = petEllipse?.y ?? petRoot.y;
-          const dx = this.gameObject.x - px;
-          const dy = this.gameObject.y - py;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const near = dist < 60;
-          if (near && !this.feedingTimer) {
-            // Start feeding over time: grow pet food, shrink item scale
-            const feedMs = 1200;
-            const feedAmt = 20;
-            pet.feedOverTime?.(feedAmt, feedMs, (pct: number) => {
-              const s = Phaser.Math.Linear(1, 0.3, pct);
-              this.gameObject.setScale(s);
-            }, () => {
-              // Optionally destroy when fully consumed
-              // this.gameObject.destroy();
-            });
-            // Throttle feeding to one session at a time
-            this.feedingTimer = this.scene.time.delayedCall(feedMs + 50, () => { this.feedingTimer = undefined; });
+        if (pet) {
+          // Use screen-space bounds for pet (HUD camera) and item (drag overlay camera)
+          const pb = pet.getScreenBounds?.();
+          if (pb) {
+            const ib = this.gameObject.getBounds();
+            // Inflate pet bounds generously to account for camera differences
+            Phaser.Geom.Rectangle.Inflate(pb, 24, 24);
+            const hitRect = Phaser.Geom.Intersects.RectangleToRectangle(ib, pb);
+            // Also check circle-to-rectangle using item center/radius
+            const radius: number = (this.gameObject as any).radius ?? (this.gameObject.displayWidth / 2);
+            const circ = new Phaser.Geom.Circle(this.gameObject.x, this.gameObject.y, radius);
+            const hitCirc = Phaser.Geom.Intersects.CircleToRectangle(circ, pb);
+            // Draw debug outlines and hover
+            // Force debug outline visible every move so it's persistent
+            (pet as any).setDebugBoundsVisible?.(true);
+            const pointerX = pointer.x;
+            const pointerY = pointer.y;
+            const overByPointer = pet.isPointerOver?.(pointerX, pointerY) ?? false;
+            pet.setHover?.(overByPointer);
+            // Do not feed/destroy here; GameScene pointermove handles one-shot feeding
           }
         }
       }
@@ -269,21 +278,36 @@ export class Item implements PhysicsObject {
     this.scene.input.on('pointerup', () => {
       if (isDragging) {
         isDragging = false;
-        this.gameObject.setFillStyle(originalColor);
+        if (this.gameObject && this.gameObject.scene) {
+          this.gameObject.setFillStyle(originalColor);
+        }
         (this.scene as any).isDraggingObject = false;
-        const originalParent: any = (this.gameObject as any)._originalParent;
-        if (originalParent) {
-          const overlayParent: any = (this.gameObject as any).parentContainer;
-          if (overlayParent) overlayParent.remove(this.gameObject);
-          originalParent.add(this.gameObject);
-          (this.gameObject as any)._originalParent = null;
-        } else {
+        if ((this.scene as any).draggingItem === this.gameObject) {
+          (this.scene as any).draggingItem = null;
+        }
+        (this.gameObject as any)._hasFedWhileOver = false;
+        // If the item still exists (not fed/destroyed), keep it in main scene at high depth for a moment
+        if (this.gameObject && this.gameObject.scene) {
           const od = (this.gameObject as any)._originalDepth;
-          if (typeof od === 'number') this.gameObject.setDepth(od);
+          this.gameObject.setDepth(60001);
+          // Restore original depth after short delay
+          this.scene.time.delayedCall(100, () => {
+            if (this.gameObject && this.gameObject.scene) {
+              if (typeof od === 'number') this.gameObject.setDepth(od);
+            }
+          });
+          // Restore parent
+          const originalParent: any = (this.gameObject as any)._originalParent;
+          if (originalParent) {
+            const overlayParent: any = (this.gameObject as any).parentContainer;
+            if (overlayParent) overlayParent.remove(this.gameObject);
+            originalParent.add(this.gameObject);
+            (this.gameObject as any)._originalParent = null;
+          }
         }
         
         // Re-enable physics and apply momentum
-        if (this.gameObject.body) {
+        if (this.gameObject && this.gameObject.scene && this.gameObject.body) {
           (this.gameObject.body as any).isStatic = false;
           // Apply velocity as momentum
           this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.1, y: velocityY * 0.1 });

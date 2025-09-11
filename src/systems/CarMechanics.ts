@@ -165,7 +165,7 @@ export class CarMechanics {
   public startDriving() {
     this.drivingMode = true;
     this.shouldAutoRestartDriving = true;
-    console.log('Starting driving...');
+    //console.log('Starting driving...');
     this.carSpeed = 0;
     // Do not force-reset carX to center; preserve current lateral position
     
@@ -201,7 +201,7 @@ export class CarMechanics {
    */
   public stopDriving() {
     this.drivingMode = false;
-    console.log('Stopping driving...');
+    //console.log('Stopping driving...');
     this.carSpeed = 0;
     
     // Reset camera to center position
@@ -241,14 +241,14 @@ export class CarMechanics {
    * Handle speed crank input
    */
   public handleSpeedCrank(percentage: number) {
-    console.log('CarMechanics: Speed crank set to', percentage + '%');
+    //console.log('CarMechanics: Speed crank set to', percentage + '%');
     
     // Update car speed based on crank percentage
     // Convert percentage (0-100) to actual speed
     const maxSpeed = this.config.carMaxSpeed;
     this.carSpeed = (percentage / 100) * maxSpeed;
     
-    console.log('CarMechanics: Car speed set to', this.carSpeed);
+    //console.log('CarMechanics: Car speed set to', this.carSpeed);
   }
 
   /**
@@ -301,7 +301,7 @@ export class CarMechanics {
     this.drivingCar = this.scene.add.rectangle(
       gameWidth / 2,
       Math.floor(gameHeight * 0.85), // move car up on screen while staying near bottom road area
-      40,
+      60, // Increased width from 40 to 60 for easier collision
       60,
       0xff0000
     );

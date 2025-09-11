@@ -186,7 +186,7 @@ export class AppScene extends Phaser.Scene {
    * Handle scene pause - stop timers to prevent accumulation
    */
   pause() {
-    console.log('AppScene: Scene paused by Phaser');
+    //console.log('AppScene: Scene paused by Phaser');
     // Pause the step timer to prevent accumulation
     if (this.stepTimer) {
       this.stepTimer.paused = true;
@@ -197,7 +197,7 @@ export class AppScene extends Phaser.Scene {
    * Handle scene resume - restart timers properly
    */
   resume() {
-    console.log('AppScene: Scene resumed by Phaser');
+    //console.log('AppScene: Scene resumed by Phaser');
     // Resume the step timer if game is started and not manually paused
     if (this.gameStarted && !this.isPaused && this.stepTimer) {
       this.stepTimer.paused = false;

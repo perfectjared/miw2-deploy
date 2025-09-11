@@ -84,7 +84,7 @@ export class MenuManager {
   private readonly MAX_VELOCITY = 15;
   private readonly GRAVITY = 0.3;
   private readonly SENSITIVITY = 0.5;
-  private readonly START_THRESHOLD = 0.9;
+  private readonly START_THRESHOLD = 0.9; // Reduced threshold (~20% of original) for faster ignition
   private readonly START_INCREMENT = 0.5;
   
   // ============================================================================
@@ -98,6 +98,11 @@ export class MenuManager {
     GAME_OVER: 70,    // High priority - game over menu
     OBSTACLE: 60,     // Medium priority - obstacle collision menu
     SAVE: 50,         // Medium priority - save menu
+    DESTINATION: 50,  // Medium priority - destination menu
+    CYOA: 50,         // Medium priority - choose-your-own-adventure menu
+    VIRTUAL_PET: 50,  // Medium priority - virtual pet menu
+    MORAL_DECISION: 50, // Medium priority - moral decision menu
+    PET_STORY: 40,    // Low priority - pet story UI
     TURN_KEY: 30      // Lowest priority - ignition menu
   };
   
@@ -197,6 +202,131 @@ export class MenuManager {
         this.clearCurrentDialog();
       }
     }
+  }
+  
+  // PET STORY UI -----------------------------------------------------------
+  public showPetStoryUI(content: string) {
+    // Non-blocking: don't use menu stack or overlay background
+    this.clearCurrentDialog();
+    
+    // Get virtual pet position to position the UI above it
+    const gameScene = this.scene.scene.get('GameScene');
+    if (!gameScene || !(gameScene as any).virtualPet) return;
+    
+    // Use pet's screen-space XY for accurate placement
+    const petXY = (gameScene as any).virtualPet.getPetScreenXY?.();
+    if (!petXY) return;
+    // Clamp on-screen and flip below if too close to top
+    const cam = this.scene.cameras.main;
+    const marginX = 90;
+    const marginY = 50;
+    let desiredX = Phaser.Math.Clamp(petXY.x, marginX, cam.width - marginX);
+    let desiredYAbove = petXY.y - 80;
+    let desiredY = desiredYAbove < marginY ? petXY.y + 90 : desiredYAbove;
+    desiredY = Phaser.Math.Clamp(desiredY, marginY, cam.height - marginY);
+    const petX = desiredX;
+    const petY = desiredY;
+    
+    // Ensure MenuScene is rendering on top (matches story menu behavior)
+    try { this.scene.scene.bringToTop('MenuScene'); } catch {}
+
+    // Create dialog at pet position instead of screen center
+    this.currentDialog = this.scene.add.container(petX, petY);
+    this.currentDialog.setScrollFactor(0);
+    // Place above tutorials and pet; similar to story overlay but higher to guarantee visibility
+    this.currentDialog.setDepth(50010);
+    this.currentDisplayedMenuType = 'PET_STORY';
+
+    // Small window background (like story overlay but smaller)
+    const dialogBackground = this.scene.add.graphics();
+    dialogBackground.fillStyle(0x1e1e1e, 0.9);
+    dialogBackground.fillRoundedRect(-80, -40, 160, 80, 8);
+    dialogBackground.lineStyle(2, 0xffffff, 1);
+    dialogBackground.strokeRoundedRect(-80, -40, 160, 80, 8);
+    dialogBackground.setScrollFactor(0);
+    this.currentDialog.add(dialogBackground);
+
+    // Food meter inside the pet story UI
+    const petFoodValue = (gameScene as any).virtualPet.getFoodValue?.() || 0;
+    const meterWidth = 120;
+    const meterHeight = 12;
+    const meterY = 0;
+    const meterBG = this.scene.add.rectangle(0, meterY, meterWidth, meterHeight, 0x000000, 0.65);
+    meterBG.setStrokeStyle(1, 0xffffff, 0.9);
+    meterBG.setScrollFactor(0);
+    const fillWidth = Math.floor(meterWidth * (petFoodValue / 10));
+    const meterFill = this.scene.add.rectangle(-meterWidth / 2, meterY, fillWidth, meterHeight - 3, 0x2ecc71, 1).setOrigin(0, 0.5);
+    meterFill.setScrollFactor(0);
+    const label = this.scene.add.text(0, -18, 'FOOD', { fontSize: '12px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    label.setScrollFactor(0);
+    this.currentDialog.add([label, meterBG, meterFill]);
+
+    // Auto-hide after 3 steps
+    (this.currentDialog as any).stepsRemaining = 3;
+    (this.currentDialog as any).isStory = true; // mark as ephemeral so onGlobalStep removes it
+    
+    console.log('Pet story UI created at position:', petX, petY, 'petXY:', petXY, 'with depth:', this.currentDialog.depth);
+  }
+
+  // PET STORY UI for a specific pet index -----------------------------------
+  public showPetStoryUIForPet(petIndex: number) {
+    // Non-blocking: don't use menu stack or overlay background
+    this.clearCurrentDialog();
+    
+    // Get virtual pet position to position the UI above it
+    const gameScene = this.scene.scene.get('GameScene');
+    if (!gameScene || !(gameScene as any).getVirtualPet) return;
+    const pet = (gameScene as any).getVirtualPet(petIndex);
+    if (!pet) return;
+    
+    const petXY = pet.getPetScreenXY?.();
+    if (!petXY) return;
+    const cam = this.scene.cameras.main;
+    const uiWidth = 160;
+    const uiHeight = 80;
+    let petX = Phaser.Math.Clamp(petXY.x, uiWidth / 2, cam.width - uiWidth / 2);
+    let petY = petXY.y - 80; // Default above
+    if (petY - uiHeight / 2 < 0) petY = petXY.y + 80; // Flip below
+    
+    try { this.scene.scene.bringToTop('MenuScene'); } catch {}
+    
+    this.currentDialog = this.scene.add.container(petX, petY);
+    this.currentDialog.setScrollFactor(0);
+    this.currentDialog.setDepth(50010);
+    this.currentDisplayedMenuType = 'PET_STORY';
+    
+    const dialogBackground = this.scene.add.graphics();
+    dialogBackground.fillStyle(0x1e1e1e, 0.9);
+    dialogBackground.fillRoundedRect(-uiWidth / 2, -uiHeight / 2, uiWidth, uiHeight, 8);
+    dialogBackground.lineStyle(2, 0xffffff, 1);
+    dialogBackground.strokeRoundedRect(-uiWidth / 2, -uiHeight / 2, uiWidth, uiHeight, 8);
+    dialogBackground.setScrollFactor(0);
+    this.currentDialog.add(dialogBackground);
+    
+    const foodLabel = this.scene.add.text(0, -20, 'FOOD', {
+      fontSize: '14px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
+    foodLabel.setScrollFactor(0);
+    
+    const foodBarWidth = 100;
+    const foodBarHeight = 12;
+    const foodBarBG = this.scene.add.rectangle(0, 5, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    foodBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+    foodBarBG.setScrollFactor(0);
+    
+    const foodValue = pet.getFoodValue?.() || 0;
+    const fillWidth = Math.floor(foodBarWidth * (foodValue / 10));
+    const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, 5, fillWidth, foodBarHeight - 2, 0x2ecc71, 1);
+    foodBarFill.setOrigin(0, 0.5);
+    foodBarFill.setScrollFactor(0);
+    
+    this.currentDialog.add([foodLabel, foodBarBG, foodBarFill]);
+    
+    (this.currentDialog as any).stepsRemaining = 3;
+    (this.currentDialog as any).isStory = true;
   }
   
   public getCurrentMenuType(): string | null {
@@ -322,10 +452,10 @@ export class MenuManager {
       // Show new game menu for first time
       menuConfig = {
         title: 'START GAME',
-        content: 'Welcome to the game! Click Start to begin your adventure.',
+        content: 'click start to start',
         buttons: [
           {
-            text: 'Start Game',
+            text: 'start',
             onClick: () => {
               this.closeDialog();
               const appScene = this.scene.scene.get('AppScene');
@@ -473,54 +603,8 @@ export class MenuManager {
   }
 
   public showExitMenu() {
-    this.clearCurrentDialog();
-    
-    const menuConfig: MenuConfig = {
-      title: 'EXIT FOUND!',
-      content: 'You found an exit! This could lead to new opportunities.',
-      buttons: [
-        {
-          text: 'Take Exit',
-          onClick: () => {
-            this.closeDialog();
-            const appScene = this.scene.scene.get('AppScene');
-            if (appScene) {
-              (appScene as any).isPaused = false;
-              const gameScene = this.scene.scene.get('GameScene');
-              if (gameScene) {
-                gameScene.events.emit('gameResumed');
-              }
-            }
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).takeExit();
-            }
-          },
-            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        },
-        {
-          text: 'Continue Driving',
-          onClick: () => {
-            this.closeDialog();
-            const appScene = this.scene.scene.get('AppScene');
-            if (appScene) {
-              (appScene as any).isPaused = false;
-              const gameScene = this.scene.scene.get('GameScene');
-              if (gameScene) {
-                gameScene.events.emit('gameResumed');
-              }
-            }
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).resumeAfterCollision();
-            }
-          },
-            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        }
-      ]
-    };
-
-    this.createDialog(menuConfig);
+    // Adapt exit menu to the Destination-style menu flow
+    this.showDestinationMenu();
   }
 
   public showTurnKeyMenu() {
@@ -544,7 +628,7 @@ export class MenuManager {
     
     const menuConfig: MenuConfig = {
       title: 'IGNITION',
-      content: 'Keys are in the ignition! Turn the dial to start the car. Swipe down to remove keys.',
+      content: 'swipe up to turn keys, swipe down to remove',
       buttons: [] // No buttons - swipe down to remove keys
     };
 
@@ -659,7 +743,7 @@ export class MenuManager {
     const startThreshold = this.START_THRESHOLD; // 90% slider position to start accumulating
     const startIncrement = this.START_INCREMENT; // How much to add per frame when over threshold
     //.4 is slow, .8 is medium, 1.2 is fast
-    const startMax = 100; // Maximum start value to trigger ignition
+    const startMax = 20; // Maximum start value to trigger ignition
     let carStarted = false; // Track if car has been started
     
     // Create pointer down handler (works anywhere on screen)
@@ -877,6 +961,402 @@ export class MenuManager {
     this.createDialog(menuConfig, 'GAME_OVER');
   }
 
+  public showCYOAMenu(config?: { imageKey?: string; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {
+    if (!this.canShowMenu('CYOA')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('CYOA');
+    const menuConfig: MenuConfig = {
+      title: 'CYOA',
+      content: config?.text || 'Choose your path.',
+      buttons: [
+        { text: config?.optionA || 'Option A', onClick: () => {} },
+        { text: config?.optionB || 'Option B', onClick: () => {} }
+      ]
+    };
+    this.createDialog(menuConfig, 'CYOA');
+
+    // Image area (optional)
+    if (config?.imageKey) {
+      try {
+        const img = this.scene.add.image(0, -110, config.imageKey);
+        img.setOrigin(0.5);
+        img.setScrollFactor(0);
+        const scale = Math.min(280 / (img.width || 280), 120 / (img.height || 120));
+        img.setScale(scale);
+        (this.currentDialog as any).add(img);
+      } catch {}
+    } else {
+      // Placeholder graphic area
+      const ph = this.scene.add.graphics();
+      ph.lineStyle(1, 0xffffff, 0.5);
+      ph.strokeRoundedRect(-140, -170, 280, 100, 6);
+      (this.currentDialog as any).add(ph);
+    }
+
+    // Hook buttons to follow-up dialogs
+    const btnTexts = (this.currentDialog.list.filter((o: any) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text[])
+      .filter(t => t.text === (config?.optionA || 'Option A') || t.text === (config?.optionB || 'Option B'));
+    btnTexts.forEach((btn) => {
+      btn.removeAllListeners('pointerdown');
+      btn.on('pointerdown', () => {
+        const followText = btn.text === (config?.optionA || 'Option A') ? (config?.followA || 'You chose A') : (config?.followB || 'You chose B');
+        this.clearCurrentDialog();
+        const followConfig: MenuConfig = {
+          title: 'Result',
+          content: followText,
+          buttons: [ { text: 'Close', onClick: () => this.closeDialog() } ]
+        };
+        this.createDialog(followConfig, 'CYOA');
+      });
+    });
+  }
+
+  public showMoralDecisionMenu(config?: { petIndex?: number; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {
+    if (!this.canShowMenu('MORAL_DECISION')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('MORAL_DECISION');
+    
+    const menuConfig: MenuConfig = {
+      title: 'MORAL DECISION',
+      content: config?.text || 'What would you do?',
+      buttons: [
+        { text: config?.optionA || 'Option A', onClick: () => {} },
+        { text: config?.optionB || 'Option B', onClick: () => {} }
+      ]
+    };
+    this.createDialog(menuConfig, 'MORAL_DECISION');
+
+    // Add tamagotchi representation
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        const petIndex = config?.petIndex ?? 0;
+        const pet = (gameScene as any).getVirtualPet?.(petIndex);
+        if (pet) {
+          // Create a copy of the pet sprite
+          const petCopy = this.scene.add.ellipse(0, -110, 60, 60, 0xffcc66, 1);
+          petCopy.setStrokeStyle(2, 0x000000, 1);
+          petCopy.setScrollFactor(0);
+          (this.currentDialog as any).add(petCopy);
+          
+          // Add simple idle animation to the copy
+          this.scene.tweens.add({
+            targets: petCopy,
+            y: petCopy.y - 3,
+            duration: 1000,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+          });
+
+          // Add pet number label
+          const label = this.scene.add.text(0, -140, `Pet ${petIndex + 1}`, {
+            fontSize: '14px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 1
+          }).setOrigin(0.5);
+          label.setScrollFactor(0);
+          (this.currentDialog as any).add(label);
+        }
+      }
+    } catch {}
+
+    // Hook buttons to follow-up dialogs
+    const btnTexts = (this.currentDialog.list.filter((o: any) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text[])
+      .filter(t => t.text === (config?.optionA || 'Option A') || t.text === (config?.optionB || 'Option B'));
+    btnTexts.forEach((btn) => {
+      btn.removeAllListeners('pointerdown');
+      btn.on('pointerdown', () => {
+        const followText = btn.text === (config?.optionA || 'Option A') ? (config?.followA || 'You chose A') : (config?.followB || 'You chose B');
+        this.clearCurrentDialog();
+        const followConfig: MenuConfig = {
+          title: 'Result',
+          content: followText,
+          buttons: [ { text: 'Close', onClick: () => this.closeDialog() } ]
+        };
+        this.createDialog(followConfig, 'MORAL_DECISION');
+      });
+    });
+  }
+
+  public showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {
+    console.log('MenuManager: showVirtualPetMenu called with petSprite:', petSprite);
+    if (!this.canShowMenu('VIRTUAL_PET')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('VIRTUAL_PET');
+    
+    // Pause the game
+    this.scene.events.emit('gamePaused');
+    
+    const menuConfig: MenuConfig = {
+      title: 'band member',
+      content: 'doing fine',
+      buttons: [
+        { 
+          text: 'Close', 
+          onClick: () => {
+            this.closeDialog();
+            // Resume the game
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene) {
+              gameScene.events.emit('gameResumed');
+            }
+          }
+        }
+      ]
+    };
+    this.createDialog(menuConfig, 'VIRTUAL_PET');
+
+    // Add a copy of the virtual pet sprite in the menu, plus its digit label
+    if (petSprite) {
+      try {
+        // Create a copy of the pet sprite
+        const petCopy = this.scene.add.ellipse(0, -50, petSprite.width, petSprite.height, petSprite.fillColor, petSprite.fillAlpha);
+        petCopy.setStrokeStyle(petSprite.lineWidth, petSprite.strokeColor, petSprite.strokeAlpha);
+        petCopy.setScrollFactor(0);
+        (this.currentDialog as any).add(petCopy);
+        // Try to infer pet index from GameScene's virtualPets by position matching
+        let digitText = '';
+        try {
+          const gameScene = this.scene.scene.get('GameScene');
+          const pets = (gameScene as any)?.virtualPets as any[];
+          if (pets && pets.length) {
+            const idx = pets.findIndex(p => p?.getPetSprite?.() === petSprite);
+            if (idx >= 0) digitText = String(idx + 1);
+          }
+        } catch {}
+        if (digitText) {
+          const label = this.scene.add.text(0, -50, digitText, {
+            fontSize: '16px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 2
+          }).setOrigin(0.5);
+          label.setScrollFactor(0);
+          (this.currentDialog as any).add(label);
+        }
+        
+        // Add simple idle animation to the copy
+        this.scene.tweens.add({
+          targets: petCopy,
+          y: petCopy.y - 3,
+          duration: 1000,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut'
+        });
+
+        // Add food meter to the menu
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene && (gameScene as any).virtualPet) {
+          const foodMeter = (gameScene as any).virtualPet.getFoodMeterElements();
+          
+          // Create food meter elements for the menu
+          const foodLabel = this.scene.add.text(0, 20, 'FOOD', {
+            fontSize: '16px',
+            color: '#ffffff',
+            fontStyle: 'bold',
+            align: 'center'
+          }).setOrigin(0.5);
+          foodLabel.setScrollFactor(0);
+          
+          const foodBarWidth = 120;
+          const foodBarHeight = 15;
+          const foodBarBG = this.scene.add.rectangle(0, 45, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+          foodBarBG.setStrokeStyle(2, 0xffffff, 0.8);
+          foodBarBG.setScrollFactor(0);
+          
+          const foodValue = (gameScene as any).virtualPet.getFoodValue?.() || 0;
+          const fillWidth = Math.floor(foodBarWidth * (foodValue / 10));
+          const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, 45, fillWidth, foodBarHeight - 4, 0x2ecc71, 1);
+          foodBarFill.setOrigin(0, 0.5);
+          foodBarFill.setScrollFactor(0);
+          
+          // Add food meter elements to the dialog
+          (this.currentDialog as any).add([foodLabel, foodBarBG, foodBarFill]);
+        }
+      } catch (error) {
+        console.log('Could not create pet copy in menu:', error);
+      }
+    }
+  }
+
+  public showDestinationMenu(includeFinalShowStep: boolean = false) {
+    if (!this.canShowMenu('DESTINATION')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('DESTINATION');
+    const menuConfig: MenuConfig = {
+      title: 'DESTINATION',
+      content: 'Choose a destination or assign custom spots.',
+      buttons: [
+        { text: 'Shop 1', onClick: () => {} },
+        { text: 'Shop 2', onClick: () => {} },
+        { text: 'Shop 3', onClick: () => {} },
+        { text: 'Go', onClick: () => { /* TODO: handle go selection */ this.closeDialog(); } },
+        { text: 'Close', onClick: () => this.closeDialog() }
+      ]
+    };
+    this.createDialog(menuConfig, 'DESTINATION');
+
+    // Add five draggable circles that snap onto buttons
+    const circles: Phaser.GameObjects.Arc[] = [];
+    const circleLabels: Phaser.GameObjects.Text[] = [];
+    for (let i = 0; i < 5; i++) {
+      const c = this.scene.add.circle(-110 + i * 55, 120, 12, 0xffcc33);
+      c.setInteractive({ draggable: true });
+      c.setScrollFactor(0);
+      this.currentDialog.add(c);
+      circles.push(c);
+      // Add number labels centered on each circle
+      const label = this.scene.add.text(c.x, c.y, String(i + 1), { fontSize: '12px', color: '#000000', fontStyle: 'bold' });
+      label.setOrigin(0.5);
+      label.setScrollFactor(0);
+      this.currentDialog.add(label);
+      circleLabels.push(label);
+    }
+
+    // Collect button texts to snap onto
+    const buttons = (this.currentDialog.list.filter((o: any) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text[])
+      .filter(t => /Shop\s+[1-3]/i.test(t.text));
+
+    // Assignment state for stacking: button -> circles[]; circle -> button
+    const assignments: Map<Phaser.GameObjects.Text, Phaser.GameObjects.Arc[]> = new Map();
+    buttons.forEach((b: Phaser.GameObjects.Text) => assignments.set(b, []));
+    const circleToButton: Map<Phaser.GameObjects.Arc, Phaser.GameObjects.Text | null> = new Map();
+
+    const getButtonWidth = (btn: any): number => (btn.displayWidth ? btn.displayWidth : (btn.width || 80)) as number;
+    const getCircleRadius = (circle: any): number => (circle.radius ? circle.radius : 12) as number;
+
+    const layoutForButton = (btn: Phaser.GameObjects.Text) => {
+      const list = assignments.get(btn) || [];
+      if (list.length === 0) return;
+      const bWidth = getButtonWidth(btn as any);
+      const radius = getCircleRadius(list[0] as any);
+      const gap = 12;
+      const spacing = radius * 2 + gap;
+      const baseX = (btn as any).x + (bWidth / 2) + radius + gap;
+      const baseY = (btn as any).y;
+      list.forEach((circle, index) => {
+        circle.x = baseX + index * spacing;
+        circle.y = baseY;
+        const idx = circles.indexOf(circle);
+        const lbl = circleLabels[idx];
+        if (lbl) { lbl.x = circle.x; lbl.y = circle.y; }
+      });
+    };
+
+    const removeFromButton = (circle: Phaser.GameObjects.Arc, btn: Phaser.GameObjects.Text | null | undefined) => {
+      if (!btn) return;
+      const list = assignments.get(btn);
+      if (!list) return;
+      const i = list.indexOf(circle);
+      if (i >= 0) list.splice(i, 1);
+      layoutForButton(btn);
+    };
+
+    const snapToNearestButton = (circle: Phaser.GameObjects.Arc) => {
+      let bestBtn: Phaser.GameObjects.Text | null = null;
+      let bestDist = Number.POSITIVE_INFINITY;
+      buttons.forEach((btn: Phaser.GameObjects.Text) => {
+        // Compare in currentDialog local space directly (btn.x/btn.y are local)
+        const dx = circle.x - (btn as any).x;
+        const dy = circle.y - (btn as any).y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestDist) { bestDist = d2; bestBtn = btn; }
+      });
+      const prevBtn = circleToButton.get(circle) || null;
+      if (bestBtn) {
+        if (prevBtn !== bestBtn) {
+          removeFromButton(circle, prevBtn);
+          const list = assignments.get(bestBtn) as Phaser.GameObjects.Arc[];
+          // Avoid duplicates
+          if (list.indexOf(circle) === -1) list.push(circle);
+          circleToButton.set(circle, bestBtn);
+        }
+        // Layout both affected buttons
+        if (prevBtn && prevBtn !== bestBtn) layoutForButton(prevBtn);
+        layoutForButton(bestBtn);
+      } else if (prevBtn) {
+        removeFromButton(circle, prevBtn);
+        circleToButton.set(circle, null);
+      }
+    };
+
+    circles.forEach((c, idx) => {
+      c.on('drag', (pointer: Phaser.Input.Pointer) => {
+        // Convert pointer to currentDialog local space
+        const lp = (this.currentDialog as any).getLocalPoint
+          ? (this.currentDialog as Phaser.GameObjects.Container).getLocalPoint(pointer.x, pointer.y)
+          : { x: pointer.x - this.currentDialog.x, y: pointer.y - this.currentDialog.y };
+        c.x = lp.x;
+        c.y = lp.y;
+        const lbl = circleLabels[idx];
+        if (lbl) { lbl.x = c.x; lbl.y = c.y; }
+      });
+      c.on('dragend', () => snapToNearestButton(c));
+    });
+
+    // Override Go button to play a sequence of simple dialogs for assigned destinations
+    const goBtn = (this.currentDialog.list.filter((o: any) => o instanceof Phaser.GameObjects.Text) as Phaser.GameObjects.Text[])
+      .find(t => t.text === 'Go');
+    if (goBtn) {
+      goBtn.removeAllListeners('pointerdown');
+      goBtn.on('pointerdown', () => {
+        // Gather destinations with at least one assignment, in button order
+        const steps = buttons
+          .filter(btn => (assignments.get(btn) || []).length > 0)
+          .map(btn => ({ title: btn.text, circles: (assignments.get(btn) || []) }));
+        if (includeFinalShowStep) {
+          steps.push({ title: 'show', circles: [] as any });
+        }
+        const showStep = (index: number) => {
+          if (index >= steps.length) {
+            this.clearCurrentDialog();
+            return;
+          }
+          // Clear current and show next simple dialog with a single continue button
+          this.clearCurrentDialog();
+          const step = steps[index];
+          const stepConfig: MenuConfig = {
+            title: step.title,
+            content: 'Proceed to next destination.',
+            buttons: [
+              {
+                text: index < steps.length - 1 ? 'Continue' : 'Done',
+                onClick: () => {
+                  // Advance to next step
+                  this.clearCurrentDialog();
+                  showStep(index + 1);
+                }
+              }
+            ]
+          };
+          this.createDialog(stepConfig, 'DESTINATION_STEP');
+          // Draw assigned circle labels on this step dialog
+          const gameWidth = this.scene.cameras.main.width;
+          const gameHeight = this.scene.cameras.main.height;
+          const container = this.currentDialog as Phaser.GameObjects.Container;
+          // Position the badges under the title
+          const startY = -40;
+          const startX = -120;
+          const spacing = 36;
+          step.circles.forEach((circle: Phaser.GameObjects.Arc, i: number) => {
+            const badge = this.scene.add.circle(startX + i * spacing, startY, 12, 0xffcc33);
+            const idx = circles.indexOf(circle);
+            const labelText = idx >= 0 ? String(idx + 1) : '?';
+            const t = this.scene.add.text(badge.x, badge.y, labelText, { fontSize: '12px', color: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            container.add(badge);
+            container.add(t);
+          });
+        };
+        showStep(0);
+      });
+    }
+  }
+
   private createDialog(menuConfig: MenuConfig, menuType?: string) {
     console.log('=== MenuManager: createDialog called for menuType:', menuType, '===');
     const gameWidth = this.scene.cameras.main.width;
@@ -890,10 +1370,16 @@ export class MenuManager {
     // Track what menu type is being displayed
     this.currentDisplayedMenuType = menuType || null;
     
+    // Update game state to indicate a menu is open
+    const gameSceneInstance = this.scene.scene.get('GameScene');
+    if (gameSceneInstance && (gameSceneInstance as any).gameState) {
+      (gameSceneInstance as any).gameState.updateState({ hasOpenMenu: true });
+    }
+    
     // Background - use unified overlay system
     // For story-type overlay, skip grey background; otherwise use default overlay
     let background: Phaser.GameObjects.Container | null = null;
-    if (menuType !== 'STORY') {
+    if (menuType !== 'STORY' && menuType !== 'PET_STORY') {
       background = this.createOverlayBackground(gameWidth, gameHeight, [
         { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
       ]);
@@ -906,7 +1392,7 @@ export class MenuManager {
     
     // Dialog background (visible background for the dialog itself)
     const dialogBackground = this.scene.add.graphics();
-    if (menuType === 'STORY') {
+    if (menuType === 'STORY' || menuType === 'PET_STORY') {
       // No grey background; draw only border for story overlay
       dialogBackground.lineStyle(2, 0xffffff, 1);
       dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
@@ -982,20 +1468,20 @@ export class MenuManager {
     });
     
     console.log('MenuManager: All buttons added. Dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog children:', this.currentDialog.list.map(child => child.constructor.name));
+    console.log('MenuManager: Dialog children:', this.currentDialog.list.map((child: any) => child.constructor.name));
     
     // Notify GameScene that a menu is now open
-    const gameScene = this.scene.scene.get('GameScene');
-    if (gameScene && gameScene.updateAllTutorialOverlays) {
-      gameScene.updateAllTutorialOverlays();
+    const gameSceneForTutorial: any = this.scene.scene.get('GameScene');
+    if (gameSceneForTutorial && gameSceneForTutorial.updateAllTutorialOverlays) {
+      gameSceneForTutorial.updateAllTutorialOverlays();
     }
     
     console.log('MenuManager: After GameScene notification. Dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog children after notification:', this.currentDialog.list.map(child => child.constructor.name));
+    console.log('MenuManager: Dialog children after notification:', this.currentDialog.list.map((child: any) => child.constructor.name));
   }
 
   private createActionButtons(buttons: MenuButton[]) {
-    return buttons.map(button => {
+    return buttons.map((button: MenuButton) => {
       const buttonText = this.scene.add.text(0, 0, button.text, {
         fontSize: '18px',
         color: button.style?.color || '#ffffff',
@@ -1026,10 +1512,6 @@ export class MenuManager {
       
       return buttonText;
     });
-    
-    console.log('MenuManager: createDialog completed. Final dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog depth:', this.currentDialog.depth);
-    console.log('MenuManager: Dialog visible:', this.currentDialog.visible);
   }
 
   private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>) {
@@ -1121,6 +1603,12 @@ export class MenuManager {
       // Clear the displayed menu type
       this.currentDisplayedMenuType = null;
       
+      // Update game state to indicate no menu is open
+      const gameSceneInstance2 = this.scene.scene.get('GameScene');
+      if (gameSceneInstance2 && (gameSceneInstance2 as any).gameState) {
+        (gameSceneInstance2 as any).gameState.updateState({ hasOpenMenu: false });
+      }
+      
       // Check if we should restore a previous menu
       if (this.shouldRestorePreviousMenu()) {
         // Add a small delay to ensure cleanup is complete
@@ -1135,9 +1623,9 @@ export class MenuManager {
       }
       
       // Notify GameScene that menu state has changed
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene && gameScene.updateAllTutorialOverlays) {
-        gameScene.updateAllTutorialOverlays();
+      const gameSceneForRestore: any = this.scene.scene.get('GameScene');
+      if (gameSceneForRestore && gameSceneForRestore.updateAllTutorialOverlays) {
+        gameSceneForRestore.updateAllTutorialOverlays();
       }
     }
   }

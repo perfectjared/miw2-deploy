@@ -41,6 +41,11 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showGameOverMenu', this.showGameOverMenu, this);
     this.events.on('showStartMenu', this.showStartMenu, this);
     this.events.on('showTurnKeyMenu', this.showTurnKeyMenu, this);
+    this.events.on('showDestinationMenu', this.showDestinationMenu, this);
+    this.events.on('showCYOA', this.showCYOA, this);
+    this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
+    this.events.on('showMoralDecision', this.showMoralDecision, this);
+    this.events.on('showPetStoryUI', this.showPetStoryUI, this);
     this.events.on('showStoryOverlay', (title: string, content: string) => {
       this.menuManager.showStoryOverlay(title, content);
     });
@@ -48,6 +53,14 @@ export class MenuScene extends Phaser.Scene {
     
     // Don't create any default menu - wait for events
     console.log('MenuScene ready - waiting for menu events');
+
+    // Forward step events from GameScene to MenuManager for ephemeral UIs
+    try {
+      const gameScene = this.scene.get('GameScene');
+      gameScene?.events.on('step', () => {
+        (this.menuManager as any)?.onGlobalStep?.();
+      });
+    } catch {}
   }
 
   private setupOverlayCamera() {
@@ -92,6 +105,36 @@ export class MenuScene extends Phaser.Scene {
 
   private showTurnKeyMenu() {
     this.menuManager.showTurnKeyMenu();
+  }
+
+  private showDestinationMenu(includeFinalShowStep?: boolean) {
+    this.menuManager.showDestinationMenu(!!includeFinalShowStep);
+  }
+
+  private showCYOA(cfg?: { imageKey?: string; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {
+    this.menuManager.showCYOAMenu(cfg);
+  }
+
+  private showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {
+    console.log('MenuScene: showVirtualPetMenu called with petSprite:', petSprite);
+    this.menuManager.showVirtualPetMenu(petSprite);
+  }
+
+  private showMoralDecision(cfg?: { petIndex?: number; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {
+    console.log('MenuScene: showMoralDecision called with config:', cfg);
+    this.menuManager.showMoralDecisionMenu(cfg);
+  }
+
+  private showPetStoryUI(arg: any) {
+    // arg can be string (legacy) or { petIndex: number }
+    if (typeof arg === 'string') {
+      console.log('MenuScene: showPetStoryUI called (legacy) with content:', arg);
+      this.menuManager.showPetStoryUI(arg);
+      return;
+    }
+    const petIndex = (arg && typeof arg.petIndex === 'number') ? arg.petIndex : 0;
+    console.log('MenuScene: showPetStoryUI called with petIndex:', petIndex);
+    this.menuManager.showPetStoryUIForPet(petIndex);
   }
 
   private closeCurrentMenu() {

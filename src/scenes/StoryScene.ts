@@ -47,6 +47,6 @@ export class StoryScene extends Phaser.Scene {
     // Set this scene to use the overlay camera
     this.cameras.main = overlayCamera;
     
-    console.log('StoryScene: Overlay camera set up');
+    //console.log('StoryScene: Overlay camera set up');
   }
 }

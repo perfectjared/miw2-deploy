@@ -54,6 +54,8 @@ export class TutorialSystem {
   // Visual Elements
   private tutorialOverlay!: Phaser.GameObjects.Container;
   private tutorialMaskGraphics!: Phaser.GameObjects.Graphics;
+  private blinkText?: Phaser.GameObjects.Text;
+  private blinkIntervalSteps: number = 5;
   
   // State Tracking
   private lastTutorialState: string = '';
@@ -72,6 +74,21 @@ export class TutorialSystem {
    */
   public initialize() {
     this.createTutorialOverlay();
+    // Create blink text (hidden by default)
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    this.blinkText = this.scene.add.text(gameWidth / 2, gameHeight - 60, 'tutorial', {
+      fontSize: '28px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
+    this.blinkText.setScrollFactor(0);
+    this.blinkText.setDepth(100);
+    try { (this.blinkText as any).setStroke?.(); } catch {}
+    try { (this.blinkText as any).setShadow?.(2, 2, '#000000', 6, true, true); } catch {}
+    this.blinkText.setVisible(false);
+    this.tutorialOverlay.add(this.blinkText);
   }
 
   /**
@@ -134,10 +151,17 @@ export class TutorialSystem {
     
     // Update overlay visibility and mask
     if (this.tutorialOverlay) {
-      this.tutorialOverlay.setVisible(tutorialState !== 'none');
-      
-      if (tutorialState !== 'none') {
-        this.updateTutorialMask(tutorialState);
+      const shouldShow = tutorialState !== 'none';
+      this.tutorialOverlay.setVisible(shouldShow);
+      if (shouldShow) {
+        // Ensure blink text is above overlay gfx
+        if (this.blinkText) {
+          this.blinkText.setDepth(1);
+          this.blinkText.setVisible(true);
+        }
+        this.updateTutorialMask(tutorialState as 'keys-and-ignition' | 'crank' | 'steering');
+      } else if (this.blinkText) {
+        this.blinkText.setVisible(false);
       }
     }
     
@@ -146,16 +170,6 @@ export class TutorialSystem {
       console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'crankPercentage:', state.crankPercentage, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType);
       this.lastTutorialState = tutorialState;
     }
-    
-    // Always log the current state for debugging
-    console.log('Tutorial system state:', {
-      tutorialState,
-      keysInIgnition: state.keysInIgnition,
-      carStarted: state.carStarted,
-      crankPercentage: state.crankPercentage,
-      hasOpenMenu: state.hasOpenMenu,
-      steeringUsed: state.steeringUsed
-    });
   }
 
   /**
@@ -170,10 +184,12 @@ export class TutorialSystem {
     // Create tutorial overlay container
     this.tutorialOverlay = this.scene.add.container(0, 0);
     this.tutorialOverlay.setDepth(this.config.overlayDepth); // Above everything
+    (this.tutorialOverlay as any).setScrollFactor?.(0);
     
     // Create semi-transparent black overlay covering the screen
     const overlay = this.scene.add.graphics();
     overlay.fillStyle(this.config.overlayColor, this.config.overlayAlpha).fillRect(0, 0, gameWidth, gameHeight);
+    overlay.setScrollFactor(0);
     this.tutorialOverlay.add(overlay);
     
     // Create mask graphics for cutouts
@@ -299,6 +315,25 @@ export class TutorialSystem {
    */
   public isTutorialVisible(): boolean {
     return this.tutorialOverlay ? this.tutorialOverlay.visible : false;
+  }
+
+  /** Set the blinking tutorial text content */
+  public setBlinkText(text: string) {
+    if (!this.blinkText) return;
+    this.blinkText.setText(text || '');
+  }
+
+  /** Call on each step to toggle blink visibility every 5 steps on/off when overlay is active */
+  public handleStep(step: number) {
+    if (!this.blinkText) return;
+    const overlayVisible = this.isTutorialVisible();
+    if (!overlayVisible || !this.blinkText.text) {
+      this.blinkText.setVisible(false);
+      return;
+    }
+    // Toggle visibility every 5 steps: visible on steps 0,1,2,3,4, hidden on 5,6,7,8,9, etc.
+    const phase = Math.floor(step / this.blinkIntervalSteps) % 2; // 0 or 1
+    this.blinkText.setVisible(phase === 0);
   }
 
   /**

@@ -37,10 +37,12 @@ export class GameScene extends Phaser.Scene {
   private gameUI!: GameUI;
   private inputHandlers!: InputHandlers;
   private gameState!: GameState;
-  private virtualPet?: VirtualPet;
+  private virtualPets: VirtualPet[] = [];
+  private petLabels: Phaser.GameObjects.Text[] = [];
   private dragOverlay?: Phaser.GameObjects.Container;
-  private hudCamera?: Phaser.Cameras.Scene2D.Camera;
   private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
+  private dragOverlayCamera?: Phaser.Cameras.Scene2D.Camera;
+  private feedingDebug?: Phaser.GameObjects.Graphics;
   
   // ============================================================================
   // PHYSICS OBJECTS
@@ -127,22 +129,121 @@ export class GameScene extends Phaser.Scene {
     
     // Initialize input handlers
     this.inputHandlers.initialize();
-    // Initialize virtual pet UI element atop a rectangle at the top
-    this.virtualPet = new VirtualPet(this, { depth: 20000, xPercent: 0.5, yOffset: 8 });
-    this.virtualPet.initialize();
-    // Render the virtual pet via a dedicated HUD camera that does not rotate
-    const petRoot = this.virtualPet.getRoot?.();
-    if (petRoot) {
-      // Ensure main camera does not render the pet
-      this.cameras.main.ignore(petRoot);
-      // Create HUD camera and make it ignore everything except the pet
-      this.hudCamera = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
-      this.hudCamera.setScroll(0, 0);
-      this.hudCamera.setName('hudCamera');
-      // Ignore all non-pet objects for the HUD camera
-      const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
-      const toIgnore = allObjects.filter(obj => obj !== petRoot);
-      if (toIgnore.length > 0) this.hudCamera.ignore(toIgnore);
+
+    // Add keyboard shortcut to open Destination menu (key 'M')
+    try {
+      const keyM = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M, true, false);
+      keyM?.on('down', () => {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showDestinationMenu', true);
+          this.scene.bringToTop('MenuScene');
+        }
+      });
+      const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
+      keyC?.on('down', () => {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showCYOA', {
+            imageKey: undefined,
+            text: 'You approach a fork in the road.',
+            optionA: 'Take the left path',
+            optionB: 'Take the right path',
+            followA: 'The left path was serene and quiet.',
+            followB: 'The right path was lively and bustling.'
+          });
+          this.scene.bringToTop('MenuScene');
+        }
+      });
+      const keyP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
+      keyP?.on('down', () => {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showPetStoryUI', 'Pet says: "Hello there!"');
+        }
+      });
+
+      // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability
+      const openPetStoryByIndex = (index: number) => {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showPetStoryUI', { petIndex: index });
+          this.scene.bringToTop('MenuScene');
+        }
+      };
+      this.input.keyboard?.on('keydown-ONE', () => openPetStoryByIndex(0));
+      this.input.keyboard?.on('keydown-TWO', () => openPetStoryByIndex(1));
+      this.input.keyboard?.on('keydown-THREE', () => openPetStoryByIndex(2));
+      this.input.keyboard?.on('keydown-FOUR', () => openPetStoryByIndex(3));
+      this.input.keyboard?.on('keydown-FIVE', () => openPetStoryByIndex(4));
+
+      // Add keyboard shortcut for moral decision menu (key 'D')
+      const keyD = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, true, false);
+      keyD?.on('down', () => {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showMoralDecision', {
+            petIndex: 0, // Use first pet for now
+            text: 'You witness a stranger drop their wallet. What do you do?',
+            optionA: 'Return it immediately',
+            optionB: 'Keep it for yourself',
+            followA: 'You feel good about doing the right thing.',
+            followB: 'You feel guilty about your choice.'
+          });
+          this.scene.bringToTop('MenuScene');
+        }
+      });
+    } catch {}
+
+    // Initialize five virtual pets within a single rectangle container
+    const singlePetContainer = this.add.container(0, 0);
+    singlePetContainer.setScrollFactor(0);
+    singlePetContainer.setDepth(70000);
+    
+    // Create the shared rectangle background
+    const cam = this.cameras.main;
+    const rectWidth = Math.floor(cam.width * 0.85);
+    const rectHeight = Math.floor(cam.height * 0.20);
+    const rectX = Math.floor(cam.width * 0.5);
+    const rectY = Math.floor(rectHeight / 2) + 8;
+    
+    const sharedRect = this.add.rectangle(rectX, rectY, rectWidth, rectHeight, 0x222222, 0.9);
+    sharedRect.setStrokeStyle(2, 0xffffff, 1);
+    sharedRect.setScrollFactor(0);
+    singlePetContainer.add(sharedRect);
+    
+    // Create five virtual pets within the shared rectangle
+    for (let i = 0; i < 5; i++) {
+      // Random height within the rectangle (between 20% and 80% of rectangle height)
+      const randomHeightPercent = 0.2 + (Math.random() * 0.6); // 0.2 to 0.8
+      const randomYOffset = Math.floor((randomHeightPercent - 0.5) * rectHeight);
+      
+      const pet = new VirtualPet(this, { 
+        depth: 70001 + i, 
+        xPercent: 0.2 + (i * 0.15), // Spread across the rectangle
+        yOffset: 8 + randomYOffset, // Random height within rectangle
+        petColor: 0xffcc66, // Same yellow color
+        width: 0, // Don't create individual rectangles
+        height: 0
+      });
+      pet.initialize();
+      this.virtualPets.push(pet);
+      
+      // Add visible numeric label above each pet's circle
+      const petSprite = pet.getPetSprite?.();
+      const anchor = pet.getFeedAnchor?.();
+      if (petSprite && anchor) {
+        const label = this.add.text(petSprite.x, petSprite.y - (anchor.r + 20), `${i + 1}`, {
+          fontSize: '16px',
+          color: '#ffffff',
+          fontStyle: 'bold',
+          stroke: '#000000',
+          strokeThickness: 2
+        }).setOrigin(0.5);
+        label.setScrollFactor(0);
+        label.setDepth(70050 + i); // ensure above pet circle in depth
+        this.petLabels[i] = label;
+      }
     }
 
     // Create a second HUD camera for car controls (ignition/crank/wheel) to keep them upright
@@ -162,6 +263,139 @@ export class GameScene extends Phaser.Scene {
     this.dragOverlay = this.add.container(0, 0);
     this.dragOverlay.setDepth(60001);
     this.dragOverlay.setScrollFactor(0);
+    // Ensure drag overlay renders above the pet HUD via a dedicated camera
+    // Exclude drag overlay from main camera to avoid double draw
+    this.cameras.main.ignore(this.dragOverlay);
+    // Simplify: let HUD (and controls) render dragOverlay; disable overlay camera
+    // Ensure HUD/controls DO NOT ignore dragOverlay (main still ignores to avoid tilt)
+    // If an overlay camera exists, hide/disable it to avoid double rendering
+    try {
+      if (this.dragOverlayCamera) {
+        this.dragOverlayCamera.setVisible(false);
+        const allForDrag = (this.children.list || []) as Phaser.GameObjects.GameObject[];
+        this.dragOverlayCamera.ignore(allForDrag);
+      }
+    } catch {}
+
+    // Debug overlay graphics for feeding overlap (renders in drag overlay camera)
+    this.feedingDebug = this.add.graphics();
+    this.feedingDebug.setScrollFactor(0);
+    this.dragOverlay.add(this.feedingDebug);
+
+    // Global pointer hover feedback for Tamagotchi (camera-agnostic)
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      const pet = this.getVirtualPet?.();
+      if (!pet) return;
+      const dragging = (this as any).isDraggingObject === true;
+      if (!dragging) {
+        pet.setHover?.(false);
+        return;
+      }
+      const over = pet.isPointerOver?.(pointer.x, pointer.y) ?? false;
+      pet.setHover?.(over);
+      if (over) {
+        // Dwell-to-eat with continuous particles + bite burst when threshold reached
+        const item: any = (this as any).draggingItem;
+        if (item) {
+          const now = this.time.now;
+          const dwellMs = 1400; // required hover duration per bite (doubled)
+          if (!item._overSince) item._overSince = now;
+          const elapsed = now - item._overSince;
+          const lastFeedAt = item._lastFeedTime ?? 0;
+
+          // Shared particle look (base) so dwell matches burst styling
+          const baseParticle = {
+            speed: { min: 100, max: 200 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.5, end: 0 },
+            lifespan: 600
+          } as any;
+          // Dwell parameters: continuous emission using the same look
+          const dwellParticle = {
+            ...baseParticle,
+            alpha: { start: 1, end: 0.2 },
+            quantity: 2,
+            frequency: 100
+          } as any;
+
+          // Ensure continuous dwell emitter exists and follows the item while over the pet
+          if (!item._dwellEmitter) {
+            try {
+              const emitter: any = this.add.particles(item.x, item.y, 'x', dwellParticle);
+              try { if (this.dragOverlay) this.dragOverlay.add(emitter); } catch {}
+              try { emitter.setScrollFactor?.(0); emitter.setDepth?.(60050); } catch {}
+              item._dwellEmitter = emitter;
+            } catch {}
+          }
+          try { item._dwellEmitter?.setPosition?.(item.x, item.y); } catch {}
+
+          if (elapsed >= dwellMs && (now - lastFeedAt) >= dwellMs) {
+            item._lastFeedTime = now;
+            item._overSince = now; // re-arm for next dwell cycle
+            item._feedCount = (item._feedCount ?? 0) + 1;
+            pet.setFood?.(10);
+            // shrink item by 20%
+            const s = item.scaleX ?? 1;
+            item.setScale(Math.max(0.1, s * 0.8));
+
+            // One-off particle burst on successful bite, placed at pointer position in dragOverlay local space
+            try {
+              const lp = this.dragOverlay?.getLocalPoint ? this.dragOverlay.getLocalPoint(pointer.x, pointer.y, (this as any).dragOverlayCamera) : { x: pointer.x, y: pointer.y };
+              const burst: any = this.add.particles(lp.x, lp.y, 'x', { ...baseParticle, quantity: 0, frequency: -1 });
+              try { if (this.dragOverlay) this.dragOverlay.add(burst); } catch {}
+              try { burst.setScrollFactor?.(0); burst.setDepth?.(60060); } catch {}
+              burst.explode?.(14, lp.x, lp.y);
+              this.time.delayedCall(700, () => burst.destroy?.());
+            } catch {}
+
+            // If eaten 3 times, destroy immediately (even while held)
+            if (item._feedCount >= 3) {
+              if (item && item.scene) {
+                try { item.disableInteractive?.(); } catch {}
+                (this as any).isDraggingObject = false;
+                (this as any).draggingItem = null;
+                // Clean up dwell emitter before destruction
+                try { item._dwellEmitter?.stop?.(); item._dwellEmitter?.destroy?.(); item._dwellEmitter = null; } catch {}
+                this.time.delayedCall(0, () => { if (item && item.scene) item.destroy(); });
+              }
+            }
+          }
+        }
+      } else {
+        const item: any = (this as any).draggingItem;
+        if (item) {
+          item._overSince = undefined;
+          // Stop and destroy dwell emitter when leaving pet hover
+          try {
+            item._dwellEmitter?.stop?.();
+            item._dwellEmitter?.destroy?.();
+            item._dwellEmitter = null;
+          } catch {}
+        }
+      }
+    });
+    this.input.on('pointerout', () => {
+      const pet = this.getVirtualPet?.();
+      pet?.setHover?.(false);
+    });
+    
+    // Clean up particles when pointer is released
+    this.input.on('pointerup', () => {
+      const item: any = (this as any).draggingItem;
+      if (item) {
+        // Stop and destroy dwell emitter when releasing item
+        try {
+          item._dwellEmitter?.stop?.();
+          item._dwellEmitter?.destroy?.();
+          item._dwellEmitter = null;
+        } catch {}
+        
+        // Reset hover state
+        item._overSince = undefined;
+        const pet = this.getVirtualPet?.();
+        pet?.setHover?.(false);
+      }
+    });
     
     // Set up event listeners
     this.setupEventListeners();
@@ -263,7 +497,7 @@ export class GameScene extends Phaser.Scene {
     const tutorialConfig: TutorialConfig = {
       overlayColor: 0x000000,
       overlayAlpha: 0.7,
-      overlayDepth: 20000,
+      overlayDepth: 60000,
       maskColor: 0xffffff,
       keysHoleRadius: 30,
       targetHoleMultiplier: 1.5,
@@ -503,6 +737,15 @@ export class GameScene extends Phaser.Scene {
     this.events.on('speedUpdate', this.onSpeedUpdate, this);
     this.events.on('steeringInput', this.onSteeringInput, this);
     this.events.on('speedCrankInput', this.onSpeedCrankInput, this);
+    
+    // Handle window blur (game loses focus) - show pause menu
+    this.game.events.on('hidden', () => {
+      // Only show pause menu if game is running and no menu is already open
+      const state = this.gameState.getState();
+      if (state.gameStarted && !state.hasOpenMenu) {
+        this.scene.get('MenuScene').events.emit('showPauseMenu');
+      }
+    });
   }
 
   /**
@@ -523,7 +766,7 @@ export class GameScene extends Phaser.Scene {
       steeringUsed: this.steeringUsed
     };
     
-    console.log('updateTutorialSystem called:', tutorialState);
+   //console.log('updateTutorialSystem called:', tutorialState);
     // Track tutorial state transitions for crank/steering
     const prevCrankShown = this.hasShownCrankTutorial;
     const prevSteeringShown = this.hasShownSteeringTutorial;
@@ -598,6 +841,21 @@ export class GameScene extends Phaser.Scene {
     // Smoothly apply lateral gravity based on steering
     this.gravityXCurrent = Phaser.Math.Linear(this.gravityXCurrent, this.gravityXTarget, 0.1);
     this.matter.world.setGravity(this.gravityXCurrent, this.gravityBaseY);
+
+    // Keep pet labels pinned to pet positions and correct order/depth
+    for (let i = 0; i < this.virtualPets.length; i++) {
+      const pet = this.virtualPets[i];
+      const label = this.petLabels[i];
+      if (!pet || !label) continue;
+      const anchor = pet.getFeedAnchor?.();
+      const sprite = pet.getPetSprite?.();
+      if (anchor && sprite) {
+        label.setPosition(sprite.x, sprite.y - (anchor.r + 20));
+        label.setDepth(70050 + i);
+        label.setText(String(i + 1));
+        label.setVisible(true);
+      }
+    }
 
     // Fast tutorial updates while keys are out (no menu)
     const menuScene = this.scene.get('MenuScene');
@@ -875,8 +1133,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Expose the virtual pet to systems (for interactions like feeding) */
-  public getVirtualPet(): VirtualPet | undefined {
-    return this.virtualPet;
+  public getVirtualPet(index?: number): VirtualPet | undefined {
+    if (index !== undefined) {
+      return this.virtualPets[index] || undefined;
+    }
+    return this.virtualPets[0]; // Default to first pet for backward compatibility
+  }
+
+  /** Draw feeding debug rectangles in screen space */
+  public showFeedingDebug(petRect: Phaser.Geom.Rectangle, itemRect: Phaser.Geom.Rectangle) {
+    if (!this.feedingDebug) return;
+    this.feedingDebug.clear();
+    this.feedingDebug.lineStyle(2, 0xff0000, 0.9).strokeRect(petRect.x, petRect.y, petRect.width, petRect.height);
+    this.feedingDebug.lineStyle(2, 0x00ff00, 0.9).strokeRect(itemRect.x, itemRect.y, itemRect.width, itemRect.height);
+  }
+
+  public clearFeedingDebug() {
+    this.feedingDebug?.clear();
   }
 
   /** Resume gameplay after a non-blocking collision menu (e.g., pothole) */
@@ -948,6 +1221,10 @@ export class GameScene extends Phaser.Scene {
    */
   private onStepEvent(step: number) {
     this.gameState.updateState({ step });
+    // Drive tutorial blink text every step
+    if ((this.tutorialSystem as any).handleStep) {
+      (this.tutorialSystem as any).handleStep(step);
+    }
     // Step-based countdown: only when game and car have both started
     const state = this.gameState.getState();
     if (state.gameStarted && this.carStarted && state.gameTime > 0) {
@@ -1009,8 +1286,13 @@ export class GameScene extends Phaser.Scene {
       this.scheduleTutorialUpdate(0);
     }
 
-    // Show pothole overlay 3 steps after hit
+    // Show pothole overlay 3 steps after hit (cancel if any real menu is open)
     if (this.potholeHitStep !== null && step >= this.potholeHitStep) {
+      const curState = this.gameState.getState();
+      if (curState.hasOpenMenu) {
+        // Prevent pending pothole overlays while a real menu is up
+        this.potholeHitStep = null;
+      } else {
       const menuScene = this.scene.get('MenuScene');
       if (menuScene) {
         menuScene.events.emit('showStoryOverlay', 'Pothole!', 'Ouch. You hit a pothole.');
@@ -1023,6 +1305,7 @@ export class GameScene extends Phaser.Scene {
         this.scene.bringToTop('MenuScene');
       }
       this.potholeHitStep = null;
+      }
     }
   }
 

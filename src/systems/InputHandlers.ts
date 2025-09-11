@@ -144,22 +144,7 @@ export class InputHandlers {
       }
     });
     
-    // Number keys for speed crank
-    this.scene.input.keyboard?.on('keydown-ONE', () => {
-      this.scene.events.emit('speedCrankInput', 0);
-    });
-    
-    this.scene.input.keyboard?.on('keydown-TWO', () => {
-      this.scene.events.emit('speedCrankInput', 40);
-    });
-    
-    this.scene.input.keyboard?.on('keydown-THREE', () => {
-      this.scene.events.emit('speedCrankInput', 70);
-    });
-    
-    this.scene.input.keyboard?.on('keydown-FOUR', () => {
-      this.scene.events.emit('speedCrankInput', 100);
-    });
+    // Number keys removed - now used for pet menus
   }
 
   /**
