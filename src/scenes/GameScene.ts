@@ -56,6 +56,7 @@ export class GameScene extends Phaser.Scene {
   // Game state flags
   private keysInIgnition: boolean = false;
   private carStarted: boolean = false;
+  private steeringUsed: boolean = false;
   
   // Driving state
   private drivingMode: boolean = false;
@@ -63,6 +64,9 @@ export class GameScene extends Phaser.Scene {
   
   // UI state
   private currentPosition: string = 'frontseat';
+  
+  // Tutorial update throttling
+  private tutorialUpdateScheduled: boolean = false;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -133,7 +137,7 @@ export class GameScene extends Phaser.Scene {
       // Validation
       minMoney: 0,
       maxMoney: 9999,
-      minHealth: 1,
+      minHealth: 0,
       maxHealth: 100,
       minSkill: 0,
       maxSkill: 100,
@@ -159,8 +163,8 @@ export class GameScene extends Phaser.Scene {
     const carConfig: CarMechanicsConfig = {
       carMaxSpeed: 5,
       carAcceleration: 0.01,
-      minCrankForSteering: 40,
-      minSpeedForSteering: 0.01,
+      minCrankForSteering: .40,
+      minSpeedForSteering: 0.01, // Lower threshold so steering works immediately
       steeringSensitivity: 1.0,
       skyColor: 0x87CEEB,
       roadColor: 0x333333,
@@ -311,6 +315,7 @@ export class GameScene extends Phaser.Scene {
     
     // Set references for tutorial system
     this.tutorialSystem.setPhysicsObjects(this.frontseatKeys);
+    this.tutorialSystem.setGameUI(this.gameUI);
   }
 
   /**
@@ -339,7 +344,8 @@ export class GameScene extends Phaser.Scene {
     
     // Create the magnetic target circle (outline only)
     this.magneticTarget = this.add.graphics();
-    this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
+    // Start with gray color to indicate inactive state
+    this.magneticTarget.lineStyle(3, 0x666666, 1);
     this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
     
     // Create a separate invisible Matter.js body for collision detection
@@ -381,7 +387,14 @@ export class GameScene extends Phaser.Scene {
     this.gameState.setEventCallbacks({
       onStateChange: (state) => {
         this.gameUI.updateUI(state);
-        this.updateTutorialSystem();
+        // Auto-snap crank to 0 when keys are out of ignition
+        if (!state.keysInIgnition && state.speedCrankPercentage !== 0) {
+          this.carMechanics.handleSpeedCrank(0);
+          this.gameUI.updateSpeedCrank(0);
+          // Reflect in state once to keep consistency
+          this.gameState.updateState({ speedCrankPercentage: 0 });
+        }
+        this.scheduleTutorialUpdate(0);
       },
       onSaveComplete: (success) => {
         console.log('Save completed:', success);
@@ -427,15 +440,47 @@ export class GameScene extends Phaser.Scene {
    * Update tutorial system based on current state
    */
   private updateTutorialSystem() {
+    // Check if any menu is currently open
+    const menuScene = this.scene.get('MenuScene');
+    const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+    const currentMenuType = hasOpenMenu ? (menuScene as any).menuManager.currentDisplayedMenuType : null;
+    
     const tutorialState = {
       keysInIgnition: this.keysInIgnition,
       carStarted: this.carStarted,
       crankPercentage: this.gameUI.getSpeedCrankPercentage(),
-      hasOpenMenu: false, // TODO: Get from menu system
-      currentMenuType: null
+      hasOpenMenu: !!hasOpenMenu,
+      currentMenuType: currentMenuType,
+      steeringUsed: this.steeringUsed
     };
     
+    console.log('updateTutorialSystem called:', tutorialState);
     this.tutorialSystem.updateTutorialOverlay(tutorialState);
+  }
+
+  /**
+   * Schedule a tutorial update with simple debouncing to avoid floods/loops
+   */
+  private scheduleTutorialUpdate(delayMs: number = 0) {
+    if (this.tutorialUpdateScheduled) return;
+    this.tutorialUpdateScheduled = true;
+    this.time.delayedCall(delayMs, () => {
+      this.tutorialUpdateScheduled = false;
+      this.updateTutorialSystem();
+    });
+  }
+
+  /**
+   * Reset speed crank to 0% across state, UI, and mechanics
+   */
+  public resetCrankToZero() {
+    this.gameState.updateState({ speedCrankPercentage: 0 });
+    if (this.gameUI?.updateSpeedCrank) {
+      this.gameUI.updateSpeedCrank(0);
+    }
+    if (this.carMechanics?.handleSpeedCrank) {
+      this.carMechanics.handleSpeedCrank(0);
+    }
   }
 
   /**
@@ -464,6 +509,25 @@ export class GameScene extends Phaser.Scene {
     // Update all systems
     this.carMechanics.update();
     this.applyMagneticAttraction();
+
+    // Fast tutorial updates while keys are out (no menu)
+    const menuScene = this.scene.get('MenuScene');
+    const hasOpenMenu = !!(menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog);
+    if (!hasOpenMenu && !this.keysInIgnition) {
+      // Recompute state and update immediately
+      this.tutorialSystem.updateTutorialOverlay({
+        keysInIgnition: this.keysInIgnition,
+        carStarted: this.carStarted,
+        crankPercentage: this.gameUI.getSpeedCrankPercentage(),
+        hasOpenMenu: false,
+        currentMenuType: null,
+        steeringUsed: this.steeringUsed
+      } as any);
+      // Keep mask aligned to moving keys each frame
+      if ((this.tutorialSystem as any).updateTutorialMaskRealTime) {
+        (this.tutorialSystem as any).updateTutorialMaskRealTime();
+      }
+    }
     this.inputHandlers.setInputState({
       isDraggingObject: false, // TODO: Get from physics objects
       isKnobActive: false, // TODO: Get from UI
@@ -477,15 +541,15 @@ export class GameScene extends Phaser.Scene {
    * Apply magnetic attraction to keys
    */
   private applyMagneticAttraction() {
-    if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
+    // Only apply magnetic attraction after game has started
+    if (!this.gameState.isGameStarted()) {
           return;
-        }
-    if (!this.magneticTarget || !(this.magneticTarget as any).magneticBody) {
-      return;
     }
     
-    // Don't apply magnetic attraction if key is being actively dragged
-    if ((this.frontseatKeys.gameObject as any).isDragging) {
+    if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
+        return;
+      }
+    if (!this.magneticTarget || !(this.magneticTarget as any).magneticBody) {
       return;
     }
     
@@ -494,9 +558,9 @@ export class GameScene extends Phaser.Scene {
       y: 550,
       radius: 25,
       color: 0xff0000,
-      magneticRange: 150,
-      magneticStrength: 0.01,
-      snapThreshold: 30
+      magneticRange: 50,
+      magneticStrength: 0.005,
+      snapThreshold: 15
     };
     
     const keysBody = this.frontseatKeys.gameObject.body;
@@ -511,8 +575,10 @@ export class GameScene extends Phaser.Scene {
     const dy = targetPos.y - keysPos.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Snap threshold - when Keys gets close enough, create a constraint
-    if (distance <= magneticConfig.snapThreshold && !this.keysConstraint) {
+    const isDraggingKeys = !!(this.frontseatKeys.gameObject as any).isDragging;
+    
+    // Snap threshold - when Keys gets close enough, create a constraint (only when not dragging)
+    if (!isDraggingKeys && distance <= magneticConfig.snapThreshold && !this.keysConstraint) {
       // Create constraint to snap Keys to the center of magnetic target
       this.keysConstraint = this.matter.add.constraint(keysBody as any, magneticBody as any, 0, 0.1, {
         pointA: { x: 0, y: 0 },
@@ -526,8 +592,8 @@ export class GameScene extends Phaser.Scene {
       this.gameState.updateState({ keysInIgnition: true });
       console.log('Keys snapped to ignition');
       
-      // Update tutorial overlay
-      this.updateTutorialSystem();
+      // Update tutorial overlay (debounced)
+      this.scheduleTutorialUpdate(0);
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
       if (!this.carStarted && this.keysConstraint) {
@@ -559,20 +625,20 @@ export class GameScene extends Phaser.Scene {
       this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
       this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
       
-      // Update tutorial overlay
-      this.updateTutorialSystem();
+      // Snap speed crank to 0% when keys leave ignition
+      this.resetCrankToZero();
       
-    } else if (distance <= magneticConfig.magneticRange && distance > magneticConfig.snapThreshold && !this.keysConstraint) {
-      // Apply magnetic attraction when close but not snapped
+      // Update tutorial overlay after a small delay (debounced)
+      this.scheduleTutorialUpdate(50);
+      
+    } else if (!isDraggingKeys && distance <= magneticConfig.magneticRange && distance > magneticConfig.snapThreshold && !this.keysConstraint) {
+      // Apply magnetic attraction when close but not snapped (only when not dragging)
       const attractionForce = magneticConfig.magneticStrength * (1 - distance / magneticConfig.magneticRange);
-      
-      // Apply force towards target
-      const forceX = (dx / distance) * attractionForce;
-      const forceY = (dy / distance) * attractionForce;
-      
-      // Apply the force to the Keys object using Phaser Matter API
-      this.matter.body.applyForce(keysBody as any, keysPos, { x: forceX, y: forceY });
-      
+      if (distance > 0) {
+        const forceX = (dx / distance) * attractionForce;
+        const forceY = (dy / distance) * attractionForce;
+        this.matter.body.applyForce(keysBody as any, keysPos, { x: forceX, y: forceY });
+      }
       // Visual feedback: make target glow when Keys is close
       this.magneticTarget.clear();
       this.magneticTarget.lineStyle(3, 0xffff00, 1);
@@ -621,7 +687,7 @@ export class GameScene extends Phaser.Scene {
       console.log('Driving mode started with car ignition');
     }
     
-    this.updateTutorialSystem();
+    this.scheduleTutorialUpdate(0);
   }
 
   /**
@@ -666,11 +732,14 @@ export class GameScene extends Phaser.Scene {
       this.magneticTarget.lineStyle(3, 0xff0000, 1);
       this.magneticTarget.strokeCircle(200, 550, 25);
       
-      // Update tutorial overlay
-      this.updateTutorialSystem();
+      // Snap speed crank to 0% when keys are removed
+      this.resetCrankToZero();
       
-      // Close the turn key menu
+      // Close the turn key menu first
       this.closeCurrentMenu();
+      
+      // Update tutorial overlay after a small delay to ensure menu is closed (debounced)
+      this.scheduleTutorialUpdate(100);
     }
   }
 
@@ -679,8 +748,23 @@ export class GameScene extends Phaser.Scene {
    */
   public startGame() {
     this.gameState.startGame();
-    this.carStarted = true;
-    this.updateTutorialSystem();
+    // Don't set carStarted = true here - car is not started yet
+    this.scheduleTutorialUpdate(0);
+    
+    // Activate magnetic target when game starts
+    this.activateMagneticTarget();
+  }
+
+  /**
+   * Activate magnetic target (change color to red)
+   */
+  private activateMagneticTarget() {
+    if (this.magneticTarget) {
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(3, 0xff0000, 1);
+      this.magneticTarget.strokeCircle(200, 550, 25);
+      console.log('Magnetic target activated - keys can now be attracted');
+    }
   }
 
   /**
@@ -747,10 +831,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onSpeedUpdate(speed: number) {
-    this.gameState.updateState({ speedCrankPercentage: speed });
+    // Don't update speedCrankPercentage automatically - it should only be controlled by user input
+    // The car's automatic acceleration should not affect the speed crank UI
+    //console.log('Car speed updated to:', speed + '%', 'but speed crank remains at:', this.gameUI.getSpeedCrankPercentage() + '%');
   }
 
   private onSteeringInput(value: number) {
+    console.log('GameScene: Steering input received:', value, 'Car started:', this.carStarted, 'Driving mode:', this.carMechanics.isDriving());
+    
+    // Mark steering as used if there's any steering input
+    if (Math.abs(value) > 0.1) {
+      this.steeringUsed = true;
+      this.scheduleTutorialUpdate(0);
+    }
+    
     this.carMechanics.handleSteering(value);
   }
 

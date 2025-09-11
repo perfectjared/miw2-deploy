@@ -575,7 +575,7 @@ export class GameUI {
       knob.fillRect(-3, -knobRadius + 10, 6, 20);
     });
     
-    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+    knob.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (isDragging) {
         const deltaX = pointer.x - lastPointerX;
         const deltaY = pointer.y - lastPointerY;
@@ -591,7 +591,7 @@ export class GameUI {
       }
     });
     
-    this.scene.input.on('pointerup', () => {
+    knob.on('pointerup', () => {
       if (isDragging) {
         isDragging = false;
         
@@ -731,6 +731,24 @@ export class GameUI {
    */
   public getSpeedCrankPercentage(): number {
     return this.currentSpeedCrankPercentage;
+  }
+
+  /**
+   * Get speed crank position for tutorial system
+   */
+  public getSpeedCrankPosition(): { x: number; y: number; width: number; height: number } {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    const crankX = gameWidth * 0.7; // Right side
+    const crankY = gameHeight * 0.6; // Middle height
+    
+    return {
+      x: crankX,
+      y: crankY,
+      width: this.config.speedCrankWidth,
+      height: this.config.speedCrankHeight
+    };
   }
 
   /**

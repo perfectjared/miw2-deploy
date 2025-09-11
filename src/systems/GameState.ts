@@ -139,6 +139,13 @@ export class GameState {
   }
 
   /**
+   * Check if game has started
+   */
+  public isGameStarted(): boolean {
+    return this.state.gameStarted;
+  }
+
+  /**
    * Update specific state values
    */
   public updateState(updates: Partial<GameStateData>) {

@@ -290,6 +290,21 @@ export class Keys implements PhysicsObject {
       if ((this.scene as any).keysConstraint) {
         this.scene.matter.world.removeConstraint((this.scene as any).keysConstraint);
         (this.scene as any).keysConstraint = null;
+        // Reflect state change immediately so tutorial can react
+        (this.scene as any).keysInIgnition = false;
+        if ((this.scene as any).gameState?.updateState) {
+          (this.scene as any).gameState.updateState({ keysInIgnition: false });
+        }
+        // Close ignition menu if it was open
+        if ((this.scene as any).closeCurrentMenu) {
+          (this.scene as any).closeCurrentMenu();
+        }
+        // Request a debounced tutorial update if available
+        if ((this.scene as any).scheduleTutorialUpdate) {
+          (this.scene as any).scheduleTutorialUpdate(50);
+        } else if ((this.scene as any).updateTutorialSystem) {
+          (this.scene as any).time?.delayedCall(50, () => (this.scene as any).updateTutorialSystem());
+        }
       }
       
       // Disable physics during drag
@@ -310,6 +325,12 @@ export class Keys implements PhysicsObject {
         // Convert screen coordinates to container-relative coordinates for Keys
         this.gameObject.x = pointer.x;
         this.gameObject.y = pointer.y;
+        
+        // Update tutorial mask in real-time
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene && (gameScene as any).tutorialSystem) {
+          (gameScene as any).tutorialSystem.updateTutorialMaskRealTime();
+        }
       }
     });
 

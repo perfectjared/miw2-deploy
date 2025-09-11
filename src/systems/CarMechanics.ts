@@ -175,6 +175,7 @@ export class CarMechanics {
    */
   public handleSteering(steeringValue: number) {
     this.currentSteeringValue = steeringValue;
+    console.log('CarMechanics: Steering input received:', steeringValue, 'Driving mode:', this.drivingMode, 'Car speed:', this.carSpeed);
   }
 
   /**
@@ -234,7 +235,7 @@ export class CarMechanics {
   private createDrivingCar() {
     this.drivingCar = this.scene.add.rectangle(
       this.scene.cameras.main.width / 2,
-      this.scene.cameras.main.height - 100,
+      this.scene.cameras.main.height / 2,
       40,
       60,
       0xff0000
@@ -383,6 +384,11 @@ export class CarMechanics {
     
     // Update car visual position
     this.drivingCar.setX(this.carX);
+    
+    // Debug: Log car position changes
+    if (Math.abs(normalizedValue) > 0.1) {
+      console.log('CarMechanics: Car position updated to', this.carX, 'Steering:', normalizedValue, 'Speed:', this.carSpeed);
+    }
     
     // Move camera horizontally for first-person effect
     this.updateDrivingCamera();

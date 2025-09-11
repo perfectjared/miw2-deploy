@@ -44,6 +44,7 @@ export interface TutorialState {
   crankPercentage: number;
   hasOpenMenu: boolean;
   currentMenuType: string | null;
+  steeringUsed: boolean;
 }
 
 export class TutorialSystem {
@@ -59,6 +60,7 @@ export class TutorialSystem {
   
   // Physics Object References (set by external system)
   private frontseatKeys: any = null;
+  private gameUI: any = null;
 
   constructor(scene: Phaser.Scene, config: TutorialConfig) {
     this.scene = scene;
@@ -80,40 +82,54 @@ export class TutorialSystem {
   }
 
   /**
+   * Set GameUI reference for tutorial system
+   */
+  public setGameUI(gameUI: any) {
+    this.gameUI = gameUI;
+  }
+
+  /**
+   * Update tutorial mask in real-time (for drag operations)
+   */
+  public updateTutorialMaskRealTime() {
+    if (!this.tutorialOverlay || !this.tutorialMaskGraphics) {
+      return;
+    }
+    
+    // Only update if tutorial is currently showing keys-and-ignition
+    if (this.lastTutorialState === 'keys-and-ignition') {
+      this.createKeysAndIgnitionMask();
+    }
+  }
+
+  /**
    * Update tutorial overlay based on current game state
    */
   public updateTutorialOverlay(state: TutorialState) {
-    // Tutorial overlay disabled for debugging
-    if (this.tutorialOverlay) {
-      this.tutorialOverlay.setVisible(false);
-    }
-    return;
     // Determine which tutorial state to show
-    let tutorialState: 'none' | 'keys-and-ignition' | 'ignition-menu' | 'crank' = 'none';
+    let tutorialState: 'none' | 'keys-and-ignition' | 'crank' | 'steering' = 'none';
     
     if (state.hasOpenMenu) {
-      // Menu is open - show tutorial for that specific menu
-      if (state.currentMenuType === 'TURN_KEY') {
-        tutorialState = 'ignition-menu';
-      } else {
-        // For other menus (START, PAUSE, SAVE, etc.), show appropriate tutorial
-        tutorialState = 'none'; // No tutorial for these menus
-      }
+      // Menu is open - no tutorial overlay (menu has its own overlay)
+      tutorialState = 'none';
+    } else if (!state.keysInIgnition) {
+      // Keys not in ignition should always be highlighted unless a menu is open
+      tutorialState = 'keys-and-ignition';
+    } else if (state.keysInIgnition && state.crankPercentage === 0) {
+      // Keys are in, crank is at 0% → always guide to crank
+      tutorialState = 'crank';
     } else if (state.carStarted) {
-      // Car is started - check crank percentage
-      if (state.crankPercentage < 40) {
-        // Car started but crank below 40% - show crank tutorial
+      // Car is started - check crank percentage and steering usage
+      if (state.steeringUsed) {
+        tutorialState = 'none';
+      } else if (state.crankPercentage < 40) {
         tutorialState = 'crank';
       } else {
-        // Car started and crank >= 40% - normal gameplay, no tutorial
-        tutorialState = 'none';
+        tutorialState = 'steering';
       }
-    } else if (state.keysInIgnition) {
-      // Keys are in ignition but car not started - show ignition menu tutorial
-      tutorialState = 'ignition-menu';
     } else {
-      // Keys not in ignition - show both keys and ignition
-      tutorialState = 'keys-and-ignition';
+      // Keys are in ignition but car not started - ignition menu will handle overlay
+      tutorialState = 'none';
     }
     
     // Update overlay visibility and mask
@@ -130,6 +146,16 @@ export class TutorialSystem {
       console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'crankPercentage:', state.crankPercentage, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType);
       this.lastTutorialState = tutorialState;
     }
+    
+    // Always log the current state for debugging
+    console.log('Tutorial system state:', {
+      tutorialState,
+      keysInIgnition: state.keysInIgnition,
+      carStarted: state.carStarted,
+      crankPercentage: state.crankPercentage,
+      hasOpenMenu: state.hasOpenMenu,
+      steeringUsed: state.steeringUsed
+    });
   }
 
   /**
@@ -167,7 +193,7 @@ export class TutorialSystem {
   /**
    * Update tutorial mask based on current state
    */
-  private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'ignition-menu' | 'crank') {
+  private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'crank' | 'steering') {
     if (!this.tutorialOverlay || !this.tutorialMaskGraphics) {
       console.log('Cannot update mask - overlay or mask graphics not found');
       return;
@@ -180,11 +206,11 @@ export class TutorialSystem {
       case 'keys-and-ignition':
         this.createKeysAndIgnitionMask();
         break;
-      case 'ignition-menu':
-        this.createIgnitionMask();
-        break;
       case 'crank':
         this.createCrankMask();
+        break;
+      case 'steering':
+        this.createSteeringMask();
         break;
     }
   }
@@ -209,37 +235,45 @@ export class TutorialSystem {
     const ignitionHoleRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2; // 20% larger
     this.tutorialMaskGraphics.fillCircle(ignitionX, ignitionY, ignitionHoleRadius);
   }
-  
-  /**
-   * Create mask for ignition menu tutorial
-   */
-  private createIgnitionMask() {
-    // Create circular cutout around ignition (magnetic target)
-    const ignitionX = this.config.magneticTargetX;
-    const ignitionY = this.config.magneticTargetY;
-    const holeRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2; // 20% larger
-    
-    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
-    this.tutorialMaskGraphics.fillCircle(ignitionX, ignitionY, holeRadius);
-  }
-  
+
   /**
    * Create mask for crank tutorial
    */
   private createCrankMask() {
     // Create cutout around speed crank area
-    // This would need to be implemented based on the speed crank position
-    // For now, we'll create a placeholder cutout
+    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
     
+    // Get speed crank position from GameUI (if available)
+    if (this.gameUI) {
+      const crankPos = this.gameUI.getSpeedCrankPosition();
+      const crankRadius = Math.max(crankPos.width, crankPos.height) / 2 + 20; // Add padding
+      this.tutorialMaskGraphics.fillCircle(crankPos.x, crankPos.y, crankRadius);
+    } else {
+      // Fallback to calculated position
+      const gameWidth = this.scene.cameras.main.width;
+      const gameHeight = this.scene.cameras.main.height;
+      const crankX = gameWidth * 0.7;
+      const crankY = gameHeight * 0.6;
+      this.tutorialMaskGraphics.fillCircle(crankX, crankY, 50);
+    }
+  }
+
+  /**
+   * Create mask for steering tutorial
+   */
+  private createSteeringMask() {
+    // Create cutout around steering dial area
+    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
+    
+    // Get steering dial position (left side of screen)
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Placeholder position - would need actual crank position from CarMechanics
-    const crankX = gameWidth * 0.7; // Right side of screen
-    const crankY = gameHeight * 0.6; // Middle height
+    // Steering dial is typically on the left side
+    const steeringX = gameWidth * 0.3; // Left side
+    const steeringY = gameHeight * 0.6; // Middle height
     
-    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
-    this.tutorialMaskGraphics.fillCircle(crankX, crankY, 50); // Placeholder radius
+    this.tutorialMaskGraphics.fillCircle(steeringX, steeringY, 60); // Larger radius for steering dial
   }
 
   /**
