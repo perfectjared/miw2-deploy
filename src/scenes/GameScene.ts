@@ -67,6 +67,10 @@ export class GameScene extends Phaser.Scene {
   private storyOverlayScheduledStep: number | null = null;
   private chapter1Shown: boolean = false;
   private firstSteeringLoggedStep: number | null = null;
+  private hasShownCrankTutorial: boolean = false;
+  private hasClearedCrankTutorial: boolean = false;
+  private hasShownSteeringTutorial: boolean = false;
+  private hasClearedSteeringTutorial: boolean = false;
   
   // Tutorial update throttling
   private tutorialUpdateScheduled: boolean = false;
@@ -468,7 +472,23 @@ export class GameScene extends Phaser.Scene {
     };
     
     console.log('updateTutorialSystem called:', tutorialState);
+    // Track tutorial state transitions for crank/steering
+    const prevCrankShown = this.hasShownCrankTutorial;
+    const prevSteeringShown = this.hasShownSteeringTutorial;
     this.tutorialSystem.updateTutorialOverlay(tutorialState);
+    const currentTutorial = this.tutorialSystem.getCurrentTutorialState();
+    if (currentTutorial === 'crank') {
+      this.hasShownCrankTutorial = true;
+      this.hasClearedCrankTutorial = false;
+    } else if (prevCrankShown && currentTutorial !== 'crank') {
+      this.hasClearedCrankTutorial = true;
+    }
+    if (currentTutorial === 'steering') {
+      this.hasShownSteeringTutorial = true;
+      this.hasClearedSteeringTutorial = false;
+    } else if (prevSteeringShown && currentTutorial !== 'steering') {
+      this.hasClearedSteeringTutorial = true;
+    }
   }
 
   /**
@@ -854,7 +874,7 @@ export class GameScene extends Phaser.Scene {
 
     // Schedule story overlay only after car started AND crank >= 40 AND steering occurred
     const stateNow = this.gameState.getState();
-    if (!this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40) {
+    if (!this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40 && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
       this.storyOverlayScheduledStep = step + 5;
     }
 
