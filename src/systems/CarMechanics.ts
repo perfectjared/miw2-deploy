@@ -90,6 +90,7 @@ export class CarMechanics {
   
   // Visual Elements
   private drivingContainer!: Phaser.GameObjects.Container;
+  private lowResRT?: Phaser.GameObjects.RenderTexture;
   private drivingBackground!: Phaser.GameObjects.Graphics;
   private drivingCar!: Phaser.GameObjects.Rectangle;
   private roadLines: Phaser.GameObjects.Graphics[] = [];
@@ -153,6 +154,22 @@ export class CarMechanics {
 
     // Listen for countdown changes to animate horizontal lines
     this.scene.events.on('countdownChanged', this.onCountdownChanged, this);
+
+    // Optional low-res rendering via RenderTexture
+    if (this.config.useLowRes) {
+      const scale = this.config.lowResScale && this.config.lowResScale > 0 && this.config.lowResScale < 1 ? this.config.lowResScale : 0.5;
+      const gw = this.scene.cameras.main.width;
+      const gh = this.scene.cameras.main.height;
+      const rtW = Math.max(2, Math.floor(gw * scale));
+      const rtH = Math.max(2, Math.floor(gh * 0.5 * scale));
+      this.lowResRT = this.scene.add.renderTexture(0, this.drivingContainer.y, rtW, rtH);
+      this.lowResRT.setDepth(this.config.roadDepth + 0.25);
+      this.lowResRT.setScale(1 / scale, 1 / scale);
+      // Hide originals that will be drawn into RT each frame
+      this.drivingBackground.setVisible(false);
+      this.roadLineGraphics.setVisible(false);
+      this.drivingCar.setVisible(false);
+    }
   }
 
   /**
@@ -270,6 +287,22 @@ export class CarMechanics {
     this.updateRoadLines();
     this.updateObstacles();
     this.updateRadar();
+
+    // If low-res RT is enabled, redraw the driving elements into it each frame
+    if (this.lowResRT) {
+      this.lowResRT.clear();
+      this.lowResRT.draw(this.drivingBackground);
+      this.lowResRT.draw(this.roadLineGraphics);
+      this.obstacles.forEach(ob => {
+        const vis: Phaser.GameObjects.Rectangle | undefined = ob.getData('visual');
+        if (vis) {
+          this.lowResRT!.draw(vis);
+        } else {
+          this.lowResRT!.draw(ob);
+        }
+      });
+      this.lowResRT.draw(this.drivingCar);
+    }
   }
 
   /**
