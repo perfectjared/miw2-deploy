@@ -64,6 +64,8 @@ export class GameScene extends Phaser.Scene {
   
   // UI state
   private currentPosition: string = 'frontseat';
+  private storyOverlayScheduledStep: number | null = null;
+  private chapter1Shown: boolean = false;
   
   // Tutorial update throttling
   private tutorialUpdateScheduled: boolean = false;
@@ -848,6 +850,19 @@ export class GameScene extends Phaser.Scene {
         speedCrankPercentage: state.speedCrankPercentage
       });
     }
+
+    // Show Chapter 1 story overlay 5 steps after first steering input
+    if (!this.chapter1Shown && this.storyOverlayScheduledStep !== null && step >= this.storyOverlayScheduledStep) {
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.showStoryOverlay) {
+        (menuScene as any).menuManager.showStoryOverlay('Chapter 1', 'Welcome! This story overlay will fade after 10 steps.');
+      }
+      this.chapter1Shown = true;
+      this.storyOverlayScheduledStep = null;
+      // Hide steering tutorial overlay when story appears
+      this.steeringUsed = true;
+      this.scheduleTutorialUpdate(0);
+    }
   }
 
   private onGamePaused() {
@@ -871,6 +886,11 @@ export class GameScene extends Phaser.Scene {
     if (Math.abs(value) > 0.1) {
       this.steeringUsed = true;
       this.scheduleTutorialUpdate(0);
+      // Schedule Chapter 1 story overlay 5 steps after first steering input
+      if (this.storyOverlayScheduledStep === null && !this.chapter1Shown) {
+        const currentStep = this.gameState.getState().step || 0;
+        this.storyOverlayScheduledStep = currentStep + 5;
+      }
     }
     
     this.carMechanics.handleSteering(value);
