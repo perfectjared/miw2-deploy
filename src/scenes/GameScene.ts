@@ -720,11 +720,7 @@ export class GameScene extends Phaser.Scene {
       console.log('Driving mode started with car ignition');
     }
     
-    // Show a non-blocking story overlay that autohides after 10 steps
-    const menuScene = this.scene.get('MenuScene');
-    if (menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.showStoryOverlay) {
-      (menuScene as any).menuManager.showStoryOverlay('Chapter 1', 'Welcome! This story overlay will fade after 10 steps.');
-    }
+    // Do not show story overlay here; it is gated and scheduled in onStepEvent
 
     this.scheduleTutorialUpdate(0);
   }
