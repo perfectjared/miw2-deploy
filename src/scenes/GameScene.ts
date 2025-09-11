@@ -66,6 +66,7 @@ export class GameScene extends Phaser.Scene {
   private currentPosition: string = 'frontseat';
   private storyOverlayScheduledStep: number | null = null;
   private chapter1Shown: boolean = false;
+  private firstSteeringLoggedStep: number | null = null;
   
   // Tutorial update throttling
   private tutorialUpdateScheduled: boolean = false;
@@ -851,7 +852,13 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Show Chapter 1 story overlay 5 steps after first steering input
+    // Schedule story overlay only after car started AND crank >= 40 AND steering occurred
+    const stateNow = this.gameState.getState();
+    if (!this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40) {
+      this.storyOverlayScheduledStep = step + 5;
+    }
+
+    // Show Chapter 1 story overlay once scheduled and step reached
     if (!this.chapter1Shown && this.storyOverlayScheduledStep !== null && step >= this.storyOverlayScheduledStep) {
       const menuScene = this.scene.get('MenuScene');
       if (menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.showStoryOverlay) {
@@ -886,10 +893,9 @@ export class GameScene extends Phaser.Scene {
     if (Math.abs(value) > 0.1) {
       this.steeringUsed = true;
       this.scheduleTutorialUpdate(0);
-      // Schedule Chapter 1 story overlay 5 steps after first steering input
-      if (this.storyOverlayScheduledStep === null && !this.chapter1Shown) {
-        const currentStep = this.gameState.getState().step || 0;
-        this.storyOverlayScheduledStep = currentStep + 5;
+      // Log first steering step; story overlay scheduling will be handled in onStepEvent
+      if (this.firstSteeringLoggedStep === null) {
+        this.firstSteeringLoggedStep = this.gameState.getState().step || 0;
       }
     }
     
