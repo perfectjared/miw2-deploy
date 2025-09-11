@@ -90,7 +90,7 @@ export class CarMechanics {
   
   // Visual Elements
   private drivingContainer!: Phaser.GameObjects.Container;
-  private lowResRT?: Phaser.GameObjects.RenderTexture;
+  // private lowResRT?: Phaser.GameObjects.RenderTexture;
   private drivingBackground!: Phaser.GameObjects.Graphics;
   private drivingCar!: Phaser.GameObjects.Rectangle;
   private roadLines: Phaser.GameObjects.Graphics[] = [];
@@ -136,7 +136,8 @@ export class CarMechanics {
     // Create container to vertically compress the driving scene
     this.drivingContainer = this.scene.add.container(0, 0);
     this.drivingContainer.setDepth(this.config.roadDepth);
-    this.drivingContainer.setScale(1, 0.5); // mash up toward top (half height)
+    // Keep container scale compact vertically; handle zoom via low-res RT scaling
+    this.drivingContainer.setScale(1, 0.5);
     // Scooch the entire driving view down ~10% screen height
     this.drivingContainer.y = Math.floor(this.scene.cameras.main.height * 0.10);
 
@@ -155,21 +156,7 @@ export class CarMechanics {
     // Listen for countdown changes to animate horizontal lines
     this.scene.events.on('countdownChanged', this.onCountdownChanged, this);
 
-    // Optional low-res rendering via RenderTexture
-    if (this.config.useLowRes) {
-      const scale = this.config.lowResScale && this.config.lowResScale > 0 && this.config.lowResScale < 1 ? this.config.lowResScale : 0.5;
-      const gw = this.scene.cameras.main.width;
-      const gh = this.scene.cameras.main.height;
-      const rtW = Math.max(2, Math.floor(gw * scale));
-      const rtH = Math.max(2, Math.floor(gh * 0.5 * scale));
-      this.lowResRT = this.scene.add.renderTexture(0, this.drivingContainer.y, rtW, rtH);
-      this.lowResRT.setDepth(this.config.roadDepth + 0.25);
-      this.lowResRT.setScale(1 / scale, 1 / scale);
-      // Hide originals that will be drawn into RT each frame
-      this.drivingBackground.setVisible(false);
-      this.roadLineGraphics.setVisible(false);
-      this.drivingCar.setVisible(false);
-    }
+    // (low-res RT disabled)
   }
 
   /**
@@ -180,7 +167,7 @@ export class CarMechanics {
     this.shouldAutoRestartDriving = true;
     console.log('Starting driving...');
     this.carSpeed = 0;
-    this.carX = this.scene.cameras.main.width / 2;
+    // Do not force-reset carX to center; preserve current lateral position
     
     // Reset camera to center position when starting
     this.resetDrivingCamera();
@@ -245,8 +232,10 @@ export class CarMechanics {
    */
   public handleSteering(steeringValue: number) {
     this.currentSteeringValue = steeringValue;
-    console.log('CarMechanics: Steering input received:', steeringValue, 'Driving mode:', this.drivingMode, 'Car speed:', this.carSpeed);
+    // Debug log disabled to avoid console flooding during interaction
   }
+
+  // (removed additive steering gating)
 
   /**
    * Handle speed crank input
@@ -288,21 +277,7 @@ export class CarMechanics {
     this.updateObstacles();
     this.updateRadar();
 
-    // If low-res RT is enabled, redraw the driving elements into it each frame
-    if (this.lowResRT) {
-      this.lowResRT.clear();
-      this.lowResRT.draw(this.drivingBackground);
-      this.lowResRT.draw(this.roadLineGraphics);
-      this.obstacles.forEach(ob => {
-        const vis: Phaser.GameObjects.Rectangle | undefined = ob.getData('visual');
-        if (vis) {
-          this.lowResRT!.draw(vis);
-        } else {
-          this.lowResRT!.draw(ob);
-        }
-      });
-      this.lowResRT.draw(this.drivingCar);
-    }
+    // (low-res RT disabled)
   }
 
   /**
@@ -461,8 +436,9 @@ export class CarMechanics {
       this.currentSteeringValue = 0;
       // decay turn to neutral when nearly stopped
       this.turn = Math.abs(this.turn) < 0.01 ? 0 : Phaser.Math.Linear(this.turn, 0, this.config.turnResetMultiplier);
-      // still update camera to slowly recenter world
-      this.worldLateralOffset = Phaser.Math.Linear(this.worldLateralOffset, 0, 0.05);
+      // still allow car to keep its current lateral position (no forced recenter)
+      // update visual position
+      this.drivingCar.setX(this.carX);
       return;
     }
     
@@ -488,22 +464,17 @@ export class CarMechanics {
 
     const dx = dlt * (speedMultiplier <= 0 ? 0 : speedMultiplier);
 
-    // Apply lateral movement to world offset instead of moving the car
-    this.worldLateralOffset += this.turn * dx * this.config.steeringSensitivity;
+    // Apply lateral movement based on accumulated turn (independent of dial recenter)
+    this.carX += this.turn * dx * this.config.steeringSensitivity;
     // Apply centrifugal effect pushing outward on curves, scaled by speed
-    this.worldLateralOffset -= this.currentCurve * dx * speedMultiplier * this.config.centrifugal;
+    this.carX -= this.currentCurve * dx * speedMultiplier * this.config.centrifugal;
+    // Clamp car within road bounds
+    const gameWidthLocal = this.scene.cameras.main.width;
+    this.carX = Phaser.Math.Clamp(this.carX, this.config.boundaryPadding, gameWidthLocal - this.config.boundaryPadding);
+    // Update car visual position
+    this.drivingCar.setX(this.carX);
     
-    // Clamp world lateral offset
-    this.worldLateralOffset = Phaser.Math.Clamp(this.worldLateralOffset, -this.cameraMaxOffset, this.cameraMaxOffset);
-    
-    // Ensure car stays fixed at screen center
-    const centerX = this.scene.cameras.main.width / 2;
-    this.drivingCar.setX(centerX);
-    
-    // Debug: Log car position changes
-    if (Math.abs(normalizedValue) > 0.1) {
-      console.log('CarMechanics: Car position updated to', this.carX, 'Steering:', normalizedValue, 'Speed:', this.carSpeed);
-    }
+    // Debug log disabled to avoid console flooding during interaction
     
     // Move camera horizontally and tilt for first-person effect
     this.updateDrivingCamera();
@@ -644,7 +615,7 @@ export class CarMechanics {
         const centerX2 = gameWidth2 / 2;
         const tVisConst = Phaser.Math.Clamp(((obstacle.getData('visualY') ?? obstacle.y) - horizonY) / (gameHeight - horizonY), 0, 1);
         // Use same bezier, lane term and lens as road lines
-        const laneIndexConst: number | undefined = obstacle.getData('isExit') ? this.laneIndices[this.laneIndices.length - 1] : (obstacle.getData('laneIndex') ?? 0);
+        const laneIndexConst: number = obstacle.getData('isExit') ? this.laneIndices[this.laneIndices.length - 1] : (Number(obstacle.getData('laneIndex')) || 0);
         const lensBaseConst = this.getLensStrength();
         const lensFactorConst = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
         const lensOffsetConst = (laneIndexConst >= 0 ? 1 : -1) * lensBaseConst * (tVisConst * tVisConst) * lensFactorConst;
@@ -664,7 +635,45 @@ export class CarMechanics {
       }
 
       // Screen-space collision with fixed car representation
-      if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(this.drivingCar.getBounds(), obstacle.getBounds())) {
+      const carBounds = this.drivingCar.getBounds();
+      // Use visual size/width, but logical Y (visual Y steps only on countdown)
+      const visualTwin: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+      let obsBounds: Phaser.Geom.Rectangle;
+      if (visualTwin) {
+        const halfW = visualTwin.displayWidth / 2;
+        const halfH = visualTwin.displayHeight / 2;
+        obsBounds = new Phaser.Geom.Rectangle(
+          visualTwin.x - halfW,
+          obstacle.y - halfH,
+          visualTwin.displayWidth,
+          visualTwin.displayHeight
+        );
+      } else {
+        obsBounds = obstacle.getBounds();
+      }
+      const nearLogged = obstacle.getData('nearLogged');
+      if (!nearLogged && Math.abs(obstacle.y - this.drivingCar.y) < 80) {
+        // One-time near log to verify approach
+        console.log('Pothole near car: carX=', this.drivingCar.x, 'obsX=', obstacle.x, 'carY=', this.drivingCar.y, 'obsY=', obstacle.y);
+        obstacle.setData('nearLogged', true);
+      }
+      // Only allow collision once the obstacle's bottom reaches the car's top
+      // Use the visual rectangle's bounds entirely so collision matches what the player sees
+      const isExit = !!obstacle.getData('isExit');
+      const isPothole = !!obstacle.getData('isPothole');
+      const visualBounds = visualTwin ? visualTwin.getBounds() : obsBounds;
+      // Slightly shrink pothole bounds to avoid aggressive hits
+      const tightBounds = Phaser.Geom.Rectangle.Clone(visualBounds);
+      Phaser.Geom.Rectangle.Inflate(tightBounds, -4, -(isPothole ? 6 : 2));
+      if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, tightBounds)) {
+        console.log('COLLISION: car vs obstacle', {
+          carX: this.drivingCar.x,
+          carY: this.drivingCar.y,
+          obsX: obstacle.x,
+          obsY: obstacle.y,
+          usingVisualBounds: !!visualTwin,
+          isPothole: !!obstacle.getData('isPothole')
+        });
         // Destroy obstacle on collision
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
         if (visualToDestroy) visualToDestroy.destroy();
@@ -677,10 +686,35 @@ export class CarMechanics {
   }
 
   private handleCollisionWithObstacle(obstacle: Phaser.GameObjects.Rectangle) {
-    // Simple collision response: stop briefly and emit event
+    // Collision response
+    const isExit = !!obstacle.getData('isExit');
+    const isPothole = !!obstacle.getData('isPothole');
+    console.log('handleCollisionWithObstacle: pausing driving. isExit=', isExit, 'isPothole=', isPothole);
     this.pauseDriving();
-    this.scene.time.delayedCall(500, () => this.resumeDriving(), [], this);
     this.scene.events.emit('carCollision');
+    if (isPothole) {
+      // Let GameScene schedule the overlay cleanly (avoids double-show conflicts)
+      this.scene.events.emit('potholeHit');
+      // Auto-resume a bit later since pothole menu is ephemeral/non-blocking
+      this.scene.time.delayedCall(500, () => this.resumeDriving(), [], this);
+    }
+    if (isExit) {
+      // Show blocking exit menu with dark overlay and require button press; do NOT auto-resume here
+      // Also pause the global app step/countdown just like the pause menu
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = true;
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          gameScene.events.emit('gamePaused');
+        }
+      }
+      const menuScene = this.scene.scene.get('MenuScene');
+      if (menuScene) {
+        (menuScene as any).events.emit('showObstacleMenu', 'exit');
+        this.scene.scene.bringToTop('MenuScene');
+      }
+    }
     obstacle.destroy();
     const index = this.obstacles.indexOf(obstacle);
     if (index > -1) {
@@ -717,6 +751,7 @@ export class CarMechanics {
         gameHeight * this.config.potholeHeight,
         this.config.potholeColor
       );
+      obstacle.setData('isPothole', true);
     } else {
       // Create exit occupying right 30% of road width
       const roadWidthPx = gameWidth; // using full width road representation

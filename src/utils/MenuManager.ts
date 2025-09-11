@@ -483,6 +483,14 @@ export class MenuManager {
           text: 'Take Exit',
           onClick: () => {
             this.closeDialog();
+            const appScene = this.scene.scene.get('AppScene');
+            if (appScene) {
+              (appScene as any).isPaused = false;
+              const gameScene = this.scene.scene.get('GameScene');
+              if (gameScene) {
+                gameScene.events.emit('gameResumed');
+              }
+            }
             const gameScene = this.scene.scene.get('GameScene');
             if (gameScene) {
               (gameScene as any).takeExit();
@@ -494,6 +502,14 @@ export class MenuManager {
           text: 'Continue Driving',
           onClick: () => {
             this.closeDialog();
+            const appScene = this.scene.scene.get('AppScene');
+            if (appScene) {
+              (appScene as any).isPaused = false;
+              const gameScene = this.scene.scene.get('GameScene');
+              if (gameScene) {
+                gameScene.events.emit('gameResumed');
+              }
+            }
             const gameScene = this.scene.scene.get('GameScene');
             if (gameScene) {
               (gameScene as any).resumeAfterCollision();

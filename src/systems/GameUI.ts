@@ -344,6 +344,9 @@ export class GameUI {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
+    // Temporarily disabled LOOK UP / LOOK DOWN buttons per request
+    return;
+
     // Look Up / Look Down buttons (large, centered, 85% width)
     const btnWidth = Math.floor(gameWidth * 0.85);
     const btnHeight = 46;
@@ -648,6 +651,8 @@ export class GameUI {
       knob.lineStyle(2, 0xffffff, 1);
       knob.strokeCircle(0, 0, knobRadius);
       // No square overlay; indicator line shows current value
+
+      // (removed steering active gating)
     });
     
     // Track pointer globally while dragging so it keeps responding even off the knob
@@ -663,24 +668,43 @@ export class GameUI {
       }
     });
     
-    knob.on('pointerup', () => {
-      if (isDragging) {
-        isDragging = false;
-        
-        // Don't move the knob - just reset its visual state
-        // Redraw knob with original color
-        knob.clear();
-        knob.fillStyle(0x444444);
-        knob.fillCircle(0, 0, knobRadius);
-        knob.lineStyle(2, 0xffffff, 1);
-        knob.strokeCircle(0, 0, knobRadius);
-        // No square overlay; indicator line shows current value
-        
-        // Reset steering
-        this.scene.events.emit('steeringInput', 0);
-        updateDialIndicator(0);
-      }
-    });
+    const endDrag = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      // (removed steering active gating)
+      // Redraw knob with original color
+      knob.clear();
+      knob.fillStyle(0x444444);
+      knob.fillCircle(0, 0, knobRadius);
+      knob.lineStyle(2, 0xffffff, 1);
+      knob.strokeCircle(0, 0, knobRadius);
+      // Reset steering
+      // Return to center more slowly via tweened steps
+      const currentPct = Math.round(((Math.min(Math.max(lastPointerX - dialX, -knobRadius), knobRadius) / knobRadius) * 100));
+      const steps = 10;
+      let step = 0;
+      const timer = this.scene.time.addEvent({
+        delay: 20,
+        repeat: steps,
+        callback: () => {
+          const t = (steps - step) / steps;
+          const value = Math.round(currentPct * t);
+          this.scene.events.emit('steeringInput', value);
+          updateDialIndicator(value);
+          step++;
+          if (step > steps) {
+            this.scene.events.emit('steeringInput', 0);
+            updateDialIndicator(0);
+            timer.remove();
+          }
+        }
+      });
+    };
+
+    knob.on('pointerup', endDrag);
+    knob.on('pointerupoutside', endDrag as any);
+    this.scene.input.on('pointerup', endDrag);
+    this.scene.input.on('gameout', endDrag);
   }
 
   /**

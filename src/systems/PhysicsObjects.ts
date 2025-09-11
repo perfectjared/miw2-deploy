@@ -72,6 +72,18 @@ export class Trash implements PhysicsObject {
       lastPointerY = pointer.y;
       this.gameObject.setFillStyle(dragColor);
       (this.scene as any).isDraggingObject = true;
+      // Move to drag overlay container if present, else raise depth
+      const gameScene = this.scene.scene.get('GameScene');
+      (this.gameObject as any)._originalDepth = this.gameObject.depth;
+      (this.gameObject as any)._originalParent = (this.gameObject as any).parentContainer || null;
+      if (gameScene && (gameScene as any).dragOverlay) {
+        const parent: any = (this.gameObject as any).parentContainer;
+        if (parent) parent.remove(this.gameObject);
+        (gameScene as any).dragOverlay.add(this.gameObject);
+      } else {
+        this.gameObject.setDepth(60001);
+        this.scene.children.bringToTop(this.gameObject);
+      }
       
       // Disable physics during drag
       if (this.gameObject.body) {
@@ -100,6 +112,17 @@ export class Trash implements PhysicsObject {
         isDragging = false;
         this.gameObject.setFillStyle(originalColor);
         (this.scene as any).isDraggingObject = false;
+        // Restore original parent/depth after drag ends
+        const originalParent: any = (this.gameObject as any)._originalParent;
+        if (originalParent) {
+          const overlayParent: any = (this.gameObject as any).parentContainer;
+          if (overlayParent) overlayParent.remove(this.gameObject);
+          originalParent.add(this.gameObject);
+          (this.gameObject as any)._originalParent = null;
+        } else {
+          const od = (this.gameObject as any)._originalDepth;
+          if (typeof od === 'number') this.gameObject.setDepth(od);
+        }
         
         // Re-enable physics and apply momentum
         if (this.gameObject.body) {
@@ -178,6 +201,17 @@ export class Item implements PhysicsObject {
       lastPointerY = pointer.y;
       this.gameObject.setFillStyle(dragColor);
       (this.scene as any).isDraggingObject = true;
+      const gameScene = this.scene.scene.get('GameScene');
+      (this.gameObject as any)._originalDepth = this.gameObject.depth;
+      (this.gameObject as any)._originalParent = (this.gameObject as any).parentContainer || null;
+      if (gameScene && (gameScene as any).dragOverlay) {
+        const parent: any = (this.gameObject as any).parentContainer;
+        if (parent) parent.remove(this.gameObject);
+        (gameScene as any).dragOverlay.add(this.gameObject);
+      } else {
+        this.gameObject.setDepth(60001);
+        this.scene.children.bringToTop(this.gameObject);
+      }
       
       // Disable physics during drag
       if (this.gameObject.body) {
@@ -206,6 +240,16 @@ export class Item implements PhysicsObject {
         isDragging = false;
         this.gameObject.setFillStyle(originalColor);
         (this.scene as any).isDraggingObject = false;
+        const originalParent: any = (this.gameObject as any)._originalParent;
+        if (originalParent) {
+          const overlayParent: any = (this.gameObject as any).parentContainer;
+          if (overlayParent) overlayParent.remove(this.gameObject);
+          originalParent.add(this.gameObject);
+          (this.gameObject as any)._originalParent = null;
+        } else {
+          const od = (this.gameObject as any)._originalDepth;
+          if (typeof od === 'number') this.gameObject.setDepth(od);
+        }
         
         // Re-enable physics and apply momentum
         if (this.gameObject.body) {
@@ -285,6 +329,17 @@ export class Keys implements PhysicsObject {
       lastPointerY = pointer.y;
       this.gameObject.setFillStyle(dragColor);
       (this.scene as any).isDraggingObject = true;
+      const gameScene = this.scene.scene.get('GameScene');
+      (this.gameObject as any)._originalDepth = this.gameObject.depth;
+      (this.gameObject as any)._originalParent = (this.gameObject as any).parentContainer || null;
+      if (gameScene && (gameScene as any).dragOverlay) {
+        const parent: any = (this.gameObject as any).parentContainer;
+        if (parent) parent.remove(this.gameObject);
+        (gameScene as any).dragOverlay.add(this.gameObject);
+      } else {
+        this.gameObject.setDepth(60001);
+        this.scene.children.bringToTop(this.gameObject);
+      }
       
       // Break constraint if Keys is snapped to magnetic target
       if ((this.scene as any).keysConstraint) {
@@ -341,6 +396,16 @@ export class Keys implements PhysicsObject {
         (this.gameObject as any).isDragging = false; // Clear flag
         this.gameObject.setFillStyle(originalColor);
         (this.scene as any).isDraggingObject = false;
+        const originalParent: any = (this.gameObject as any)._originalParent;
+        if (originalParent) {
+          const overlayParent: any = (this.gameObject as any).parentContainer;
+          if (overlayParent) overlayParent.remove(this.gameObject);
+          originalParent.add(this.gameObject);
+          (this.gameObject as any)._originalParent = null;
+        } else {
+          const od = (this.gameObject as any)._originalDepth;
+          if (typeof od === 'number') this.gameObject.setDepth(od);
+        }
         
         // Re-enable physics and apply momentum
         if (this.gameObject.body) {

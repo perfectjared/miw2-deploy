@@ -41,6 +41,9 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showGameOverMenu', this.showGameOverMenu, this);
     this.events.on('showStartMenu', this.showStartMenu, this);
     this.events.on('showTurnKeyMenu', this.showTurnKeyMenu, this);
+    this.events.on('showStoryOverlay', (title: string, content: string) => {
+      this.menuManager.showStoryOverlay(title, content);
+    });
     this.events.on('closeCurrentMenu', this.closeCurrentMenu, this);
     
     // Don't create any default menu - wait for events

@@ -21,6 +21,7 @@ import Phaser from 'phaser';
 // import { NavigationUI } from '../systems/NavigationUI';
 import { Trash, Item, Keys } from '../systems/PhysicsObjects';
 import { CarMechanics, CarMechanicsConfig } from '../systems/CarMechanics';
+import { VirtualPet } from '../systems/VirtualPet';
 import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
 import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
@@ -36,6 +37,8 @@ export class GameScene extends Phaser.Scene {
   private gameUI!: GameUI;
   private inputHandlers!: InputHandlers;
   private gameState!: GameState;
+  private virtualPet?: VirtualPet;
+  private dragOverlay?: Phaser.GameObjects.Container;
   
   // ============================================================================
   // PHYSICS OBJECTS
@@ -71,6 +74,12 @@ export class GameScene extends Phaser.Scene {
   private hasClearedCrankTutorial: boolean = false;
   private hasShownSteeringTutorial: boolean = false;
   private hasClearedSteeringTutorial: boolean = false;
+  private potholeHitStep: number | null = null;
+  private stopMenuOpen: boolean = false;
+  // Matter tilt-gravity based on steering
+  private gravityBaseY: number = 0.5;
+  private gravityXCurrent: number = 0;
+  private gravityXTarget: number = 0;
   
   // Tutorial update throttling
   private tutorialUpdateScheduled: boolean = false;
@@ -116,6 +125,13 @@ export class GameScene extends Phaser.Scene {
     
     // Initialize input handlers
     this.inputHandlers.initialize();
+    // Initialize virtual pet UI element atop a rectangle at the top
+    this.virtualPet = new VirtualPet(this, { depth: 20000, xPercent: 0.5, yOffset: 8 });
+    this.virtualPet.initialize();
+    // Create a dedicated overlay container for dragged items (always above HUD/pet)
+    this.dragOverlay = this.add.container(0, 0);
+    this.dragOverlay.setDepth(60001);
+    this.dragOverlay.setScrollFactor(0);
     
     // Set up event listeners
     this.setupEventListeners();
@@ -189,13 +205,13 @@ export class GameScene extends Phaser.Scene {
       obstacleMinDelayMs: 9000,
       obstacleMaxDelayMs: 18000,
       potholeProbability: 0.8,
-      potholeWidth: 0.2,
-      potholeHeight: 0.05,
-      potholeMinPos: 0.2,
-      potholeMaxPos: 0.8,
+      potholeWidth: 0.3,            // TEMP: widen for easy collision
+      potholeHeight: 0.08,          // TEMP: taller for visibility
+      potholeMinPos: 0.45,          // TEMP: centered lane
+      potholeMaxPos: 0.55,          // TEMP: centered lane
       potholeSpawnY: 0.2,
       potholeColor: 0x8B4513,
-      potholeSpeed: 1.25,
+      potholeSpeed: 1.2,            // Slower for less aggressive approach
       exitWidth: 30,
       exitHeight: 60,
       exitPosition: 0.9,
@@ -440,6 +456,12 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
+    // Listen for pothole hits from CarMechanics and schedule a story overlay
+    this.events.on('potholeHit', () => {
+      const currentStep = this.gameState.getState().step || 0;
+      this.potholeHitStep = currentStep + 3;
+    });
+
     // Scene events
     this.events.on('step', this.onStepEvent, this);
     this.events.on('gamePaused', this.onGamePaused, this);
@@ -541,7 +563,12 @@ export class GameScene extends Phaser.Scene {
   update() {
     // Update all systems
     this.carMechanics.update();
+    // Keep virtual pet upright by counter-rotating against camera tilt
+    this.virtualPet?.update();
     this.applyMagneticAttraction();
+    // Smoothly apply lateral gravity based on steering
+    this.gravityXCurrent = Phaser.Math.Linear(this.gravityXCurrent, this.gravityXTarget, 0.1);
+    this.matter.world.setGravity(this.gravityXCurrent, this.gravityBaseY);
 
     // Fast tutorial updates while keys are out (no menu)
     const menuScene = this.scene.get('MenuScene');
@@ -818,6 +845,29 @@ export class GameScene extends Phaser.Scene {
     this.gameState.loadGame(steps);
   }
 
+  /** Resume gameplay after a non-blocking collision menu (e.g., pothole) */
+  public resumeAfterCollision(): void {
+    // Resume driving and unpause app if it was paused
+    this.carMechanics.resumeDriving();
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+    }
+    this.events.emit('gameResumed');
+  }
+
+  /** Handle taking an exit from the blocking exit menu */
+  public takeExit(): void {
+    // Placeholder: for now just resume gameplay; hook narrative/transition here later
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+    }
+    this.events.emit('gameResumed');
+    this.carMechanics.resumeDriving();
+    console.log('GameScene: Exit taken');
+  }
+
   /**
    * Toggle driving mode
    */
@@ -877,6 +927,29 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    // Increment progress by 1 per step while driving (independent of countdown)
+    if (state.gameStarted && this.carStarted && this.carMechanics.isDriving()) {
+      const cur = this.gameState.getState().progress || 0;
+      const next = cur + 1;
+      this.gameState.updateState({ progress: next });
+      if (next >= 100 && !this.stopMenuOpen) {
+        this.stopMenuOpen = true;
+        const newStops = (this.gameState.getState().stops || 0) + 1;
+        // Reset progress and countdown
+        this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 99 });
+        const appScene = this.scene.get('AppScene');
+        if (appScene) {
+          (appScene as any).isPaused = true;
+          this.events.emit('gamePaused');
+        }
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          menuScene.events.emit('showObstacleMenu', 'exit');
+          this.scene.bringToTop('MenuScene');
+        }
+      }
+    }
+
     // Schedule story overlay only after car started AND crank >= 40 AND steering occurred
     const stateNow = this.gameState.getState();
     if (!this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40 && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
@@ -901,6 +974,22 @@ export class GameScene extends Phaser.Scene {
       this.steeringUsed = true;
       this.scheduleTutorialUpdate(0);
     }
+
+    // Show pothole overlay 3 steps after hit
+    if (this.potholeHitStep !== null && step >= this.potholeHitStep) {
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('showStoryOverlay', 'Pothole!', 'Ouch. You hit a pothole.');
+        // Fallback direct call if event not wired
+        const mm: any = (menuScene as any).menuManager;
+        if (mm?.showStoryOverlay) {
+          mm.showStoryOverlay('Pothole!', 'Ouch. You hit a pothole.');
+        }
+        // Ensure MenuScene is on top so the overlay is visible
+        this.scene.bringToTop('MenuScene');
+      }
+      this.potholeHitStep = null;
+    }
   }
 
   private onGamePaused() {
@@ -909,6 +998,7 @@ export class GameScene extends Phaser.Scene {
 
   private onGameResumed() {
     this.carMechanics.resumeDriving();
+    this.stopMenuOpen = false;
   }
 
   private onSpeedUpdate(speed: number) {
@@ -918,7 +1008,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onSteeringInput(value: number) {
-    console.log('GameScene: Steering input received:', value, 'Car started:', this.carStarted, 'Driving mode:', this.carMechanics.isDriving());
+    // Debug log disabled to avoid console flooding during interaction
     
     // Mark steering as used if there's any steering input
     if (Math.abs(value) > 0.1) {
@@ -929,6 +1019,9 @@ export class GameScene extends Phaser.Scene {
         this.firstSteeringLoggedStep = this.gameState.getState().step || 0;
       }
     }
+    // Map dial value (-100..100) to lateral gravity (-gx..gx)
+    const maxGx = 0.8; // tune lateral gravity strength
+    this.gravityXTarget = (Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
     
     this.carMechanics.handleSteering(value);
   }
