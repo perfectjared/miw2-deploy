@@ -723,6 +723,15 @@ export class GameScene extends Phaser.Scene {
     // Do not show story overlay here; it is gated and scheduled in onStepEvent
 
     this.scheduleTutorialUpdate(0);
+
+    // Ensure look buttons appear once car is started
+    if ((this as any).gameUI && (this as any).gameUI['frontseatButton']) {
+      const ui: any = this.gameUI as any;
+      ui.frontseatButton?.setVisible(true);
+      ui.backseatButton?.setVisible(true);
+      (ui as any).lookUpLabel?.setVisible(true);
+      (ui as any).lookDownLabel?.setVisible(true);
+    }
   }
 
   /**

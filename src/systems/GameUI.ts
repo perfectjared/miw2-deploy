@@ -347,8 +347,9 @@ export class GameUI {
     // Look Up / Look Down buttons (large, centered, 85% width)
     const btnWidth = Math.floor(gameWidth * 0.85);
     const btnHeight = 46;
-    const topY = Math.floor(gameHeight * 0.10);
-    const bottomY = Math.floor(gameHeight * 0.90);
+    const pad = Math.floor(gameHeight * 0.02);
+    const topY = pad + Math.floor(btnHeight / 2);
+    const bottomY = gameHeight - pad - Math.floor(btnHeight / 2);
     const leftX = Math.floor((gameWidth - btnWidth) / 2);
 
     // Look Up
@@ -428,6 +429,13 @@ export class GameUI {
       color: '#ffffff',
       fontStyle: 'bold'
     }).setOrigin(0.5).setScrollFactor(0).setDepth(10001);
+
+    // Hide both buttons initially if car is not started
+    const carStartedNow = !!(this.scene as any).carStarted;
+    this.frontseatButton.setVisible(carStartedNow);
+    this.backseatButton.setVisible(carStartedNow);
+    if (this.lookUpLabel) this.lookUpLabel.setVisible(carStartedNow);
+    if (this.lookDownLabel) this.lookDownLabel.setVisible(carStartedNow);
   }
 
   /**
