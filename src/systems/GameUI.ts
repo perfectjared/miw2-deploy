@@ -847,6 +847,24 @@ export class GameUI {
     };
   }
 
+  /** Return UI control objects that should render on a non-rotating HUD camera */
+  public getControlObjects(): Phaser.GameObjects.GameObject[] {
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    if (this.speedCrankTrack) objs.push(this.speedCrankTrack);
+    if (this.speedCrankHandle) objs.push(this.speedCrankHandle);
+    if (this.speedCrankPercentageText) objs.push(this.speedCrankPercentageText);
+    if (this.speedCrankArea) objs.push(this.speedCrankArea);
+    if (this.frontseatDragDial) objs.push(this.frontseatDragDial);
+    if (this.steeringDialIndicator) objs.push(this.steeringDialIndicator);
+    if (this.steeringAngleText) objs.push(this.steeringAngleText);
+    // Optional labels/buttons if enabled later
+    if (this.lookUpLabel) objs.push(this.lookUpLabel);
+    if (this.lookDownLabel) objs.push(this.lookDownLabel);
+    if (this.frontseatButton) objs.push(this.frontseatButton);
+    if (this.backseatButton) objs.push(this.backseatButton);
+    return objs;
+  }
+
   /**
    * Clean up resources
    */

@@ -39,6 +39,8 @@ export class GameScene extends Phaser.Scene {
   private gameState!: GameState;
   private virtualPet?: VirtualPet;
   private dragOverlay?: Phaser.GameObjects.Container;
+  private hudCamera?: Phaser.Cameras.Scene2D.Camera;
+  private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
   
   // ============================================================================
   // PHYSICS OBJECTS
@@ -128,6 +130,34 @@ export class GameScene extends Phaser.Scene {
     // Initialize virtual pet UI element atop a rectangle at the top
     this.virtualPet = new VirtualPet(this, { depth: 20000, xPercent: 0.5, yOffset: 8 });
     this.virtualPet.initialize();
+    // Render the virtual pet via a dedicated HUD camera that does not rotate
+    const petRoot = this.virtualPet.getRoot?.();
+    if (petRoot) {
+      // Ensure main camera does not render the pet
+      this.cameras.main.ignore(petRoot);
+      // Create HUD camera and make it ignore everything except the pet
+      this.hudCamera = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
+      this.hudCamera.setScroll(0, 0);
+      this.hudCamera.setName('hudCamera');
+      // Ignore all non-pet objects for the HUD camera
+      const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
+      const toIgnore = allObjects.filter(obj => obj !== petRoot);
+      if (toIgnore.length > 0) this.hudCamera.ignore(toIgnore);
+    }
+
+    // Create a second HUD camera for car controls (ignition/crank/wheel) to keep them upright
+    const controlObjs = (this.gameUI as any).getControlObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
+    if (controlObjs && controlObjs.length > 0) {
+      // Exclude control objects from main camera
+      this.cameras.main.ignore(controlObjs);
+      // Create controls camera and ignore everything except control objects
+      this.controlsCamera = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
+      this.controlsCamera.setScroll(0, 0);
+      this.controlsCamera.setName('controlsCamera');
+      const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
+      const toIgnoreForControls = allObjects.filter(obj => !controlObjs.includes(obj));
+      if (toIgnoreForControls.length > 0) this.controlsCamera.ignore(toIgnoreForControls);
+    }
     // Create a dedicated overlay container for dragged items (always above HUD/pet)
     this.dragOverlay = this.add.container(0, 0);
     this.dragOverlay.setDepth(60001);
@@ -563,8 +593,7 @@ export class GameScene extends Phaser.Scene {
   update() {
     // Update all systems
     this.carMechanics.update();
-    // Keep virtual pet upright by counter-rotating against camera tilt
-    this.virtualPet?.update();
+    // HUD camera remains unrotated; no per-frame virtual pet counter-rotation needed
     this.applyMagneticAttraction();
     // Smoothly apply lateral gravity based on steering
     this.gravityXCurrent = Phaser.Math.Linear(this.gravityXCurrent, this.gravityXTarget, 0.1);

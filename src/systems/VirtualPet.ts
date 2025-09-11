@@ -20,6 +20,8 @@ export class VirtualPet {
 	private foodBarBG!: Phaser.GameObjects.Rectangle;
 	private foodBarFill!: Phaser.GameObjects.Rectangle;
 	private foodLabel!: Phaser.GameObjects.Text;
+	private foodDecayTimer?: Phaser.Time.TimerEvent;
+	private lastCamWidth: number = 0;
 
 	constructor(scene: Phaser.Scene, config: VirtualPetConfig = {}) {
 		this.scene = scene;
@@ -59,14 +61,16 @@ export class VirtualPet {
 
 		this.container.add([this.baseRect, this.pet]);
 
-		// Food meter (label + bar) inside the rectangle
-		const padding = 12;
-		const barWidth = Math.max(10, width - padding * 2 - 50);
+		// Food meter (label + bar) alongside the pet (track its position)
+		const camWidth = cam.width;
+		this.lastCamWidth = camWidth;
+		// Use the same pet radius as the ellipse above
 		const barHeight = 10;
-		const barX = x - Math.floor(width / 2) + padding + 50;
-		const barY = y - Math.floor(height / 2) + padding + Math.floor(barHeight / 2);
+		const barWidth = Math.max(6, Math.floor(camWidth * 0.03));
+		const barX = x + petRadius + 12;
+		const barY = y - Math.floor(height * 0.35);
 
-		this.foodLabel = this.scene.add.text(barX - 54, barY - 9, 'FOOD', {
+		this.foodLabel = this.scene.add.text(barX - 46, barY - 9, 'FOOD', {
 			fontSize: '12px',
 			color: '#ffffff',
 			fontStyle: 'bold'
@@ -77,10 +81,19 @@ export class VirtualPet {
 		this.foodBarBG.setStrokeStyle(1, 0xffffff, 0.8);
 		this.foodBarBG.setScrollFactor(0);
 
-		this.foodBarFill = this.scene.add.rectangle(barX, barY, Math.floor(barWidth * (this.foodValue / 100)), barHeight - 2, 0x2ecc71, 1).setOrigin(0, 0.5);
+		this.foodBarFill = this.scene.add.rectangle(barX - Math.floor(barWidth / 2), barY, Math.floor(barWidth * (this.foodValue / 100)), barHeight - 2, 0x2ecc71, 1).setOrigin(0, 0.5);
 		this.foodBarFill.setScrollFactor(0);
 
 		this.container.add([this.foodLabel, this.foodBarBG, this.foodBarFill]);
+
+		// Start passive food decay
+		this.foodDecayTimer = this.scene.time.addEvent({
+			delay: 2000,
+			loop: true,
+			callback: () => {
+				this.setFood(this.foodValue - 1);
+			}
+		});
 	}
 
 	public destroy() {
@@ -96,6 +109,27 @@ export class VirtualPet {
 		// Counter-rotate to keep HUD upright when main camera tilts
 		const camAngle = (this.scene.cameras.main as any).angle ?? 0;
 		(this.container as any).setAngle?.(-camAngle);
+
+		// Keep food meter tracking alongside the pet and adapt width on resize
+		const cam = this.scene.cameras.main;
+		if (this.foodBarBG && this.foodBarFill && this.pet) {
+			const rectHeight = this.baseRect.height as number;
+			const petRadius = Math.floor(rectHeight * 0.30);
+			const barHeight = this.foodBarBG.height;
+			if (this.lastCamWidth !== cam.width) {
+				this.lastCamWidth = cam.width;
+				const newBarWidth = Math.max(6, Math.floor(cam.width * 0.03));
+				this.foodBarBG.width = newBarWidth;
+				// Recompute fill width based on new total
+				const clamped = Phaser.Math.Clamp(this.foodValue, 0, 100);
+				this.foodBarFill.width = Math.max(0, Math.floor(newBarWidth * (clamped / 100)) - 2);
+			}
+			const barX = this.pet.x + petRadius + 12;
+			const barY = this.pet.y;
+			this.foodBarBG.setPosition(barX, barY);
+			this.foodBarFill.setPosition(barX - Math.floor(this.foodBarBG.width / 2), barY);
+			this.foodLabel.setPosition(barX - 46, barY - 9);
+		}
 	}
 
 	private refreshFoodBar() {
