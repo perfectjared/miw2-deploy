@@ -161,6 +161,9 @@ export class GameUI {
   
   // State
   private currentSpeedCrankPercentage: number = 0;
+  private lookUpActive: boolean = false;
+  private lookUpOriginalY: number = 0;
+  private lookUpLabel!: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, config: GameUIConfig) {
     this.scene = scene;
@@ -357,10 +360,28 @@ export class GameUI {
     this.frontseatButton.on('pointerdown', () => {
       const cam = this.scene.cameras.main;
       const delta = cam.height * 0.3;
-      const targetY = cam.scrollY - delta;
-      this.scene.tweens.add({ targets: cam, scrollY: targetY, duration: 200, ease: 'Sine.easeOut' });
+      if (!this.lookUpActive) {
+        // Store original Y and move up
+        this.lookUpOriginalY = cam.scrollY;
+        const targetY = this.lookUpOriginalY - delta;
+        this.scene.tweens.add({ targets: cam, scrollY: targetY, duration: 200, ease: 'Sine.easeOut' });
+        if (this.lookUpLabel) this.lookUpLabel.setText('LOOK DOWN');
+        this.lookUpActive = true;
+      } else {
+        // Return to original Y
+        this.scene.tweens.add({
+          targets: cam,
+          scrollY: this.lookUpOriginalY,
+          duration: 200,
+          ease: 'Sine.easeOut',
+          onComplete: () => {
+            this.lookUpActive = false;
+            if (this.lookUpLabel) this.lookUpLabel.setText('LOOK UP');
+          }
+        });
+      }
     });
-    this.scene.add.text(gameWidth / 2, topY, 'LOOK UP', {
+    this.lookUpLabel = this.scene.add.text(gameWidth / 2, topY, 'LOOK UP', {
       fontSize: '18px',
       color: '#ffffff',
       fontStyle: 'bold'
