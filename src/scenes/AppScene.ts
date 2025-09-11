@@ -214,13 +214,13 @@ export class AppScene extends Phaser.Scene {
   }
 
   private togglePauseMenu() {
-    console.log('togglePauseMenu called - gameStarted:', this.gameStarted, 'isPaused:', this.isPaused);
+    //console.log('togglePauseMenu called - gameStarted:', this.gameStarted, 'isPaused:', this.isPaused);
     // Allow pause menu even if game hasn't started yet
     
     if (this.isPaused) {
       // Resume game
       this.isPaused = false;
-      console.log('Game resumed');
+      //console.log('Game resumed');
       
       // Emit resume event to GameScene
       const gameScene = this.scene.get('GameScene');
@@ -230,7 +230,7 @@ export class AppScene extends Phaser.Scene {
     } else {
       // Pause game
       this.isPaused = true;
-      console.log('Game paused');
+      //console.log('Game paused');
       
       // Show pause menu via MenuScene
     const menuScene = this.scene.get('MenuScene');

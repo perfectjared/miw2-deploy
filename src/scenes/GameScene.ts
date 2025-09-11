@@ -18,7 +18,6 @@
  */
 
 import Phaser from 'phaser';
-// import { NavigationUI } from '../systems/NavigationUI';
 import { Trash, Item, Keys } from '../systems/PhysicsObjects';
 import { CarMechanics, CarMechanicsConfig } from '../systems/CarMechanics';
 import { VirtualPet } from '../systems/VirtualPet';
@@ -26,6 +25,7 @@ import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
 import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
+import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG } from '../config/GameConfig';
 
 export class GameScene extends Phaser.Scene {
   // ============================================================================
@@ -195,22 +195,22 @@ export class GameScene extends Phaser.Scene {
       });
     } catch {}
 
-    // Initialize five virtual pets within a single rectangle container
-    const singlePetContainer = this.add.container(0, 0);
-    singlePetContainer.setScrollFactor(0);
-    singlePetContainer.setDepth(70000);
+    // Initialize five virtual pets within a single rectangle container (rearview)
+    const rearviewContainer = this.add.container(0, 0);
+    rearviewContainer.setScrollFactor(0);
+    rearviewContainer.setDepth(70000);
     
-    // Create the shared rectangle background
+    // Create the shared rectangle background (rearview) using UI_LAYOUT
     const cam = this.cameras.main;
-    const rectWidth = Math.floor(cam.width * 0.85);
-    const rectHeight = Math.floor(cam.height * 0.20);
-    const rectX = Math.floor(cam.width * 0.5);
-    const rectY = Math.floor(rectHeight / 2) + 8;
+    const rectWidth = Math.floor(cam.width * UI_LAYOUT.rearviewWidth);
+    const rectHeight = Math.floor(cam.height * UI_LAYOUT.rearviewHeight);
+    const rectX = Math.floor(cam.width * UI_LAYOUT.rearviewX);
+    const rectY = Math.floor(cam.height * UI_LAYOUT.rearviewY);
     
-    const sharedRect = this.add.rectangle(rectX, rectY, rectWidth, rectHeight, 0x222222, 0.9);
-    sharedRect.setStrokeStyle(2, 0xffffff, 1);
-    sharedRect.setScrollFactor(0);
-    singlePetContainer.add(sharedRect);
+    const rearviewRect = this.add.rectangle(rectX, rectY, rectWidth, rectHeight, UI_LAYOUT.rearviewBackgroundColor, UI_LAYOUT.rearviewBackgroundAlpha);
+    rearviewRect.setStrokeStyle(2, UI_LAYOUT.rearviewStrokeColor, 1);
+    rearviewRect.setScrollFactor(0);
+    rearviewContainer.add(rearviewRect);
     
     // Create five virtual pets within the shared rectangle
     for (let i = 0; i < 5; i++) {
@@ -222,7 +222,7 @@ export class GameScene extends Phaser.Scene {
         depth: 70001 + i, 
         xPercent: 0.2 + (i * 0.15), // Spread across the rectangle
         yOffset: 8 + randomYOffset, // Random height within rectangle
-        petColor: 0xffcc66, // Same yellow color
+        petColor: PET_CONFIG.petColor, // Use centralized pet color
         width: 0, // Don't create individual rectangles
         height: 0
       });
@@ -407,33 +407,12 @@ export class GameScene extends Phaser.Scene {
    * Initialize game state
    */
   private initializeGameState() {
+    // Game State Configuration - using centralized config with overrides
     const gameStateConfig: GameStateConfig = {
-      // Initial Values
-      initialGameTime: 99,
+      ...GAME_STATE_CONFIG,
+      // Override specific values for this scene
       initialMoney: 108,
-      initialHealth: 100,
-      initialPlayerSkill: 0,
-      initialDifficulty: 0,
-      initialMomentum: 0,
-      initialPlotA: 0,
-      initialPlotB: 0,
-      initialPlotC: 0,
-      initialKnobValue: 0,
       initialPosition: 50,
-      
-      // Validation
-      minMoney: 0,
-      maxMoney: 9999,
-      minHealth: 0,
-      maxHealth: 100,
-      minSkill: 0,
-      maxSkill: 100,
-      minDifficulty: 0,
-      maxDifficulty: 100,
-      minMomentum: 0,
-      maxMomentum: 100,
-      minPlot: 0,
-      maxPlot: 100,
       minKnobValue: -100,
       maxKnobValue: 100
     };
@@ -446,146 +425,23 @@ export class GameScene extends Phaser.Scene {
    * Initialize all system modules
    */
   private initializeSystems() {
-    // Car Mechanics Configuration
+    // Car Mechanics Configuration - using centralized config
     const carConfig: CarMechanicsConfig = {
-      carMaxSpeed: 5,
-      carAcceleration: 0.01,
-      minCrankForSteering: .40,
-      minSpeedForSteering: 0.01, // Lower threshold so steering works immediately
-      steeringSensitivity: 1.0,
-      maxTurn: 1.0,
-      turnResetMultiplier: 0.1,
-      centrifugal: 6.0,
-      skyColor: 0x87CEEB,
-      roadColor: 0x333333,
-      lineColor: 0xffffff,
-      boundaryPadding: 50,
-      roadDepth: -1000,
-      lineWidth: 4,
-      lineHeight: 30,
-      lineGap: 40,
-      centerLineYOffset: 50,
-      lineDepth: -1000,
-      obstacleMinDelayMs: 9000,
-      obstacleMaxDelayMs: 18000,
-      potholeProbability: 0.8,
-      potholeWidth: 0.3,            // TEMP: widen for easy collision
-      potholeHeight: 0.08,          // TEMP: taller for visibility
-      potholeMinPos: 0.45,          // TEMP: centered lane
-      potholeMaxPos: 0.55,          // TEMP: centered lane
-      potholeSpawnY: 0.2,
-      potholeColor: 0x8B4513,
-      potholeSpeed: 1.2,            // Slower for less aggressive approach
-      exitWidth: 30,
-      exitHeight: 60,
-      exitPosition: 0.9,
-      exitSpawnY: 0.1,
-      exitColor: 0x00ff00,
-      exitSpeed: 1.0,
-      radarEnabled: true,
-      radarX: this.scale.gameSize.width - 40,
-      radarY: 10,
-      radarWidth: 33,
-      radarHeight: 163,
-      radarAlpha: 0.75,
-      roadBendStrength: 140
+      ...CAR_CONFIG,
+      radarX: this.scale.gameSize.width - 40 // Dynamic value
     };
     
     this.carMechanics = new CarMechanics(this, carConfig);
     
-    // Tutorial System Configuration
-    const tutorialConfig: TutorialConfig = {
-      overlayColor: 0x000000,
-      overlayAlpha: 0.7,
-      overlayDepth: 60000,
-      maskColor: 0xffffff,
-      keysHoleRadius: 30,
-      targetHoleMultiplier: 1.5,
-      magneticTargetX: 200,
-      magneticTargetY: 550,
-      magneticTargetRadius: 25
-    };
-    
+    // Tutorial System Configuration - using centralized config
+    const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
     this.tutorialSystem = new TutorialSystem(this, tutorialConfig);
     
-    // Game UI Configuration
+    // Game UI Configuration - using centralized config
     const uiConfig: GameUIConfig = {
-      gameLayerText: '(game)',
-      gameLayerPositionX: 10,
-      gameLayerPositionY: 10,
-      gameLayerFontSize: '16px',
-      gameLayerColor: '#ffff00',
-      gameLayerBackgroundColor: '#000000',
-      gameLayerDepth: 10000,
-      countdownPositionOffsetX: 0,
-      countdownPositionOffsetY: 0.1,
-      countdownFontSize: '24px',
-      countdownColor: '#ffffff',
-      moneyPositionX: 0.1,
-      moneyPositionY: 0.1,
-      healthPositionX: 0.1,
-      healthPositionY: 0.15,
-      moneyHealthFontSize: '16px',
-      moneyColor: '#00ff00',
-      healthColor: '#ff0000',
-      stopsPositionOffsetX: 0,
-      stopsPositionOffsetY: 0.2,
-      progressPositionOffsetX: 0,
-      progressPositionOffsetY: 0.3,
-      stopsFontSize: '18px',
-      progressFontSize: '18px',
-      stopsColor: '#ffffff',
-      progressColor: '#ffffff',
-      managerValuesFontSize: '12px',
-      managerValuesBackgroundColor: '#000000',
-      managerValuesPadding: { x: 4, y: 2 },
-      managerValuesOpacity: 0.8,
-      managerValuesSkillColor: '#00ff00',
-      managerValuesDifficultyColor: '#ff0000',
-      managerValuesMomentumColor: '#0000ff',
-      managerValuesPlotAColor: '#ff00ff',
-      managerValuesPlotBColor: '#ffff00',
-      managerValuesPlotCColor: '#00ffff',
-      frontseatText: 'FRONT SEAT',
-      frontseatPositionX: 0.25,
-      frontseatPositionY: 0.1,
-      frontseatFontSize: '24px',
-      frontseatColor: '#ffffff',
-      backseatText: 'BACK SEAT',
-      backseatPositionX: 0.75,
-      backseatPositionY: 0.1,
-      backseatFontSize: '24px',
-      backseatColor: '#ffffff',
-      speedCrankOffsetX: 120,
-      speedCrankOffsetY: -20,
-      speedCrankWidth: 40,
-      speedCrankHeight: 150,
-      speedCrankTrackColor: 0x333333,
-      speedCrankTrackAlpha: 0.8,
-      speedCrankTrackStrokeColor: 0xffffff,
-      speedCrankTrackStrokeWidth: 2,
-      speedCrankTrackCornerRadius: 5,
-      speedCrankHandleColor: 0x00ff00,
-      speedCrankHandleAlpha: 0.9,
-      speedCrankHandleStrokeColor: 0xffffff,
-      speedCrankHandleStrokeWidth: 1,
-      speedCrankHandleCornerRadius: 3,
-      speedCrankHandleMargin: 4,
-      speedCrankHandleHeight: 20,
-      speedCrankIndicatorColor: 0xffffff,
-      speedCrankIndicatorStrokeColor: 0x000000,
-      speedCrankIndicatorRadius: 3,
-      speedCrankTextOffsetX: 10,
-      speedCrankTextFontSize: '16px',
-      speedCrankTextColor: '#ffffff',
-      speedCrankSnapPositions: [0, 0.4, 0.7, 1.0],
-      speedCrankDepthTrack: 1000,
-      speedCrankDepthHandle: 1001,
-      speedCrankDepthIndicator: 1002,
-      speedCrankDepthText: 1003,
-      speedCrankDepthArea: 1004
+      ...UI_CONFIG,
+      speedCrankSnapPositions: [...UI_CONFIG.speedCrankSnapPositions] // Convert readonly to mutable
     };
-    
     this.gameUI = new GameUI(this, uiConfig);
     
     // Input Handlers Configuration
@@ -632,17 +488,19 @@ export class GameScene extends Phaser.Scene {
    * Create magnetic target
    */
   private createMagneticTarget() {
+    // Use centralized magnetic configuration
     const magneticConfig = {
-      x: 200,
-      y: 550,
-      radius: 25,
-      color: 0xff0000
+      x: PHYSICS_CONFIG.magneticTargetX,
+      y: PHYSICS_CONFIG.magneticTargetY,
+      radius: PHYSICS_CONFIG.magneticTargetRadius,
+      color: PHYSICS_CONFIG.magneticTargetColor,
+      inactiveColor: PHYSICS_CONFIG.magneticTargetInactiveColor
     };
     
     // Create the magnetic target circle (outline only)
     this.magneticTarget = this.add.graphics();
     // Start with gray color to indicate inactive state
-    this.magneticTarget.lineStyle(3, 0x666666, 1);
+    this.magneticTarget.lineStyle(3, magneticConfig.inactiveColor, 1);
     this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
     
     // Create a separate invisible Matter.js body for collision detection
@@ -669,11 +527,11 @@ export class GameScene extends Phaser.Scene {
    * Set up physics worlds
    */
      private setupPhysicsWorlds() {
-    // Set up Matter.js physics with gravity
+    // Set up Matter.js physics with gravity using centralized config
     this.matter.world.setBounds(0, 0, this.cameras.main.width, this.cameras.main.height);
     
-    // Enable gravity for physics objects
-    this.matter.world.setGravity(0, 0.5);
+    // Enable gravity for physics objects using centralized config
+    this.matter.world.setGravity(PHYSICS_CONFIG.gravityX, PHYSICS_CONFIG.gravityY);
   }
 
   /**
@@ -900,14 +758,17 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     
+    // Use centralized magnetic configuration
     const magneticConfig = {
-      x: 200,
-      y: 550,
-      radius: 25,
-      color: 0xff0000,
-      magneticRange: 50,
-      magneticStrength: 0.005,
-      snapThreshold: 15
+      x: PHYSICS_CONFIG.magneticTargetX,
+      y: PHYSICS_CONFIG.magneticTargetY,
+      radius: PHYSICS_CONFIG.magneticTargetRadius,
+      color: PHYSICS_CONFIG.magneticTargetColor,
+      magneticRange: PHYSICS_CONFIG.magneticRadius,
+      magneticStrength: PHYSICS_CONFIG.magneticStrength,
+      snapThreshold: PHYSICS_CONFIG.magneticSnapThreshold,
+      constraintStiffness: PHYSICS_CONFIG.magneticConstraintStiffness,
+      constraintDamping: PHYSICS_CONFIG.magneticConstraintDamping
     };
     
     const keysBody = this.frontseatKeys.gameObject.body;
@@ -930,8 +791,8 @@ export class GameScene extends Phaser.Scene {
       this.keysConstraint = this.matter.add.constraint(keysBody as any, magneticBody as any, 0, 0.1, {
         pointA: { x: 0, y: 0 },
         pointB: { x: 0, y: 0 },
-        stiffness: 1,
-        damping: 0.1
+        stiffness: magneticConfig.constraintStiffness,
+        damping: magneticConfig.constraintDamping
       });
       
       // Track that keys are now in the ignition

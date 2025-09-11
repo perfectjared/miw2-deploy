@@ -30,8 +30,8 @@ export interface GameUIConfig {
   gameLayerDepth: number;
   
   // Countdown Parameters
-  countdownPositionOffsetX: number;
-  countdownPositionOffsetY: number;
+  countdownPositionX: number;
+  countdownPositionY: number;
   countdownFontSize: string;
   countdownColor: string;
   
@@ -44,14 +44,10 @@ export interface GameUIConfig {
   moneyColor: string;
   healthColor: string;
   
-  // Stops/Progress Parameters
-  stopsPositionOffsetX: number;
-  stopsPositionOffsetY: number;
-  progressPositionOffsetX: number;
-  progressPositionOffsetY: number;
-  stopsFontSize: string;
+  // Progress Parameters
+  progressPositionX: number;
+  progressPositionY: number;
   progressFontSize: string;
-  stopsColor: string;
   progressColor: string;
   
   // Manager Values Parameters
@@ -65,6 +61,7 @@ export interface GameUIConfig {
   managerValuesPlotAColor: string;
   managerValuesPlotBColor: string;
   managerValuesPlotCColor: string;
+  managerValuesStopsColor: string;
   
   // Navigation Button Parameters
   frontseatText: string;
@@ -179,7 +176,7 @@ export class GameUI {
   public initialize() {
     this.createGameLayerText();
     this.createCountdownTimer();
-    this.createStopsAndProgressText();
+    this.createProgressText(); // Updated method name
     this.createMoneyAndHealthText();
     this.createManagerValuesText();
     this.createNavigationButtons();
@@ -194,9 +191,8 @@ export class GameUI {
     this.updateCountdown(state.gameTime);
     this.updateMoney(state.money);
     this.updateHealth(state.health);
-    this.updateStops(state.stops);
     this.updateProgress(state.progress);
-    this.updateManagerValues(state);
+    this.updateManagerValues(state); // This now includes stops
     this.updateSpeedCrank(state.speedCrankPercentage);
   }
 
@@ -221,14 +217,14 @@ export class GameUI {
   }
 
   /**
-   * Create countdown timer
+   * Create countdown timer - positioned below rearview rectangle
    */
   private createCountdownTimer() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    const countdownX = gameWidth / 2 + (gameWidth * this.config.countdownPositionOffsetX);
-    const countdownY = (gameHeight * this.config.countdownPositionOffsetY);
+    const countdownX = gameWidth * this.config.countdownPositionX;
+    const countdownY = gameHeight * this.config.countdownPositionY;
      
     this.countdownText = this.scene.add.text(countdownX, countdownY, '0', {
       fontSize: this.config.countdownFontSize,
@@ -243,38 +239,22 @@ export class GameUI {
   }
 
   /**
-   * Create stops and progress text
+   * Create progress text - bottom left corner (with money)
    */
-  private createStopsAndProgressText() {
+  private createProgressText() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Stops text
-    const stopsX = gameWidth / 2 + (gameWidth * this.config.stopsPositionOffsetX);
-    const stopsY = (gameHeight * this.config.stopsPositionOffsetY);
+    const progressX = gameWidth * this.config.progressPositionX;
+    const progressY = gameHeight * this.config.progressPositionY;
     
-    this.stopsText = this.scene.add.text(stopsX, stopsY, 'Stops: 0', {
-      fontSize: this.config.stopsFontSize,
-      color: this.config.stopsColor,
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 4, y: 2 }
-    }).setOrigin(0.5);
-    
-    this.stopsText.setScrollFactor(0);
-    this.stopsText.setDepth(10000);
-    
-    // Progress text
-    const progressX = gameWidth / 2 + (gameWidth * this.config.progressPositionOffsetX);
-    const progressY = (gameHeight * this.config.progressPositionOffsetY);
-    
-    this.progressText = this.scene.add.text(progressX, progressY, 'Progress: 0%', {
+    this.progressText = this.scene.add.text(progressX, progressY, '0%', {
       fontSize: this.config.progressFontSize,
       color: this.config.progressColor,
       fontStyle: 'bold',
       backgroundColor: '#000000',
       padding: { x: 4, y: 2 }
-    }).setOrigin(0.5);
+    }).setOrigin(0, 1); // Left-bottom alignment
     
     this.progressText.setScrollFactor(0);
     this.progressText.setDepth(10000);
@@ -329,12 +309,12 @@ export class GameUI {
       fontSize: this.config.managerValuesFontSize,
       color: '#ffffff',
       backgroundColor: this.config.managerValuesBackgroundColor,
-      padding: this.config.managerValuesPadding,
-      alpha: this.config.managerValuesOpacity
+      padding: this.config.managerValuesPadding
     }).setOrigin(1, 0);
     
     this.managerValuesText.setScrollFactor(0);
     this.managerValuesText.setDepth(10000);
+    this.managerValuesText.setAlpha(this.config.managerValuesOpacity);
   }
 
   /**
@@ -734,26 +714,18 @@ export class GameUI {
     }
   }
 
-  /**
-   * Update stops display
-   */
-  private updateStops(stops: number) {
-    if (this.stopsText) {
-      this.stopsText.setText(`Stops: ${stops}`);
-    }
-  }
 
   /**
    * Update progress display
    */
   private updateProgress(progress: number) {
     if (this.progressText) {
-      this.progressText.setText(`Progress: ${Math.round(progress)}%`);
+      this.progressText.setText(`${Math.round(progress)}%`); // Removed "Progress:" label
     }
   }
 
   /**
-   * Update manager values display
+   * Update manager values display (now includes stops)
    */
   private updateManagerValues(state: GameUIState) {
     if (this.managerValuesText) {
@@ -763,7 +735,8 @@ export class GameUI {
         `Momentum: ${state.momentum}%`,
         `Plot A (${state.plotAEnum}): ${state.plotA}%`,
         `Plot B (${state.plotBEnum}): ${state.plotB}%`,
-        `Plot C (${state.plotCEnum}): ${state.plotC}%`
+        `Plot C (${state.plotCEnum}): ${state.plotC}%`,
+        `Stops: ${state.stops}` // Added stops to manager values
       ].join('\n');
       
       this.managerValuesText.setText(values);

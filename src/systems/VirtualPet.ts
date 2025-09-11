@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { PET_CONFIG } from '../config/GameConfig';
 
 export interface VirtualPetConfig {
 	width?: number;
@@ -24,7 +25,7 @@ export class VirtualPet {
 	private lastCamWidth: number = 0;
 	private debugGraphics?: Phaser.GameObjects.Graphics;
 	private isHovering: boolean = false;
-	private petBaseColor: number = 0xffcc66;
+	private petBaseColor: number = PET_CONFIG.petColor;
 
 	constructor(scene: Phaser.Scene, config: VirtualPetConfig = {}) {
 		this.scene = scene;

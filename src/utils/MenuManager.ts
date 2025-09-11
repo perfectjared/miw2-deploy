@@ -27,6 +27,7 @@
 
 import Phaser from 'phaser';
 import { SaveManager } from './SaveManager';
+import { MENU_CONFIG } from '../config/GameConfig';
 
 export interface MenuButton {
   text: string;
@@ -44,48 +45,48 @@ export interface MenuConfig {
 
 export class MenuManager {
   // ============================================================================
-  // MENU PARAMETERS - Easy to modify values
+  // MENU PARAMETERS - Using centralized configuration
   // ============================================================================
   
   // Slider Parameters
-  private readonly SLIDER_WIDTH = 200;
-  private readonly SLIDER_HEIGHT = 20;
-  private readonly SLIDER_Y_OFFSET = 50;
-  private readonly SLIDER_TRACK_COLOR = 0x333333;
-  private readonly SLIDER_CORNER_RADIUS = 10;
-  private readonly SLIDER_HANDLE_WIDTH = 20;
-  private readonly SLIDER_HANDLE_HEIGHT = 20;
-  private readonly SLIDER_HANDLE_COLOR = 0x666666;
-  private readonly SLIDER_HANDLE_CORNER_RADIUS = 10;
+  private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
+  private readonly SLIDER_HEIGHT = MENU_CONFIG.sliderHeight;
+  private readonly SLIDER_Y_OFFSET = MENU_CONFIG.sliderYOffset;
+  private readonly SLIDER_TRACK_COLOR = MENU_CONFIG.sliderTrackColor;
+  private readonly SLIDER_CORNER_RADIUS = MENU_CONFIG.sliderCornerRadius;
+  private readonly SLIDER_HANDLE_WIDTH = MENU_CONFIG.sliderHandleWidth;
+  private readonly SLIDER_HANDLE_HEIGHT = MENU_CONFIG.sliderHandleHeight;
+  private readonly SLIDER_HANDLE_COLOR = MENU_CONFIG.sliderHandleColor;
+  private readonly SLIDER_HANDLE_CORNER_RADIUS = MENU_CONFIG.sliderHandleCornerRadius;
   
   // Depths
-  private readonly SLIDER_TRACK_DEPTH = 1000;
-  private readonly SLIDER_HANDLE_DEPTH = 1001;
-  private readonly LABELS_DEPTH = 1002;
-  private readonly METER_DEPTH = 1003;
+  private readonly SLIDER_TRACK_DEPTH = MENU_CONFIG.sliderTrackDepth;
+  private readonly SLIDER_HANDLE_DEPTH = MENU_CONFIG.sliderHandleDepth;
+  private readonly LABELS_DEPTH = MENU_CONFIG.labelsDepth;
+  private readonly METER_DEPTH = MENU_CONFIG.meterDepth;
   
   // Labels
-  private readonly START_LABEL_OFFSET = 30;
-  private readonly TURN_KEY_LABEL_OFFSET = -30;
-  private readonly LABELS_FONT_SIZE = "16px";
-  private readonly LABELS_COLOR = "#ffffff";
+  private readonly START_LABEL_OFFSET = MENU_CONFIG.startLabelOffset;
+  private readonly TURN_KEY_LABEL_OFFSET = MENU_CONFIG.turnKeyLabelOffset;
+  private readonly LABELS_FONT_SIZE = MENU_CONFIG.labelsFontSize;
+  private readonly LABELS_COLOR = MENU_CONFIG.labelsColor;
   
   // Meter Parameters
-  private readonly METER_WIDTH = 150;
-  private readonly METER_HEIGHT = 10;
-  private readonly METER_Y_OFFSET = 80;
-  private readonly METER_BACKGROUND_COLOR = 0x222222;
-  private readonly METER_CORNER_RADIUS = 5;
-  private readonly METER_FILL_COLOR = 0x00ff00;
-  private readonly METER_TEXT_OFFSET = 20;
+  private readonly METER_WIDTH = MENU_CONFIG.meterWidth;
+  private readonly METER_HEIGHT = MENU_CONFIG.meterHeight;
+  private readonly METER_Y_OFFSET = MENU_CONFIG.meterYOffset;
+  private readonly METER_BACKGROUND_COLOR = MENU_CONFIG.meterBackgroundColor;
+  private readonly METER_CORNER_RADIUS = MENU_CONFIG.meterCornerRadius;
+  private readonly METER_FILL_COLOR = MENU_CONFIG.meterFillColor;
+  private readonly METER_TEXT_OFFSET = MENU_CONFIG.meterTextOffset;
   
   // Physics Parameters
-  private readonly MOMENTUM_DECAY = 0.95;
-  private readonly MAX_VELOCITY = 15;
-  private readonly GRAVITY = 0.3;
-  private readonly SENSITIVITY = 0.5;
-  private readonly START_THRESHOLD = 0.9; // Reduced threshold (~20% of original) for faster ignition
-  private readonly START_INCREMENT = 0.5;
+  private readonly MOMENTUM_DECAY = MENU_CONFIG.momentumDecay;
+  private readonly MAX_VELOCITY = MENU_CONFIG.maxVelocity;
+  private readonly GRAVITY = MENU_CONFIG.gravity;
+  private readonly SENSITIVITY = MENU_CONFIG.sensitivity;
+  private readonly START_THRESHOLD = MENU_CONFIG.startThreshold;
+  private readonly START_INCREMENT = MENU_CONFIG.startIncrement;
   
   // ============================================================================
   // CLASS PROPERTIES
