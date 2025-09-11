@@ -69,6 +69,7 @@ export interface CarMechanicsConfig {
   radarHeight?: number;
   radarAlpha?: number;
   roadBendStrength?: number;
+  lensStrength?: number; // outward bowing when not turning
 }
 
 export class CarMechanics {
@@ -86,6 +87,7 @@ export class CarMechanics {
   private shouldAutoResumeAfterCollision: boolean = false;
   
   // Visual Elements
+  private drivingContainer!: Phaser.GameObjects.Container;
   private drivingBackground!: Phaser.GameObjects.Graphics;
   private drivingCar!: Phaser.GameObjects.Rectangle;
   private roadLines: Phaser.GameObjects.Graphics[] = [];
@@ -95,6 +97,8 @@ export class CarMechanics {
   private horizontalLinePhase: number = 0; // increments on countdown change
   private laneIndices: number[] = [-1.7, -0.55, 0.55, 1.7];
   private laneSpacingBottom: number = 130;
+  private horizontalSpacing: number = 28;
+  private getLensStrength(): number { return this.config.lensStrength ?? 60; }
 
   // Debug Radar
   private radarContainer?: Phaser.GameObjects.Container;
@@ -115,6 +119,7 @@ export class CarMechanics {
   private cameraAngle: number = 0;
   private currentCurve: number = 0; // -1..1 simplified curve value derived from steering
   private worldLateralOffset: number = 0; // world shift instead of moving the car
+  private lastSteeringValueForVisual: number = 0;
 
   constructor(scene: Phaser.Scene, config: CarMechanicsConfig) {
     this.scene = scene;
@@ -125,12 +130,18 @@ export class CarMechanics {
    * Initialize car mechanics
    */
   public initialize() {
+    // Create container to vertically compress the driving scene
+    this.drivingContainer = this.scene.add.container(0, 0);
+    this.drivingContainer.setDepth(this.config.roadDepth);
+    this.drivingContainer.setScale(1, 0.5); // mash up toward top (half height)
+
     this.createDrivingBackground();
     this.createDrivingCar();
     this.carX = this.scene.cameras.main.width / 2;
     // Persistent graphics for dashed center line
     this.roadLineGraphics = this.scene.add.graphics();
     this.roadLineGraphics.setDepth(this.config.lineDepth);
+    this.drivingContainer.add(this.roadLineGraphics);
 
     if (this.config.radarEnabled) {
       this.createRadar();
@@ -263,6 +274,7 @@ export class CarMechanics {
   private createDrivingBackground() {
     this.drivingBackground = this.scene.add.graphics();
     this.drivingBackground.setDepth(this.config.roadDepth);
+    this.drivingContainer.add(this.drivingBackground);
     
     // Draw initial road
     this.drawRoad();
@@ -284,6 +296,7 @@ export class CarMechanics {
     this.drivingCar.setDepth(this.config.roadDepth + 1);
     // keep car fixed relative to screen while world scrolls
     this.drivingCar.setScrollFactor(0, 0);
+    this.drivingContainer.add(this.drivingCar);
   }
 
   /**
@@ -509,12 +522,15 @@ export class CarMechanics {
     const bez = (t: number) => ((1 - t) * (1 - t) * 0) + (2 * (1 - t) * t * control) + (t * t * end);
 
     // Four lane lines like the overhead view
+    const lensBase = this.getLensStrength();
+    const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
     for (const lane of this.laneIndices) {
       let started = false;
       this.roadLineGraphics.beginPath();
       for (let y = roadY; y <= gameHeight; y += 6) {
         const t = Phaser.Math.Clamp((y - horizonY) / (gameHeight - horizonY), 0, 1);
-        const x = centerX + bez(t) + lane * (this.laneSpacingBottom * t);
+        const lensOffset = (lane >= 0 ? 1 : -1) * lensBase * (t * t) * lensFactorBase;
+        const x = centerX + bez(t) + lane * (this.laneSpacingBottom * t) + lensOffset;
         if (!started) {
           this.roadLineGraphics.moveTo(x, y);
           started = true;
@@ -527,12 +543,19 @@ export class CarMechanics {
 
     // Horizontal lines (grid-like), thinner, black
     this.roadLineGraphics.lineStyle(1, 0x000000, 1);
-    const horizontalSpacing = 28;
-    const phaseOffset = (this.horizontalLinePhase % horizontalSpacing);
-    for (let y = roadY + phaseOffset; y <= gameHeight; y += horizontalSpacing) {
-      const t = Phaser.Math.Clamp((y - horizonY) / (gameHeight - horizonY), 0, 1);
-      const leftX = centerX + bez(t) + this.laneIndices[0] * (this.laneSpacingBottom * t);
-      const rightX = centerX + bez(t) + this.laneIndices[this.laneIndices.length - 1] * (this.laneSpacingBottom * t);
+    // Perspective-spaced horizontals: denser near horizon, wider near bottom
+    const totalSpan = gameHeight - horizonY;
+    const linesCount = Math.max(1, Math.floor(totalSpan / this.horizontalSpacing));
+    const phaseFrac = (this.horizontalLinePhase % this.horizontalSpacing) / this.horizontalSpacing; // 0..1
+    for (let i = 0; i <= linesCount; i += 1) {
+      const tLinear = (i + phaseFrac) / linesCount; // slide with phase
+      if (tLinear > 1) continue;
+      const t = Phaser.Math.Clamp(tLinear * tLinear, 0, 1); // square for perspective spacing
+      const y = horizonY + totalSpan * t;
+      const leftLens = -lensBase * (t * t) * lensFactorBase;
+      const rightLens = lensBase * (t * t) * lensFactorBase;
+      const leftX = centerX + bez(t) + this.laneIndices[0] * (this.laneSpacingBottom * t) + leftLens;
+      const rightX = centerX + bez(t) + this.laneIndices[this.laneIndices.length - 1] * (this.laneSpacingBottom * t) + rightLens;
       this.roadLineGraphics.beginPath();
       this.roadLineGraphics.moveTo(leftX, y);
       this.roadLineGraphics.lineTo(rightX, y);
@@ -547,20 +570,12 @@ export class CarMechanics {
     // Move existing obstacles
     this.obstacles.forEach(obstacle => {
       // Advance logical position continuously
-      const prevLogicalY = obstacle.getData('logicalY');
-      const newLogicalY = (typeof prevLogicalY === 'number' ? prevLogicalY : obstacle.y) + this.config.potholeSpeed;
-      obstacle.setData('logicalY', newLogicalY);
+      obstacle.y += this.config.potholeSpeed;
       // Apply lateral offset so obstacles follow road/world movement
       const gameWidth = this.scene.cameras.main.width;
       const gameHeight = this.scene.cameras.main.height;
       const horizonY = gameHeight * 0.3;
-      // Quantize display Y to step with countdown, aligned to horizontal grid lines
-      const roadY = gameHeight * 0.3 + 10;
-      const horizontalSpacing = 28;
-      const phaseOffset = (this.horizontalLinePhase % horizontalSpacing);
-      const snappedY = roadY + Math.max(0, Math.floor(((newLogicalY - roadY) + phaseOffset) / horizontalSpacing)) * horizontalSpacing;
-      obstacle.y = snappedY;
-      const t = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+      const t = Phaser.Math.Clamp((obstacle.y - horizonY) / (gameHeight - horizonY), 0, 1);
       const bendStrength = this.config.roadBendStrength ?? 140;
       const centerX = gameWidth / 2;
       const end = this.currentCurve * bendStrength;
@@ -577,20 +592,33 @@ export class CarMechanics {
         obstacle.setData('laneIndex', laneIndex);
       }
       const worldOffset = -this.worldLateralOffset;
-      const laneTerm = laneIndex * (laneSpacingBottom * t);
-      const xProjected = centerX + bez(t) + laneTerm + worldOffset;
-      obstacle.x = xProjected;
+      let laneTerm = laneIndex * (laneSpacingBottom * t);
+      if (obstacle.getData('isExit')) {
+        // Project exit along the far-right lane, not by initial laneIndex
+        laneTerm = this.laneIndices[this.laneIndices.length - 1] * (laneSpacingBottom * t);
+      }
+      obstacle.x = centerX + bez(t) + laneTerm + worldOffset;
 
-      // Perspective taper: narrower near horizon, wider near bottom
-      const baseW = obstacle.getData('baseW') ?? obstacle.width;
-      const baseH = obstacle.getData('baseH') ?? obstacle.height;
-      const widthScale = 0.2 + 0.8 * t; // 20% at horizon -> 100% at bottom
-      const heightScale = 0.4 + 0.6 * t; // optional depth feel
-      obstacle.displayWidth = baseW * widthScale;
-      obstacle.displayHeight = baseH * heightScale;
+      // Update visual rectangle X only when steering (dial) changes
+      const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+      const steeringChanged = this.currentSteeringValue !== this.lastSteeringValueForVisual;
+      if (visual && steeringChanged) {
+        const gameWidth2 = this.scene.cameras.main.width;
+        const centerX2 = gameWidth2 / 2;
+        const tVisConst = Phaser.Math.Clamp(((obstacle.getData('visualY') ?? obstacle.y) - horizonY) / (gameHeight - horizonY), 0, 1);
+        // Use same bezier, lane term and lens as road lines
+        const laneIndexConst: number | undefined = obstacle.getData('isExit') ? this.laneIndices[this.laneIndices.length - 1] : (obstacle.getData('laneIndex') ?? 0);
+        const lensBaseConst = this.getLensStrength();
+        const lensFactorConst = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+        const lensOffsetConst = (laneIndexConst >= 0 ? 1 : -1) * lensBaseConst * (tVisConst * tVisConst) * lensFactorConst;
+        const xProjectedVisConst = centerX2 + bez(tVisConst) + laneIndexConst * (laneSpacingBottom * tVisConst) + lensOffsetConst + worldOffset;
+        visual.setX(xProjectedVisConst);
+      }
       
       // Remove obstacles that are off screen
-      if (newLogicalY > this.scene.cameras.main.height) {
+      if (obstacle.y > this.scene.cameras.main.height) {
+        const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+        if (visualToDestroy) visualToDestroy.destroy();
         obstacle.destroy();
         const index = this.obstacles.indexOf(obstacle);
         if (index > -1) {
@@ -600,9 +628,15 @@ export class CarMechanics {
 
       // Screen-space collision with fixed car representation
       if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(this.drivingCar.getBounds(), obstacle.getBounds())) {
+        // Destroy obstacle on collision
+        const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+        if (visualToDestroy) visualToDestroy.destroy();
         this.handleCollisionWithObstacle(obstacle);
       }
     });
+
+    // Record last steering value used for visual horizontal updates
+    this.lastSteeringValueForVisual = this.currentSteeringValue;
   }
 
   private handleCollisionWithObstacle(obstacle: Phaser.GameObjects.Rectangle) {
@@ -635,8 +669,8 @@ export class CarMechanics {
     if (isPothole) {
       // Create pothole
       const x = Phaser.Math.Between(
-        gameWidth * this.config.potholeMinPos,
-        gameWidth * this.config.potholeMaxPos
+        Math.floor(gameWidth * this.config.potholeMinPos),
+        Math.floor(gameWidth * (this.config.potholeMaxPos - this.config.potholeWidth))
       );
       
       obstacle = this.scene.add.rectangle(
@@ -647,17 +681,29 @@ export class CarMechanics {
         this.config.potholeColor
       );
     } else {
-      // Create exit
+      // Create exit occupying right 30% of road width
+      const roadWidthPx = gameWidth; // using full width road representation
+      const exitWidthPx = Math.floor(roadWidthPx * 0.30);
+      const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
       obstacle = this.scene.add.rectangle(
-        gameWidth * this.config.exitPosition,
+        exitX,
         horizonY + 2,
-        this.config.exitWidth,
+        exitWidthPx,
         this.config.exitHeight,
         this.config.exitColor
       );
+      obstacle.setData('isExit', true);
+      obstacle.setData('exitWidthPx', exitWidthPx);
     }
     
     obstacle.setDepth(this.config.roadDepth + 0.5);
+    // Hide logic rectangle; create visible twin for render-only stepping
+    obstacle.setVisible(false);
+    const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, obstacle.fillColor ?? 0xff0000);
+    visual.setDepth(this.config.roadDepth + 0.5);
+    // Add both to driving container so visuals are vertically compressed too
+    this.drivingContainer.add(obstacle);
+    this.drivingContainer.add(visual);
     // Store baseX so we can offset later relative to road/world movement
     obstacle.setData('baseX', obstacle.x);
     // Store a normalized lane offset so we can project along curved lanes
@@ -666,7 +712,31 @@ export class CarMechanics {
     obstacle.setData('laneOffset', (obstacle.x - centerX) / laneSpacingBottom);
     obstacle.setData('baseW', obstacle.width);
     obstacle.setData('baseH', obstacle.height);
-    obstacle.setData('logicalY', obstacle.y);
+    obstacle.setData('visual', visual);
+
+    // Initialize laneIndex now so first visual placement uses exact lane
+    const laneIndexInit = this.laneIndices.reduce((prev, curr) => Math.abs(curr - (obstacle.getData('laneOffset'))) < Math.abs(prev - (obstacle.getData('laneOffset'))) ? curr : prev, this.laneIndices[0]);
+    obstacle.setData('laneIndex', laneIndexInit);
+
+    // Initialize visual position/scale snapped to current phase at horizon
+    const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
+    const snappedY = horizonY + Math.max(0, Math.floor(((obstacle.y - horizonY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
+    const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+    const bendStrength = this.config.roadBendStrength ?? 140;
+    const end = this.currentCurve * bendStrength;
+    const control = end * 0.6;
+    const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+    const lensBase = this.getLensStrength();
+    const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+    const lensOffset = (laneIndexInit >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
+    const xProjectedVis = centerX + bez(tVis) + laneIndexInit * (this.laneSpacingBottom * tVis) + lensOffset - this.worldLateralOffset;
+    visual.setPosition(xProjectedVis, snappedY);
+    const baseW = obstacle.getData('baseW') ?? obstacle.width;
+    const baseH = obstacle.getData('baseH') ?? obstacle.height;
+    const widthScale = 0.2 + 0.8 * tVis;
+    const heightScale = 0.4 + 0.6 * tVis;
+    visual.displayWidth = baseW * widthScale;
+    visual.displayHeight = baseH * heightScale;
     this.obstacles.push(obstacle);
     
     // Schedule next obstacle
@@ -735,6 +805,38 @@ export class CarMechanics {
       // Increase shift amount per step for a more dramatic change
       const stepShift = 10; // pixels per countdown step
       this.horizontalLinePhase = (this.horizontalLinePhase + stepShift) % 1000000;
+      // Also step obstacle visuals: compute snapped Y and projected X for the visual-only rect
+      const gameHeight = this.scene.cameras.main.height;
+      const gameWidth = this.scene.cameras.main.width;
+      const horizonY = gameHeight * 0.3;
+      const roadY = gameHeight * 0.3 + 10;
+      const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
+      const bendStrength = this.config.roadBendStrength ?? 140;
+      const centerX = gameWidth / 2;
+      const end = this.currentCurve * bendStrength;
+      const control = end * 0.6;
+      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+      this.obstacles.forEach(obstacle => {
+        const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+        if (!visual) return;
+        const snappedY = roadY + Math.max(0, Math.floor(((obstacle.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
+        const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+        let laneIndex: number | undefined = obstacle.getData('laneIndex');
+        const worldOffset = -this.worldLateralOffset;
+        if (obstacle.getData('isExit')) {
+          laneIndex = this.laneIndices[this.laneIndices.length - 1];
+        }
+        const laneTermVis = (laneIndex ?? 0) * (this.laneSpacingBottom * tVis);
+        const xProjectedVis = centerX + bez(tVis) + laneTermVis + worldOffset;
+        visual.setPosition(xProjectedVis, snappedY);
+        // Perspective taper for visual only
+        const baseW = obstacle.getData('baseW') ?? obstacle.width;
+        const baseH = obstacle.getData('baseH') ?? obstacle.height;
+        const widthScale = 0.2 + 0.8 * tVis;
+        const heightScale = 0.4 + 0.6 * tVis;
+        visual.displayWidth = baseW * widthScale;
+        visual.displayHeight = baseH * heightScale;
+      });
     }
   }
 
