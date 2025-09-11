@@ -1,3 +1,30 @@
+/**
+ * MENU MANAGER - UNIFIED MENU SYSTEM
+ * 
+ * This class handles all menu creation, display, and management throughout the game.
+ * It provides a consistent interface for creating different types of menus with
+ * proper hierarchy, styling, and user interaction handling.
+ * 
+ * Key Features:
+ * - Menu hierarchy system (prevents menu conflicts)
+ * - Unified overlay background system (same as tutorial overlays)
+ * - Consistent styling and positioning
+ * - Event-driven menu creation
+ * - Save/load integration
+ * - Slider controls for interactive elements
+ * 
+ * Menu Types:
+ * - Start Menu: Game initialization and resume options
+ * - Pause Menu: Game pause/resume controls
+ * - Save Menu: Save game functionality
+ * - Turn Key Menu: Car ignition with slider control
+ * - Obstacle Menus: Pothole and exit interactions
+ * - Game Over Menu: End game state
+ * 
+ * The system uses a stack-based approach to manage menu priority and
+ * ensures only one menu is active at a time with proper cleanup.
+ */
+
 import Phaser from 'phaser';
 import { SaveManager } from './SaveManager';
 

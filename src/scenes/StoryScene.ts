@@ -1,3 +1,20 @@
+/**
+ * STORY SCENE - NARRATIVE CONTENT DISPLAY
+ * 
+ * This scene handles the display of story content, narrative text, and
+ * other non-interactive story elements. It provides a dedicated layer
+ * for story content that can be overlaid on top of the game.
+ * 
+ * Key Features:
+ * - Story text display
+ * - Narrative content management
+ * - Overlay camera setup for consistent positioning
+ * - Non-intrusive story presentation
+ * 
+ * The scene is designed to work alongside the main game without
+ * interfering with gameplay, providing context and narrative depth.
+ */
+
 import Phaser from 'phaser';
 
 export class StoryScene extends Phaser.Scene {

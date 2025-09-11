@@ -1,3 +1,20 @@
+/**
+ * MENU SCENE - MENU SYSTEM COORDINATOR
+ * 
+ * This scene acts as a bridge between the game logic and the menu system.
+ * It doesn't create menus directly, but instead listens for events from other
+ * scenes and delegates menu creation to the MenuManager utility class.
+ * 
+ * Key Responsibilities:
+ * - Event listening for menu requests from other scenes
+ * - Delegating menu creation to MenuManager
+ * - Overlay camera setup for consistent menu rendering
+ * - Scene communication for menu state management
+ * 
+ * The MenuScene runs continuously and provides a stable interface for
+ * other scenes to request menu displays without tight coupling.
+ */
+
 import Phaser from 'phaser';
 import { MenuManager } from '../utils/MenuManager';
 

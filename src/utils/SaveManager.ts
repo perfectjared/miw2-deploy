@@ -1,3 +1,21 @@
+/**
+ * SAVE MANAGER - GAME STATE PERSISTENCE
+ * 
+ * This class handles saving and loading game state using the browser's
+ * localStorage. It implements the Singleton pattern to ensure only one
+ * instance exists throughout the application.
+ * 
+ * Key Features:
+ * - Singleton pattern for consistent state management
+ * - localStorage-based persistence
+ * - Version control for save data compatibility
+ * - Error handling for save/load operations
+ * - Timestamp tracking for save data
+ * 
+ * The SaveManager tracks the current step count and allows players to
+ * resume their progress across browser sessions.
+ */
+
 export interface SaveData {
   steps: number;
   timestamp: string;

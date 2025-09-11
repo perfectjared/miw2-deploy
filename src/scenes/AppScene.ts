@@ -1,18 +1,36 @@
+/**
+ * APP SCENE - MAIN APPLICATION CONTROLLER
+ * 
+ * This scene acts as the central coordinator for the entire game application.
+ * It manages the global game state, step counter, pause/resume functionality,
+ * and coordinates between different scenes.
+ * 
+ * Key Responsibilities:
+ * - Step counter management (tracks game progress)
+ * - Game state coordination (started/paused/stopped)
+ * - Keyboard input handling for global shortcuts
+ * - Scene communication and event coordination
+ * - Overlay camera setup for consistent UI rendering
+ * 
+ * The AppScene runs continuously and provides a stable foundation for
+ * other scenes to communicate through events and shared state.
+ */
+
 import Phaser from 'phaser';
 
 export class AppScene extends Phaser.Scene {
+  // Game state tracking
   private step: number = 0;
   private stepText!: Phaser.GameObjects.Text;
   private gameStarted: boolean = false;
   private isPaused: boolean = false;
-  private pauseDialog: any = null;
+  private stepTimer!: Phaser.Time.TimerEvent;
 
   constructor() {
     super({ key: 'AppScene' });
   }
 
   create() {
-    console.log('AppScene create() called'); // Debug log
     
     // Set up overlay camera for this scene
     this.setupOverlayCamera();
@@ -30,11 +48,11 @@ export class AppScene extends Phaser.Scene {
     this.stepText.setDepth(25000);
 
     // Launch scenes in the correct layer order (bottom to top)
+    // JARED'S NOTE: could this be simplified?
     // 4. Background (bottom layer)
     this.scene.launch('BackgroundScene');
     
     // 3. Driving (driving background with separate camera) - TEMPORARILY DISABLED
-    // this.scene.launch('DrivingScene');
     
     // 2. Game (main game logic with physics)
     this.scene.launch('GameScene');
@@ -73,22 +91,20 @@ export class AppScene extends Phaser.Scene {
       switch (event.code) {
         case 'KeyM':
           if (!this.gameStarted) {
-            console.log('AppScene: Launching MenuScene...'); // Debug log
             this.scene.launch('MenuScene');
             this.scene.bringToTop('MenuScene'); // Ensure menu is on top
           }
           break;
         case 'KeyS':
-          console.log('AppScene: Launching StoryScene...'); // Debug log
           this.scene.launch('StoryScene');
           this.scene.bringToTop('StoryScene'); // Ensure story is on top
           break;
       }
     });
 
-    // Note: Pause and save buttons are now created in GameScene for proper layering
 
     // Add pause button - positioned above driving view
+    // JARED'S NOTE: make these two buttons share the same style
     const pauseButton = this.add.text(10, 100, 'PAUSE', {
       fontSize: '16px',
       color: '#ffffff',
@@ -127,7 +143,7 @@ export class AppScene extends Phaser.Scene {
     });
 
     // Start the step timer (every 1000ms = 1 second) - but only when game is started
-    this.time.addEvent({
+    this.stepTimer = this.time.addEvent({
       delay: 1000,
       callback: this.incrementStep,
       callbackScope: this,
@@ -145,8 +161,7 @@ export class AppScene extends Phaser.Scene {
     
     // Set this scene to use the overlay camera
     this.cameras.main = overlayCamera;
-    
-    console.log('AppScene: Overlay camera set up');
+
   }
 
   private incrementStep() {
@@ -162,6 +177,28 @@ export class AppScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Handle scene pause - stop timers to prevent accumulation
+   */
+  pause() {
+    console.log('AppScene: Scene paused by Phaser');
+    // Pause the step timer to prevent accumulation
+    if (this.stepTimer) {
+      this.stepTimer.paused = true;
+    }
+  }
+
+  /**
+   * Handle scene resume - restart timers properly
+   */
+  resume() {
+    console.log('AppScene: Scene resumed by Phaser');
+    // Resume the step timer if game is started and not manually paused
+    if (this.gameStarted && !this.isPaused && this.stepTimer) {
+      this.stepTimer.paused = false;
+    }
+  }
+
   public getStep(): number {
     return this.step;
   }
@@ -169,7 +206,6 @@ export class AppScene extends Phaser.Scene {
   public setStep(step: number): void {
     this.step = step;
     this.stepText.setText(`Step: ${this.step}`);
-    console.log(`Step counter set to: ${this.step}`);
   }
 
   private togglePauseMenu() {
@@ -214,13 +250,10 @@ export class AppScene extends Phaser.Scene {
   // Method to start the game (called from MenuScene)
   public startGame() {
     this.gameStarted = true;
-    this.time.addEvent({
-      delay: 1000,
-      callback: this.incrementStep,
-      callbackScope: this,
-      loop: true
-    });
-    console.log('Game started! Step counter is now running.');
+    // Resume the step timer
+    if (this.stepTimer) {
+      this.stepTimer.paused = false;
+    }
     
     // Also start the GameScene
     const gameScene = this.scene.get('GameScene');
@@ -228,13 +261,10 @@ export class AppScene extends Phaser.Scene {
       (gameScene as any).startGame();
     }
     
-    // Don't bring AppScene to top - let MenuScene be visible
-    // this.scene.bringToTop('AppScene');
   }
 
   // Method to show save menu (communicates with MenuScene)
   private showSaveMenu() {
-    console.log('showSaveMenu called - gameStarted:', this.gameStarted);
     // Allow save menu even if game hasn't started yet
     
     const menuScene = this.scene.get('MenuScene');
@@ -253,6 +283,5 @@ export class AppScene extends Phaser.Scene {
     this.gameStarted = false;
     this.step = 0; // Reset step counter
     this.stepText.setText('App Layer; Step: 0'); // Reset display
-    console.log('Step events stopped and reset');
   }
 }

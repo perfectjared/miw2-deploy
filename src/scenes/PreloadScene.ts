@@ -1,3 +1,20 @@
+/**
+ * PRELOAD SCENE - ASSET LOADING AND INITIALIZATION
+ * 
+ * This scene handles the loading of all game assets and provides visual
+ * feedback to the user during the loading process. It's the first scene
+ * that runs when the game starts.
+ * 
+ * Key Features:
+ * - Visual loading bar with progress indication
+ * - Asset loading management
+ * - Smooth transition to the main game
+ * - Error handling for failed asset loads
+ * 
+ * The scene creates a loading bar and text to show progress, then
+ * transitions to the main game once all assets are loaded successfully.
+ */
+
 import Phaser from 'phaser';
 
 export class PreloadScene extends Phaser.Scene {

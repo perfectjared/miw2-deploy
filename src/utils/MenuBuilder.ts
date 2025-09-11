@@ -1,3 +1,21 @@
+/**
+ * MENU BUILDER - DYNAMIC MENU CONSTRUCTION UTILITY
+ * 
+ * This utility class provides a flexible way to build dynamic menus with
+ * various UI elements. It's designed to work alongside the MenuManager
+ * for more complex menu layouts and custom elements.
+ * 
+ * Key Features:
+ * - Dynamic menu construction with configurable elements
+ * - Support for buttons, text, and custom elements
+ * - Flexible positioning and styling options
+ * - Reusable menu templates
+ * - Integration with Phaser's text and graphics systems
+ * 
+ * The MenuBuilder is used for creating complex menus that require
+ * more customization than the standard MenuManager templates.
+ */
+
 import Phaser from 'phaser';
 
 export interface MenuButton {

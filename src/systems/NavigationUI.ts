@@ -1,8 +1,22 @@
+/**
+ * NAVIGATION UI - NAVIGATION CONTROLS MANAGEMENT
+ * 
+ * This class manages the visibility and behavior of navigation UI elements
+ * such as buttons for switching between frontseat/backseat views and
+ * toggling map/inventory displays.
+ * 
+ * Key Features:
+ * - Centralized visibility logic for navigation elements
+ * - Conditional display based on game state (car started, crank percentage)
+ * - Dynamic UI updates based on player progress
+ * - Clean separation of navigation logic from main game scene
+ * 
+ * The NavigationUI ensures that navigation controls only appear when
+ * the player has progressed far enough in the game to use them.
+ */
+
 import Phaser from 'phaser';
 
-/**
- * NavigationUI centralizes visibility logic for nav buttons/text.
- */
 export class NavigationUI {
   private scene: Phaser.Scene;
 

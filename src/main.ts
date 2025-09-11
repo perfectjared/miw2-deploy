@@ -1,3 +1,21 @@
+/**
+ * MAIN GAME ENTRY POINT
+ * 
+ * This file initializes the Phaser game engine and sets up all the scenes.
+ * It configures the game window, physics, UI plugins, and scene management.
+ * 
+ * Game Architecture:
+ * - PreloadScene: Loads all assets before the game starts
+ * - BackgroundScene: Handles background rendering and camera movement
+ * - AppScene: Main application controller, manages game state and step counter
+ * - MenuScene: Handles all menu interactions (start, pause, save, etc.)
+ * - StoryScene: Manages story/narrative elements
+ * - GameScene: Core gameplay logic, physics, UI, and interactions
+ * 
+ * The game uses Matter.js physics for realistic object interactions and
+ * RexUI plugin for advanced UI components like sliders and dialogs.
+ */
+
 // Phaser is loaded globally via script tag
 import { PreloadScene } from './scenes/PreloadScene';
 import { BackgroundScene } from './scenes/BackgroundScene';
@@ -5,10 +23,6 @@ import { AppScene } from './scenes/AppScene';
 import { MenuScene } from './scenes/MenuScene';
 import { StoryScene } from './scenes/StoryScene';
 import { GameScene } from './scenes/GameScene';
-//import { FrontseatScene } from './scenes/FrontseatScene';
-//import { BackseatScene } from './scenes/BackseatScene';
-//import { MapScene } from './scenes/MapScene';
-//import { InventoryScene } from './scenes/InventoryScene';
 
 // Debug: Check if RexUI is available
 console.log('rexuiplugin available:', (window as any).rexuiplugin);
