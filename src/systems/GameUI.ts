@@ -347,9 +347,8 @@ export class GameUI {
     // Look Up / Look Down buttons (large, centered, 85% width)
     const btnWidth = Math.floor(gameWidth * 0.85);
     const btnHeight = 46;
-    const pad = Math.floor(gameHeight * 0.02);
-    const topY = pad + Math.floor(btnHeight / 2);
-    const bottomY = gameHeight - pad - Math.floor(btnHeight / 2);
+    const topY = Math.floor(btnHeight / 2);
+    const bottomY = gameHeight - Math.floor(btnHeight / 2);
     const leftX = Math.floor((gameWidth - btnWidth) / 2);
 
     // Look Up

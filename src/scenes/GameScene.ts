@@ -881,6 +881,12 @@ export class GameScene extends Phaser.Scene {
     const stateNow = this.gameState.getState();
     if (!this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40 && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
       this.storyOverlayScheduledStep = step + 5;
+      // Reveal look buttons when gating conditions are satisfied (same trigger as countdown)
+      const ui: any = this.gameUI as any;
+      ui?.frontseatButton?.setVisible(true);
+      ui?.backseatButton?.setVisible(true);
+      ui?.lookUpLabel?.setVisible(true);
+      ui?.lookDownLabel?.setVisible(true);
     }
 
     // Show Chapter 1 story overlay once scheduled and step reached
