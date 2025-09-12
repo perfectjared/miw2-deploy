@@ -92,6 +92,9 @@ export class PreloadScene extends Phaser.Scene {
     // Load your assets here
     // Load the game configuration file
     
+    // Load the steering wheel SVG
+    this.load.image('steering-wheel', 'assets/image/steering-wheel.svg');
+    
     // For now, we'll just add a small delay to simulate loading
     this.time.delayedCall(2000, () => {
       this.scene.start('AppScene');

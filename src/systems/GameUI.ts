@@ -150,6 +150,7 @@ export class GameUI {
     private frontseatDragDial!: any; // RexUI drag dial
     private steeringDialIndicator!: Phaser.GameObjects.Graphics;
     private steeringAngleText!: Phaser.GameObjects.Text;
+    private steeringWheelSVG!: Phaser.GameObjects.Sprite; // SVG overlay
     
     // Steering wheel state
     private currentSteeringPosition: number = 0; // Current position (-100 to 100)
@@ -582,6 +583,15 @@ export class GameUI {
     knob.setPosition(dialX, dialY);
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
+    // Create SVG overlay for visual appeal
+    this.steeringWheelSVG = this.scene.add.sprite(dialX, dialY, 'steering-wheel');
+    this.steeringWheelSVG.setScale(0.28); // Scale to fit the circle
+    this.steeringWheelSVG.setOrigin(0.5, 0.5);
+    this.steeringWheelSVG.setAlpha(0.8); // Semi-transparent overlay
+    this.steeringWheelSVG.setDepth(998); // Just above the circle
+    
+    // SVG will be positioned independently but follow the graphics circle
+    
     // Store reference to the knob
     this.frontseatDragDial = knob;
     
@@ -649,7 +659,8 @@ export class GameUI {
          
          // Apply proportional sensitivity based on distance from center
          const distanceFromCenter = Math.abs(this.currentSteeringPosition);
-         const sensitivityMultiplier = 0.3 + (distanceFromCenter / 100) * 0.7; // 0.3 to 1.0 range
+         // More aggressive curve: starts at 0.5, reaches 1.0 at 50% distance, then increases further
+         const sensitivityMultiplier = 0.5 + (distanceFromCenter / 100) * 0.5 + Math.pow(distanceFromCenter / 100, 2) * 0.5;
          const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
          
          this.scene.events.emit('steeringInput', adjustedSteeringValue);
@@ -696,12 +707,9 @@ export class GameUI {
         this.currentSteeringPosition = Math.min(0, this.currentSteeringPosition + returnSpeed * delta);
       }
       
-      // Apply proportional sensitivity and emit steering input
-      const distanceFromCenter = Math.abs(this.currentSteeringPosition);
-      const sensitivityMultiplier = 0.3 + (distanceFromCenter / 100) * 0.7; // 0.3 to 1.0 range
-      const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
-      
-      this.scene.events.emit('steeringInput', adjustedSteeringValue);
+      // During return-to-center, don't emit any steering input
+      // This allows the car to maintain its current position while wheel returns visually
+      // The car mechanics system will use its existing turn value and let it decay naturally
       
       // Update visual indicator
       this.updateSteeringIndicator(this.currentSteeringPosition);
@@ -735,6 +743,12 @@ export class GameUI {
     if (this.steeringAngleText) {
       const pct = Math.round((steeringValue + 100) / 2);
       this.steeringAngleText.setText(`${pct}%`);
+    }
+    
+    // Update SVG rotation to match steering position
+    if (this.steeringWheelSVG) {
+      const angleDeg = Phaser.Math.Clamp((steeringValue / 100) * 60, -60, 60);
+      this.steeringWheelSVG.setRotation(Phaser.Math.DegToRad(angleDeg));
     }
   }
 
@@ -879,6 +893,7 @@ export class GameUI {
     if (this.speedCrankPercentageText) objs.push(this.speedCrankPercentageText);
     if (this.speedCrankArea) objs.push(this.speedCrankArea);
     if (this.frontseatDragDial) objs.push(this.frontseatDragDial);
+    if (this.steeringWheelSVG) objs.push(this.steeringWheelSVG);
     if (this.steeringDialIndicator) objs.push(this.steeringDialIndicator);
     if (this.steeringAngleText) objs.push(this.steeringAngleText);
     // Optional labels/buttons if enabled later
