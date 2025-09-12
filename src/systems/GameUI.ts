@@ -146,10 +146,14 @@ export class GameUI {
   private speedCrankArea!: Phaser.GameObjects.Rectangle;
   private speedCrankPercentageText!: Phaser.GameObjects.Text;
   
-  // Drag Dial
-  private frontseatDragDial!: any; // RexUI drag dial
-  private steeringDialIndicator!: Phaser.GameObjects.Graphics;
-  private steeringAngleText!: Phaser.GameObjects.Text;
+    // Drag Dial
+    private frontseatDragDial!: any; // RexUI drag dial
+    private steeringDialIndicator!: Phaser.GameObjects.Graphics;
+    private steeringAngleText!: Phaser.GameObjects.Text;
+    
+    // Steering wheel state
+    private currentSteeringPosition: number = 0; // Current position (-100 to 100)
+    private isDragging: boolean = false;
   
   // State
   private currentSpeedCrankPercentage: number = 0;
@@ -588,24 +592,6 @@ export class GameUI {
       fontSize: '14px',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(999);
-    const updateDialIndicator = (value: number) => {
-      const angleDeg = Phaser.Math.Clamp((value / 100) * 60, -60, 60);
-      const angleRad = Phaser.Math.DegToRad(angleDeg - 90);
-      const lineLen = knobRadius + 6;
-      const endX = dialX + Math.cos(angleRad) * lineLen;
-      const endY = dialY + Math.sin(angleRad) * lineLen;
-      this.steeringDialIndicator.clear();
-      this.steeringDialIndicator.lineStyle(3, 0xffcc00, 1);
-      this.steeringDialIndicator.beginPath();
-      this.steeringDialIndicator.moveTo(dialX, dialY);
-      this.steeringDialIndicator.lineTo(endX, endY);
-      this.steeringDialIndicator.strokePath();
-      if (this.steeringAngleText) {
-        // Show 0..100% mapped from -100..100
-        const pct = Math.round((value + 100) / 2);
-        this.steeringAngleText.setText(`${pct}%`);
-      }
-    };
     
     // Add drag functionality (fixed version)
     let isDragging = false;
@@ -614,38 +600,71 @@ export class GameUI {
     let knobCenterX = dialX;
     let knobCenterY = dialY;
     
-    knob.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      isDragging = true;
-      lastPointerX = pointer.x;
-      lastPointerY = pointer.y;
-      
-      // Redraw knob with active color
-      knob.clear();
-      knob.fillStyle(0x666666);
-      knob.fillCircle(0, 0, knobRadius);
-      knob.lineStyle(2, 0xffffff, 1);
-      knob.strokeCircle(0, 0, knobRadius);
-      // No square overlay; indicator line shows current value
+     knob.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+       this.isDragging = true;
+       isDragging = true;
+       lastPointerX = pointer.x;
+       lastPointerY = pointer.y;
+       
+       // Redraw knob with active color
+       knob.clear();
+       knob.fillStyle(0x666666);
+       knob.fillCircle(0, 0, knobRadius);
+       knob.lineStyle(2, 0xffffff, 1);
+       knob.strokeCircle(0, 0, knobRadius);
+       // No square overlay; indicator line shows current value
 
-      // (removed steering active gating)
-    });
+       // (removed steering active gating)
+     });
     
-    // Track pointer globally while dragging so it keeps responding even off the knob
-    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (isDragging) {
-        // Map absolute pointer position relative to dial center → steering (-100..100)
-        const relativeX = pointer.x - dialX;
-        const steeringValue = Phaser.Math.Clamp((relativeX / knobRadius) * 100, -100, 100);
-        this.scene.events.emit('steeringInput', steeringValue);
-        updateDialIndicator(steeringValue);
-        lastPointerX = pointer.x;
-        lastPointerY = pointer.y;
-      }
-    });
+     // Track pointer globally while dragging so it keeps responding even off the knob
+     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+       if (isDragging) {
+         // Calculate delta movement from last position
+         const deltaX = pointer.x - lastPointerX;
+         const deltaY = pointer.y - lastPointerY;
+         
+         // Calculate steering rotation based on both horizontal and vertical movement
+         const horizontalSteering = deltaX * 2.0; // Horizontal sensitivity
+         const verticalSteering = deltaY * 1.5; // Vertical sensitivity
+         
+         // Determine which side of the dial we're on for vertical movement
+         const relativeX = pointer.x - dialX;
+         
+         // Vertical movement directions:
+         // Up on right side (positive X) = clockwise (positive steering)
+         // Down on right side (positive X) = counterclockwise (negative steering)
+         // Up on left side (negative X) = counterclockwise (negative steering)
+         // Down on left side (negative X) = clockwise (positive steering)
+         const verticalMultiplier = relativeX > 0 ? 1 : -1;
+         
+         // Combine horizontal and vertical steering
+         const totalSteeringDelta = horizontalSteering + (verticalSteering * verticalMultiplier);
+         
+         // Accumulate steering position based on combined motion
+         this.currentSteeringPosition += totalSteeringDelta;
+         
+         // Clamp the accumulated position to valid range
+         this.currentSteeringPosition = Phaser.Math.Clamp(this.currentSteeringPosition, -100, 100);
+         
+         // Apply proportional sensitivity based on distance from center
+         const distanceFromCenter = Math.abs(this.currentSteeringPosition);
+         const sensitivityMultiplier = 0.3 + (distanceFromCenter / 100) * 0.7; // 0.3 to 1.0 range
+         const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
+         
+         this.scene.events.emit('steeringInput', adjustedSteeringValue);
+         this.updateSteeringIndicator(this.currentSteeringPosition); // Show raw position
+         
+         lastPointerX = pointer.x;
+         lastPointerY = pointer.y;
+       }
+     });
     
     const endDrag = () => {
       if (!isDragging) return;
       isDragging = false;
+      this.isDragging = false;
+      
       // Redraw knob with original color
       knob.clear();
       knob.fillStyle(0x444444);
@@ -653,20 +672,70 @@ export class GameUI {
       knob.lineStyle(2, 0xffffff, 1);
       knob.strokeCircle(0, 0, knobRadius);
       
-      // DISABLED: Auto-return to center behavior
-      // The steering wheel now stays where you put it instead of returning to center
-      // This allows the car to maintain its position without being forced back to center
-      
-      // Optional: Keep the current steering value instead of resetting
-      // const currentPct = Math.round(((Math.min(Math.max(lastPointerX - dialX, -knobRadius), knobRadius) / knobRadius) * 100));
-      // this.scene.events.emit('steeringInput', currentPct);
-      // updateDialIndicator(currentPct);
+      // Gradual return to center will be handled in update method
     };
 
     knob.on('pointerup', endDrag);
     knob.on('pointerupoutside', endDrag as any);
     this.scene.input.on('pointerup', endDrag);
     this.scene.input.on('gameout', endDrag);
+  }
+
+  /**
+   * Update steering wheel gradual return to center
+   */
+  public update(delta: number) {
+    // Only return to center if not currently being dragged
+    if (!this.isDragging && this.currentSteeringPosition !== 0) {
+      const returnSpeed = 0.02; // Adjust this value to control return speed (0.01 = slow, 0.05 = fast)
+      
+      // Gradually move toward center
+      if (this.currentSteeringPosition > 0) {
+        this.currentSteeringPosition = Math.max(0, this.currentSteeringPosition - returnSpeed * delta);
+      } else {
+        this.currentSteeringPosition = Math.min(0, this.currentSteeringPosition + returnSpeed * delta);
+      }
+      
+      // Apply proportional sensitivity and emit steering input
+      const distanceFromCenter = Math.abs(this.currentSteeringPosition);
+      const sensitivityMultiplier = 0.3 + (distanceFromCenter / 100) * 0.7; // 0.3 to 1.0 range
+      const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
+      
+      this.scene.events.emit('steeringInput', adjustedSteeringValue);
+      
+      // Update visual indicator
+      this.updateSteeringIndicator(this.currentSteeringPosition);
+    }
+  }
+
+  /**
+   * Update the steering indicator visual
+   */
+  private updateSteeringIndicator(steeringValue: number) {
+    if (this.steeringDialIndicator) {
+      const angleDeg = Phaser.Math.Clamp((steeringValue / 100) * 60, -60, 60);
+      const angleRad = Phaser.Math.DegToRad(angleDeg - 90); // Match original calculation
+      const gameWidth = this.scene.cameras.main.width;
+      const gameHeight = this.scene.cameras.main.height;
+      const dialX = gameWidth * 0.3;
+      const dialY = gameHeight * 0.7;
+      const lineLen = 50;
+      const endX = dialX + Math.cos(angleRad) * lineLen;
+      const endY = dialY + Math.sin(angleRad) * lineLen;
+      
+      this.steeringDialIndicator.clear();
+      this.steeringDialIndicator.lineStyle(3, 0xffcc00, 1);
+      this.steeringDialIndicator.beginPath();
+      this.steeringDialIndicator.moveTo(dialX, dialY);
+      this.steeringDialIndicator.lineTo(endX, endY);
+      this.steeringDialIndicator.strokePath();
+    }
+    
+    // Update angle text - show percentage from 0-100%
+    if (this.steeringAngleText) {
+      const pct = Math.round((steeringValue + 100) / 2);
+      this.steeringAngleText.setText(`${pct}%`);
+    }
   }
 
   /**

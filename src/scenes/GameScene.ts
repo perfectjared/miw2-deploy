@@ -694,6 +694,12 @@ export class GameScene extends Phaser.Scene {
   update() {
     // Update all systems
     this.carMechanics.update();
+    
+    // Update game UI (steering wheel gradual return to center)
+    if (this.gameUI) {
+      this.gameUI.update(16); // Use 16ms as typical delta time
+    }
+    
     // HUD camera remains unrotated; no per-frame virtual pet counter-rotation needed
     this.applyMagneticAttraction();
     // Smoothly apply lateral gravity based on steering
