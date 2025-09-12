@@ -134,15 +134,10 @@ export class GameUI {
   private countdownText!: Phaser.GameObjects.Text;
   private moneyText!: Phaser.GameObjects.Text;
   private healthText!: Phaser.GameObjects.Text;
-  private stopsText!: Phaser.GameObjects.Text;
   private progressText!: Phaser.GameObjects.Text;
   private managerValuesText!: Phaser.GameObjects.Text;
   private frontseatButton!: Phaser.GameObjects.Graphics;
   private backseatButton!: Phaser.GameObjects.Graphics;
-  private mapToggleButton!: Phaser.GameObjects.Graphics;
-  private inventoryToggleButton!: Phaser.GameObjects.Graphics;
-  private mapToggleText!: Phaser.GameObjects.Text;
-  private inventoryToggleText!: Phaser.GameObjects.Text;
   
   // Speed Crank Elements
   private speedCrankTrack!: Phaser.GameObjects.Graphics;
@@ -651,34 +646,21 @@ export class GameUI {
     const endDrag = () => {
       if (!isDragging) return;
       isDragging = false;
-      // (removed steering active gating)
       // Redraw knob with original color
       knob.clear();
       knob.fillStyle(0x444444);
       knob.fillCircle(0, 0, knobRadius);
       knob.lineStyle(2, 0xffffff, 1);
       knob.strokeCircle(0, 0, knobRadius);
-      // Reset steering
-      // Return to center more slowly via tweened steps
-      const currentPct = Math.round(((Math.min(Math.max(lastPointerX - dialX, -knobRadius), knobRadius) / knobRadius) * 100));
-      const steps = 10;
-      let step = 0;
-      const timer = this.scene.time.addEvent({
-        delay: 20,
-        repeat: steps,
-        callback: () => {
-          const t = (steps - step) / steps;
-          const value = Math.round(currentPct * t);
-          this.scene.events.emit('steeringInput', value);
-          updateDialIndicator(value);
-          step++;
-          if (step > steps) {
-            this.scene.events.emit('steeringInput', 0);
-            updateDialIndicator(0);
-            timer.remove();
-          }
-        }
-      });
+      
+      // DISABLED: Auto-return to center behavior
+      // The steering wheel now stays where you put it instead of returning to center
+      // This allows the car to maintain its position without being forced back to center
+      
+      // Optional: Keep the current steering value instead of resetting
+      // const currentPct = Math.round(((Math.min(Math.max(lastPointerX - dialX, -knobRadius), knobRadius) / knobRadius) * 100));
+      // this.scene.events.emit('steeringInput', currentPct);
+      // updateDialIndicator(currentPct);
     };
 
     knob.on('pointerup', endDrag);
@@ -848,15 +830,10 @@ export class GameUI {
       this.countdownText,
       this.moneyText,
       this.healthText,
-      this.stopsText,
       this.progressText,
       this.managerValuesText,
       this.frontseatButton,
       this.backseatButton,
-      this.mapToggleButton,
-      this.inventoryToggleButton,
-      this.mapToggleText,
-      this.inventoryToggleText,
       this.speedCrankTrack,
       this.speedCrankHandle,
       this.speedCrankValueIndicator,

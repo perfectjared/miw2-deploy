@@ -18,18 +18,25 @@
 export const CAR_CONFIG = {
   // Car Movement
   carMaxSpeed: 5,
-  carAcceleration: 0.01,
   minCrankForSteering: 0.40,
   minSpeedForSteering: 0.01,
   steeringSensitivity: 1.0,
   maxTurn: 1.0,
   turnResetMultiplier: 0.1,
-  centrifugal: 6.0,
+  centrifugal: 2.0,
+  
+  // Steering Turn Gain (distance-based)
+  baseTurnGain: 0.25,        // Minimum turn gain at center
+  maxTurnGain: 1.0,          // Maximum turn gain at full steering
+  turnGainPower: 2,          // Power curve exponent (2 = quadratic)
+  
+  // Car Momentum & Stability
+  turnDecayRate: 0.01,       // How quickly turn decays when not steering (much lower = more momentum)
+  centerReturnForce: 0.0,    // Force pulling car back to center (0 = no center return)
+  lateralFriction: 0.99,     // Lateral friction/drag (higher = less slidey)
   
   // Visual Appearance
-  skyColor: 0x87CEEB,
   roadColor: 0x333333,
-  lineColor: 0xffffff,
   boundaryPadding: 50,
   roadDepth: -1000,
   lineWidth: 4,
@@ -84,12 +91,7 @@ export const TUTORIAL_CONFIG = {
   targetHoleMultiplier: 1.5,
   magneticTargetX: 200,
   magneticTargetY: 550,
-  magneticTargetRadius: 25,
-  
-  // Text Styling
-  textFontSize: '28px',
-  textColor: '#ffffff',
-  textFontStyle: 'bold'
+  magneticTargetRadius: 25
 } as const;
 
 // ============================================================================
@@ -388,37 +390,13 @@ export const PET_CONFIG = {
   petStrokeColor: 0x000000,
   petStrokeWidth: 2,
   
-  // Container Settings
+  // Container Settings (used in GameScene)
   containerWidth: 0.85, // Percentage of screen width
   containerHeight: 0.20, // Percentage of screen height
   containerBackgroundColor: 0x222222,
   containerBackgroundAlpha: 0.9,
   containerStrokeColor: 0xffffff,
-  containerStrokeWidth: 2,
-  
-  // Food Meter
-  foodDecayRate: 1, // Points per 2 seconds
-  foodDecayInterval: 2000, // Milliseconds
-  foodMaxValue: 10,
-  foodBarWidth: 100,
-  foodBarHeight: 12,
-  foodBarBackgroundColor: 0x000000,
-  foodBarBackgroundAlpha: 0.6,
-  foodBarFillColor: 0x2ecc71,
-  foodBarStrokeColor: 0xffffff,
-  foodBarStrokeAlpha: 0.8,
-  
-  // Animation
-  idleBobDistance: 4,
-  idleBobDuration: 800,
-  hoverScaleMultiplier: 1.08,
-  hoverScaleDuration: 120,
-  
-  // Interaction
-  feedRadius: 12,
-  feedDwellTime: 1400, // Milliseconds
-  feedShrinkAmount: 0.2, // 20% per feed
-  maxFeedsPerItem: 3
+  containerStrokeWidth: 2
 } as const;
 
 // ============================================================================

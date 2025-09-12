@@ -21,7 +21,6 @@ import Phaser from 'phaser';
 export interface CarMechanicsConfig {
   // Car Parameters
   carMaxSpeed: number;
-  carAcceleration: number;
   minCrankForSteering: number;
   minSpeedForSteering: number;
   steeringSensitivity: number;
@@ -29,10 +28,18 @@ export interface CarMechanicsConfig {
   turnResetMultiplier: number;
   centrifugal: number;
   
+  // Steering Turn Gain (distance-based)
+  baseTurnGain: number;
+  maxTurnGain: number;
+  turnGainPower: number;
+  
+  // Car Momentum & Stability
+  turnDecayRate: number;
+  centerReturnForce: number;
+  lateralFriction: number;
+  
   // Road Parameters
-  skyColor: number;
   roadColor: number;
-  lineColor: number;
   boundaryPadding: number;
   roadDepth: number;
   lineWidth: number;
@@ -452,22 +459,50 @@ export class CarMechanics {
     const targetCurve = Phaser.Math.Clamp(-normalizedValue * 0.8, -1, 1);
     this.currentCurve = Phaser.Math.Linear(this.currentCurve, targetCurve, 0.08);
     
-    // Turn accumulator similar to example handling
+    // Turn accumulator with distance-based gain and momentum
     if (Math.abs(normalizedValue) > 0.001) {
       const steeringDirection = normalizedValue > 0 ? 1 : -1;
-      const turnGain = Math.abs(this.currentCurve) > 0.1 ? 0.5 : 0.25;
+      // Make turn gain proportional to steering distance from center
+      // Further from center = more turn gain (exponential curve)
+      const steeringDistance = Math.abs(normalizedValue);
+      const baseTurnGain = this.config.baseTurnGain;
+      const maxTurnGain = this.config.maxTurnGain;
+      const turnGainPower = this.config.turnGainPower;
+      // Use a power curve: gain increases exponentially with distance from center
+      const turnGain = baseTurnGain + (maxTurnGain - baseTurnGain) * Math.pow(steeringDistance, turnGainPower);
+      
       this.turn += steeringDirection * dlt * turnGain;
     } else {
-      this.turn = Math.abs(this.turn) < 0.01 ? 0 : Phaser.Math.Linear(this.turn, 0, this.config.turnResetMultiplier);
+      // Instead of forcing turn to 0, let it decay slowly for momentum
+      this.turn *= (1 - this.config.turnDecayRate);
+      // Only reset to 0 if it's very small to avoid floating point issues
+      if (Math.abs(this.turn) < 0.001) {
+        this.turn = 0;
+      }
     }
     this.turn = Phaser.Math.Clamp(this.turn, -this.config.maxTurn, this.config.maxTurn);
 
     const dx = dlt * (speedMultiplier <= 0 ? 0 : speedMultiplier);
 
-    // Apply lateral movement based on accumulated turn (independent of dial recenter)
-    this.carX += this.turn * dx * this.config.steeringSensitivity;
+    // Calculate lateral movement with friction applied to velocity
+    let lateralVelocity = this.turn * dx * this.config.steeringSensitivity;
+    
     // Apply centrifugal effect pushing outward on curves, scaled by speed
-    this.carX -= this.currentCurve * dx * speedMultiplier * this.config.centrifugal;
+    lateralVelocity -= this.currentCurve * dx * speedMultiplier * this.config.centrifugal;
+    
+    // Apply lateral friction to velocity (not position)
+    lateralVelocity *= this.config.lateralFriction;
+    
+    // Apply the velocity to position
+    this.carX += lateralVelocity;
+    
+    // Apply center return force (if configured)
+    if (this.config.centerReturnForce > 0) {
+      const centerX = this.scene.cameras.main.width / 2;
+      const distanceFromCenter = centerX - this.carX;
+      this.carX += distanceFromCenter * this.config.centerReturnForce * dlt;
+    }
+    
     // Clamp car within road bounds
     const gameWidthLocal = this.scene.cameras.main.width;
     this.carX = Phaser.Math.Clamp(this.carX, this.config.boundaryPadding, gameWidthLocal - this.config.boundaryPadding);
