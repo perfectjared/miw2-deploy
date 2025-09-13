@@ -92,8 +92,8 @@ export class CarMechanics {
   private carX: number = 0;
   private currentSteeringValue: number = 0;
   private turn: number = 0;
-  private shouldAutoRestartDriving: boolean = false;
-  private shouldAutoResumeAfterCollision: boolean = false;
+  // private shouldAutoRestartDriving: boolean = false; // Unused
+  // private shouldAutoResumeAfterCollision: boolean = false; // Unused
   
   // Visual Elements
   private drivingContainer!: Phaser.GameObjects.Container;
@@ -124,8 +124,8 @@ export class CarMechanics {
   private collisionTimer: Phaser.Time.TimerEvent | null = null;
   
   // Camera
-  private cameraMaxOffset: number = 100;
-  private roadViewYOffsetPercent: number = 0;
+  // private cameraMaxOffset: number = 100; // Unused
+  // private roadViewYOffsetPercent: number = 0; // Unused
   private cameraAngle: number = 0;
   private currentCurve: number = 0; // -1..1 simplified curve value derived from steering
   private worldLateralOffset: number = 0; // world shift instead of moving the car
@@ -171,7 +171,7 @@ export class CarMechanics {
    */
   public startDriving() {
     this.drivingMode = true;
-    this.shouldAutoRestartDriving = true;
+    // this.shouldAutoRestartDriving = true; // Removed unused property
     //console.log('Starting driving...');
     this.carSpeed = 0;
     // Do not force-reset carX to center; preserve current lateral position
@@ -231,7 +231,7 @@ export class CarMechanics {
    */
   public resumeDriving() {
     this.drivingPaused = false;
-    this.shouldAutoResumeAfterCollision = false;
+    // this.shouldAutoResumeAfterCollision = false; // Removed unused property
   }
 
   /**
@@ -694,7 +694,7 @@ export class CarMechanics {
       }
       // Only allow collision once the obstacle's bottom reaches the car's top
       // Use the visual rectangle's bounds entirely so collision matches what the player sees
-      const isExit = !!obstacle.getData('isExit');
+      // const isExit = !!obstacle.getData('isExit'); // Unused
       const isPothole = !!obstacle.getData('isPothole');
       const visualBounds = visualTwin ? visualTwin.getBounds() : obsBounds;
       // Slightly shrink pothole bounds to avoid aggressive hits

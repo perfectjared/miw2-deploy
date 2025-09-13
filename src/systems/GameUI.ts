@@ -156,10 +156,10 @@ export class GameUI {
     private speedCrankSVG!: Phaser.GameObjects.Sprite; // SVG overlay
     
     // Key SVG
-    private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    // private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay - moved to GameScene
     
     // Keyhole SVG
-    private keyholeSVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    // private keyholeSVG!: Phaser.GameObjects.Sprite; // SVG overlay - moved to GameScene
     
     // Steering wheel state
     private currentSteeringPosition: number = 0; // Current position (-100 to 100)
@@ -312,7 +312,7 @@ export class GameUI {
    */
   private createManagerValuesText() {
     const gameWidth = this.scene.cameras.main.width;
-    const gameHeight = this.scene.cameras.main.height;
+    // const gameHeight = this.scene.cameras.main.height; // Unused
     
     this.managerValuesText = this.scene.add.text(gameWidth - 10, 10, '', {
       fontSize: this.config.managerValuesFontSize,
@@ -507,7 +507,7 @@ export class GameUI {
   /**
    * Setup speed crank pointer interaction
    */
-  private setupSpeedCrankInteraction(crankX: number, crankY: number) {
+  private setupSpeedCrankInteraction(_crankX: number, crankY: number) {
     let isDragging = false;
     
     this.speedCrankArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -623,8 +623,8 @@ export class GameUI {
     let isDragging = false;
     let lastPointerX = 0;
     let lastPointerY = 0;
-    let knobCenterX = dialX;
-    let knobCenterY = dialY;
+    // let knobCenterX = dialX; // Unused
+    // let knobCenterY = dialY; // Unused
     
      knob.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
        this.isDragging = true;
@@ -920,7 +920,7 @@ export class GameUI {
     if (this.backseatButton) objs.push(this.backseatButton);
     
     // Add SVGs from GameScene
-    const gameScene = this.scene.scene.get('GameScene') as any;
+    // const gameScene = this.scene.scene.get('GameScene') as any; // Unused
     // Note: keyholeSVG is now positioned independently, not in dash container
     // Note: keySVG is now a child of the physics object, so it moves with the world, not the dash
     

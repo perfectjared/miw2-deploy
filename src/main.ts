@@ -73,8 +73,8 @@ const config: Phaser.Types.Core.GameConfig = {
     deltaHistory: 10
   },
   // Pause the game when tab loses focus to prevent infinite loops
-  pauseOnBlur: true,
-  pauseOnMinimize: true,
+  // pauseOnBlur: true, // Removed - not a valid Phaser config property
+  // pauseOnMinimize: true, // Removed - not a valid Phaser config property
   // Add additional stability settings
   disableContextMenu: true,
   powerPreference: 'high-performance'

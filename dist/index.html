@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game Fast</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        overflow: hidden;
+      }
+      #game {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+    </style>
+    <script type="module" crossorigin src="/miw2-deploy/assets/index-D75ow6B4.js"></script>
+  </head>
+  <body>
+    <div id="game"></div>
+    <script src="/node_modules/phaser/dist/phaser.min.js"></script>
+    <script src="/miw2-deploy/rexuiplugin.js"></script>
+    <script>
+      //console.log('RexUI script loaded, rexuiplugin available:', window.rexuiplugin);
+      if (!window.rexuiplugin) {
+        console.error('rexuiplugin failed to load!');
+      }
+    </script>
+  </body>
+</html>
+

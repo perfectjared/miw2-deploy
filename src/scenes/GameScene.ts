@@ -858,7 +858,7 @@ export class GameScene extends Phaser.Scene {
       
       // Disable physics body for the key when it's constrained
       if (this.frontseatKeys.gameObject.body) {
-        this.frontseatKeys.gameObject.body.isStatic = true;
+        (this.frontseatKeys.gameObject.body as any).isStatic = true;
         console.log('Key physics disabled (static)');
       }
       
@@ -889,7 +889,7 @@ export class GameScene extends Phaser.Scene {
       
       // Re-enable physics body for the key when constraint is removed
       if (this.frontseatKeys.gameObject.body) {
-        this.frontseatKeys.gameObject.body.isStatic = false;
+        (this.frontseatKeys.gameObject.body as any).isStatic = false;
         console.log('Key physics re-enabled (dynamic)');
       }
       
@@ -1013,7 +1013,7 @@ export class GameScene extends Phaser.Scene {
       
       // Re-enable physics body for the key when constraint is removed
       if (this.frontseatKeys.gameObject.body) {
-        this.frontseatKeys.gameObject.body.isStatic = false;
+        (this.frontseatKeys.gameObject.body as any).isStatic = false;
         console.log('Key physics re-enabled (manual removal - dynamic)');
       }
       
@@ -1250,7 +1250,7 @@ export class GameScene extends Phaser.Scene {
     this.stopMenuOpen = false;
   }
 
-  private onSpeedUpdate(speed: number) {
+  private onSpeedUpdate(_speed: number) {
     // Don't update speedCrankPercentage automatically - it should only be controlled by user input
     // The car's automatic acceleration should not affect the speed crank UI
     //console.log('Car speed updated to:', speed + '%', 'but speed crank remains at:', this.gameUI.getSpeedCrankPercentage() + '%');
