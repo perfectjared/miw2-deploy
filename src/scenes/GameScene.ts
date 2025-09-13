@@ -532,7 +532,7 @@ export class GameScene extends Phaser.Scene {
     (this.magneticTarget as any).magneticBody = magneticBody;
     
     // Create keyhole SVG overlay
-    this.keyholeSVG = this.add.sprite(200, 550, 'key-hole'); // Use correct magnetic target position
+    this.keyholeSVG = this.add.sprite(200, 520, 'key-hole'); // Use correct magnetic target position
     this.keyholeSVG.setScale(0.1); // Normal scale
     this.keyholeSVG.setOrigin(0.5, 0.5);
     this.keyholeSVG.setAlpha(0.8); // Semi-transparent overlay
@@ -556,8 +556,39 @@ export class GameScene extends Phaser.Scene {
     // Set up Matter.js physics with gravity using centralized config
     this.matter.world.setBounds(0, 0, this.cameras.main.width, this.cameras.main.height);
     
+    // Add an extra wall at the bottom to avoid iOS Safari bottom URL bar
+    this.createRaisedFloor();
+    
     // Enable gravity for physics objects using centralized config
     this.matter.world.setGravity(PHYSICS_CONFIG.gravityX, PHYSICS_CONFIG.gravityY);
+  }
+
+  /**
+   * Create a raised floor to avoid iOS Safari bottom URL bar
+   */
+  private createRaisedFloor() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const raisedFloorHeight = gameHeight * 0.90; // 90% of screen height (even lower floor)
+    const wallThickness = 20;
+    
+    // Create a horizontal wall at the raised floor position
+    const raisedFloor = this.matter.add.rectangle(gameWidth/2, raisedFloorHeight, gameWidth, wallThickness, {
+      isStatic: true,
+      render: { 
+        visible: true,
+        fillStyle: '#333333',
+        strokeStyle: '#666666',
+        lineWidth: 2
+      }
+    });
+    
+    // Add a visual indicator
+    const floorVisual = this.add.rectangle(gameWidth/2, raisedFloorHeight, gameWidth, 4, 0x333333);
+    floorVisual.setDepth(999);
+    floorVisual.setAlpha(0.8);
+    
+    console.log(`Created raised floor at height: ${raisedFloorHeight}, screen height: ${gameHeight}`);
   }
 
   /**
@@ -1020,7 +1051,7 @@ export class GameScene extends Phaser.Scene {
       // Reset target color
       this.magneticTarget.clear();
       this.magneticTarget.lineStyle(3, 0xff0000, 1);
-      this.magneticTarget.strokeCircle(200, 550, 25);
+      this.magneticTarget.strokeCircle(200, 520, 25);
       
       // Snap speed crank to 0% when keys are removed
       this.resetCrankToZero();
@@ -1052,7 +1083,7 @@ export class GameScene extends Phaser.Scene {
     if (this.magneticTarget) {
       this.magneticTarget.clear();
       this.magneticTarget.lineStyle(3, 0xff0000, 1);
-      this.magneticTarget.strokeCircle(200, 550, 25);
+      this.magneticTarget.strokeCircle(200, 520, 25);
       console.log('Magnetic target activated - keys can now be attracted');
     }
   }

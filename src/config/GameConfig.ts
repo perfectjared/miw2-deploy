@@ -25,7 +25,7 @@ export const CAR_CONFIG = {
   turnResetMultiplier: 0.1,
   centrifugal: 2.0,
   
-  // Steering Turn Gain (distance-based)
+  // Steering Turn Gain (distance-based)gi
   baseTurnGain: 0.25,        // Minimum turn gain at center
   maxTurnGain: 1.0,          // Maximum turn gain at full steering
   turnGainPower: 2,          // Power curve exponent (2 = quadratic)
@@ -117,17 +117,17 @@ export const UI_LAYOUT = {
   
   // Center elements
   countdownX: 0.5,            // 50% from left edge (centered)
-  countdownY: 0.35,           // 35% from top edge (below rearview)
+  countdownY: 0.2,           // 35% from top edge (below rearview)
   
   // Bottom elements
   progressX: 0.02,            // 2% from left edge
   progressY: 0.95,            // 95% from top edge (bottom)
   
   // Rearview rectangle (virtual pets)
-  rearviewX: 0.5,             // 50% from left edge (centered)
-  rearviewY: 0.15,            // 15% from top edge
-  rearviewWidth: 0.85,        // 85% of screen width
-  rearviewHeight: 0.20,       // 20% of screen height
+  rearviewX: 0.55,             // 50% from left edge (centered)
+  rearviewY: -0.05,            // 15% from top edge
+  rearviewWidth: 0.92,        // 85% of screen width
+  rearviewHeight: 0.4,       // 20% of screen height
   
   // ============================================================================
   // SIZING (Font sizes, dimensions, etc.)
@@ -136,7 +136,7 @@ export const UI_LAYOUT = {
   // Font sizes
   gameLayerFontSize: '14px',
   moneyHealthFontSize: '16px',
-  countdownFontSize: '24px',
+  countdownFontSize: '36px',
   progressFontSize: '18px',
   managerValuesFontSize: '12px',
   
@@ -471,7 +471,7 @@ export const PHYSICS_CONFIG = {
   magneticRadius: 50,
   magneticTargetRadius: 25,
   magneticTargetX: 200,
-  magneticTargetY: 550,
+  magneticTargetY: 520, // Moved up 5% from 550
   magneticTargetColor: 0xff0000,
   magneticTargetInactiveColor: 0x666666,
   magneticSnapThreshold: 15,

@@ -2,8 +2,8 @@ import { defineConfig } from 'vite'
 import { copyFileSync } from 'fs'
 import { resolve } from 'path'
 
-export default defineConfig({
-  base: '/miw2-deploy/', // GitHub Pages base path
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? '/miw2-deploy/' : '/', // Only use base path for production builds
   server: {
     host: true,
     // Add HMR settings to prevent issues with game state
@@ -32,5 +32,5 @@ export default defineConfig({
       }
     }
   ]
-})
+}))
 
