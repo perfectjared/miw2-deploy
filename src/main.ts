@@ -16,7 +16,9 @@
  * RexUI plugin for advanced UI components like sliders and dialogs.
  */
 
-// Phaser is loaded globally via script tag
+// Import Phaser as ES module
+import Phaser from 'phaser';
+import rexuiplugin from 'phaser3-rex-plugins/dist/rexuiplugin.js';
 import { PreloadScene } from './scenes/PreloadScene';
 import { BackgroundScene } from './scenes/BackgroundScene';
 import { AppScene } from './scenes/AppScene';
@@ -25,7 +27,7 @@ import { StoryScene } from './scenes/StoryScene';
 import { GameScene } from './scenes/GameScene';
 
 // Debug: Check if RexUI is available
-//console.log('rexuiplugin available:', (window as any).rexuiplugin);
+//console.log('rexuiplugin available:', rexuiplugin);
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -59,7 +61,7 @@ const config: Phaser.Types.Core.GameConfig = {
     scene: [
       {
         key: 'rexUI',
-        plugin: (window as any).rexuiplugin,
+        plugin: rexuiplugin,
         mapping: 'rexUI'
       }
     ]

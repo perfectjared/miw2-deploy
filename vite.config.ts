@@ -1,4 +1,6 @@
 import { defineConfig } from 'vite'
+import { copyFileSync } from 'fs'
+import { resolve } from 'path'
 
 export default defineConfig({
   base: '/miw2-deploy/', // GitHub Pages base path
@@ -17,6 +19,18 @@ export default defineConfig({
   // Add optimization settings
   optimizeDeps: {
     include: ['phaser']
-  }
+  },
+  plugins: [
+    {
+      name: 'copy-external-scripts',
+      writeBundle() {
+        // Copy rexuiplugin.js to dist
+        copyFileSync(
+          resolve(__dirname, 'public/rexuiplugin.js'),
+          resolve(__dirname, 'dist/rexuiplugin.js')
+        )
+      }
+    }
+  ]
 })
 
