@@ -574,13 +574,7 @@ export class GameScene extends Phaser.Scene {
     
     // Create a horizontal wall at the raised floor position
     const raisedFloor = this.matter.add.rectangle(gameWidth/2, raisedFloorHeight, gameWidth, wallThickness, {
-      isStatic: true,
-      render: { 
-        visible: true,
-        fillStyle: '#333333',
-        strokeStyle: '#666666',
-        lineWidth: 2
-      }
+      isStatic: true
     });
     
     // Add a visual indicator
