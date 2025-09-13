@@ -174,6 +174,12 @@ export class TutorialSystem {
 
   /**
    * Create tutorial overlay
+   * 
+   * IMPORTANT: DO NOT DELETE THIS CODE - TUTORIAL OVERLAY SYSTEM
+   * This creates the visual tutorial overlay with cutouts and guidance.
+   * Currently commented out for cleaner UI, but should be preserved for future use.
+   * 
+   * To re-enable: Uncomment the code below and ensure tutorialOverlay is created in constructor
    */
   private createTutorialOverlay() {
     const gameWidth = this.scene.cameras.main.width;

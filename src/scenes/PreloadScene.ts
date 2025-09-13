@@ -92,8 +92,15 @@ export class PreloadScene extends Phaser.Scene {
     // Load your assets here
     // Load the game configuration file
     
-    // Load the steering wheel SVG
+    // Load SVGs
     this.load.image('steering-wheel', 'assets/image/steering-wheel.svg');
+    this.load.image('key-white', 'assets/image/key-white.svg');
+    this.load.image('key-hole', 'assets/image/key-hole.svg');
+    this.load.image('bat', 'assets/image/bat.svg');
+    this.load.image('hot-dog', 'assets/image/hot-dog.svg');
+    this.load.image('face-smile', 'assets/image/face-smile.svg');
+    this.load.image('face-neutral', 'assets/image/face-neutral.svg');
+    this.load.image('face-frown', 'assets/image/face-frown.svg');
     
     // For now, we'll just add a small delay to simulate loading
     this.time.delayedCall(2000, () => {

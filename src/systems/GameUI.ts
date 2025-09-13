@@ -152,6 +152,15 @@ export class GameUI {
     private steeringAngleText!: Phaser.GameObjects.Text;
     private steeringWheelSVG!: Phaser.GameObjects.Sprite; // SVG overlay
     
+    // Speed Crank SVG
+    private speedCrankSVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    
+    // Key SVG
+    private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    
+    // Keyhole SVG
+    private keyholeSVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    
     // Steering wheel state
     private currentSteeringPosition: number = 0; // Current position (-100 to 100)
     private isDragging: boolean = false;
@@ -484,6 +493,13 @@ export class GameUI {
     this.speedCrankArea.setDepth(this.config.speedCrankDepthArea);
     this.speedCrankArea.setInteractive();
     
+    // Create speed crank SVG overlay
+    this.speedCrankSVG = this.scene.add.sprite(crankX, crankY, 'bat');
+    this.speedCrankSVG.setScale(0.1); // Much smaller scale to fit the crank area
+    this.speedCrankSVG.setOrigin(0.5, 0.5);
+    this.speedCrankSVG.setAlpha(0.8); // Semi-transparent overlay
+    this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1); // Just above the handle
+    
     // Add pointer interaction to the speed crank
     this.setupSpeedCrankInteraction(crankX, crankY);
   }
@@ -585,7 +601,7 @@ export class GameUI {
     
     // Create SVG overlay for visual appeal
     this.steeringWheelSVG = this.scene.add.sprite(dialX, dialY, 'steering-wheel');
-    this.steeringWheelSVG.setScale(0.28); // Scale to fit the circle
+    this.steeringWheelSVG.setScale(0.2); // 2x bigger: was 0.1, now 0.2
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
     this.steeringWheelSVG.setAlpha(0.8); // Semi-transparent overlay
     this.steeringWheelSVG.setDepth(998); // Just above the circle
@@ -890,6 +906,7 @@ export class GameUI {
     const objs: Phaser.GameObjects.GameObject[] = [];
     if (this.speedCrankTrack) objs.push(this.speedCrankTrack);
     if (this.speedCrankHandle) objs.push(this.speedCrankHandle);
+    if (this.speedCrankSVG) objs.push(this.speedCrankSVG);
     if (this.speedCrankPercentageText) objs.push(this.speedCrankPercentageText);
     if (this.speedCrankArea) objs.push(this.speedCrankArea);
     if (this.frontseatDragDial) objs.push(this.frontseatDragDial);
@@ -901,6 +918,12 @@ export class GameUI {
     if (this.lookDownLabel) objs.push(this.lookDownLabel);
     if (this.frontseatButton) objs.push(this.frontseatButton);
     if (this.backseatButton) objs.push(this.backseatButton);
+    
+    // Add SVGs from GameScene
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    // Note: keyholeSVG is now positioned independently, not in dash container
+    // Note: keySVG is now a child of the physics object, so it moves with the world, not the dash
+    
     return objs;
   }
 

@@ -41,7 +41,7 @@ export class Trash implements PhysicsObject {
     this.gameObject = this.scene.add.circle(
       100, // x position
       200, // y position
-      20,  // radius
+      40,  // radius (2/3 of previous: was 60, now 40)
       0xff0000 // color (red)
     );
   }

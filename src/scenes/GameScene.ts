@@ -58,6 +58,9 @@ export class GameScene extends Phaser.Scene {
   
   private gameContentContainer!: Phaser.GameObjects.Container;
   private magneticTarget!: Phaser.GameObjects.Graphics;
+  private keyholeSVG!: Phaser.GameObjects.Sprite; // SVG overlay
+  private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay for keys
+  private hotdogSVG!: Phaser.GameObjects.Sprite; // SVG overlay for food item
   private keysConstraint: any = null;
   
   // Game state flags
@@ -466,6 +469,21 @@ export class GameScene extends Phaser.Scene {
     this.backseatItem = new Item(this);
     this.frontseatKeys = new Keys(this);
     
+    // Create key SVG overlay that will follow the key's position
+    this.keySVG = this.add.sprite(200, 300, 'key-white'); // Start at key's initial position
+    this.keySVG.setScale(0.08); // Scaled to match key physics object (radius 15)
+    this.keySVG.setOrigin(0.5, 0.5);
+    this.keySVG.setAlpha(0.8); // Semi-transparent overlay
+    this.keySVG.setDepth(1001); // Above the key circle
+    
+    // Create hot-dog SVG overlay that will follow the food item's position (red Trash object)
+    this.hotdogSVG = this.add.sprite(100, 200, 'hot-dog'); // Start at red food item's initial position
+    // Scale SVG to match the physics object size (radius 60, so scale accordingly)
+    this.hotdogSVG.setScale(0.1); // Scaled to match smaller physics object (radius 40)
+    this.hotdogSVG.setOrigin(0.5, 0.5);
+    this.hotdogSVG.setAlpha(0.8); // Semi-transparent overlay
+    this.hotdogSVG.setDepth(1001); // Above the food item circle
+    
     // Set references for tutorial system
     this.tutorialSystem.setPhysicsObjects(this.frontseatKeys);
     this.tutorialSystem.setGameUI(this.gameUI);
@@ -512,6 +530,14 @@ export class GameScene extends Phaser.Scene {
     
     // Store reference to the body for collision detection
     (this.magneticTarget as any).magneticBody = magneticBody;
+    
+    // Create keyhole SVG overlay
+    this.keyholeSVG = this.add.sprite(200, 550, 'key-hole'); // Use correct magnetic target position
+    this.keyholeSVG.setScale(0.1); // Normal scale
+    this.keyholeSVG.setOrigin(0.5, 0.5);
+    this.keyholeSVG.setAlpha(0.8); // Semi-transparent overlay
+    this.keyholeSVG.setDepth(1000); // Above the magnetic target
+    this.keyholeSVG.setScrollFactor(0); // Don't move with camera
     
     // Set scroll factor to move with camera
     this.magneticTarget.setScrollFactor(1, 1);
@@ -720,6 +746,30 @@ export class GameScene extends Phaser.Scene {
         label.setVisible(true);
       }
     }
+    
+    // Update key SVG position and rotation to follow the key's physics body
+    if (this.keySVG && this.frontseatKeys && this.frontseatKeys.gameObject) {
+      // Convert physics object position to world coordinates
+      const worldPos = this.gameContentContainer.getWorldTransformMatrix().transformPoint(
+        this.frontseatKeys.gameObject.x, 
+        this.frontseatKeys.gameObject.y
+      );
+      this.keySVG.setPosition(worldPos.x, worldPos.y);
+      this.keySVG.setRotation(this.frontseatKeys.gameObject.rotation);
+    }
+    
+    // Keyhole SVG is now positioned independently and doesn't need updates
+    
+    // Update hot-dog SVG position and rotation to follow the food item's physics body (red Trash object)
+    if (this.hotdogSVG && this.frontseatTrash && this.frontseatTrash.gameObject) {
+      // Convert physics object position to world coordinates (same as key SVG)
+      const worldPos = this.gameContentContainer.getWorldTransformMatrix().transformPoint(
+        this.frontseatTrash.gameObject.x, 
+        this.frontseatTrash.gameObject.y
+      );
+      this.hotdogSVG.setPosition(worldPos.x, worldPos.y);
+      this.hotdogSVG.setRotation(this.frontseatTrash.gameObject.rotation);
+    }
 
     // Fast tutorial updates while keys are out (no menu)
     const menuScene = this.scene.get('MenuScene');
@@ -806,6 +856,12 @@ export class GameScene extends Phaser.Scene {
       this.gameState.updateState({ keysInIgnition: true });
       console.log('Keys snapped to ignition');
       
+      // Disable physics body for the key when it's constrained
+      if (this.frontseatKeys.gameObject.body) {
+        this.frontseatKeys.gameObject.body.isStatic = true;
+        console.log('Key physics disabled (static)');
+      }
+      
       // Update tutorial overlay (debounced)
       this.scheduleTutorialUpdate(0);
       
@@ -830,6 +886,12 @@ export class GameScene extends Phaser.Scene {
       // Reset keys in ignition state
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
+      
+      // Re-enable physics body for the key when constraint is removed
+      if (this.frontseatKeys.gameObject.body) {
+        this.frontseatKeys.gameObject.body.isStatic = false;
+        console.log('Key physics re-enabled (dynamic)');
+      }
       
       // Reset Keys scroll factor to horizontal only
       this.frontseatKeys.gameObject.setScrollFactor(1, 0);
@@ -949,8 +1011,11 @@ export class GameScene extends Phaser.Scene {
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
       
-      // Reset Keys scroll factor to horizontal only
-      this.frontseatKeys.gameObject.setScrollFactor(1, 0);
+      // Re-enable physics body for the key when constraint is removed
+      if (this.frontseatKeys.gameObject.body) {
+        this.frontseatKeys.gameObject.body.isStatic = false;
+        console.log('Key physics re-enabled (manual removal - dynamic)');
+      }
       
       // Reset target color
       this.magneticTarget.clear();

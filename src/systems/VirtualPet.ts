@@ -17,6 +17,7 @@ export class VirtualPet {
 	private container!: Phaser.GameObjects.Container;
 	private baseRect!: Phaser.GameObjects.Rectangle;
 	private pet!: Phaser.GameObjects.Ellipse;
+	private faceSVG!: Phaser.GameObjects.Sprite; // Face emotion overlay
 	private foodValue: number = 0; // 0..10
 	private foodBarBG!: Phaser.GameObjects.Rectangle;
 	private foodBarFill!: Phaser.GameObjects.Rectangle;
@@ -71,6 +72,28 @@ export class VirtualPet {
 			repeat: -1,
 			ease: 'Sine.easeInOut'
 		});
+
+		// Create face SVG overlay
+		this.faceSVG = this.scene.add.sprite(this.pet.x, this.pet.y, 'face-neutral');
+		this.faceSVG.setScale(0.075); // 1/4 of previous size: was 0.3, now 0.075
+		this.faceSVG.setOrigin(0.5, 0.5);
+		this.faceSVG.setAlpha(0.9);
+		this.faceSVG.setScrollFactor(0);
+		this.faceSVG.setDepth(this.pet.depth + 1); // Ensure face is above the ellipse
+		this.container.add(this.faceSVG);
+		
+		// Make face follow the pet's bobbing animation
+		this.scene.tweens.add({
+			targets: this.faceSVG,
+			y: this.faceSVG.y - 4,
+			duration: 800,
+			yoyo: true,
+			repeat: -1,
+			ease: 'Sine.easeInOut'
+		});
+		
+		// Update face based on initial food value
+		this.updateFaceEmotion();
 
 		// Make pet interactive for menu opening
 		this.pet.setInteractive();
@@ -263,6 +286,7 @@ export class VirtualPet {
 	public setFood(value: number) {
 		this.foodValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshFoodBar();
+		this.updateFaceEmotion(); // Update face based on new food value
 	}
 
 	/** Gradually add food over a short duration */
@@ -325,5 +349,24 @@ export class VirtualPet {
 	/** Expose the pet body ellipse for menus */
 	public getPetSprite(): Phaser.GameObjects.Ellipse | undefined {
 		return this.pet;
+	}
+
+	/**
+	 * Update face emotion based on food value (thirds system)
+	 * 0-3: sad (frown), 4-6: neutral, 7-10: happy (smile)
+	 */
+	private updateFaceEmotion() {
+		if (!this.faceSVG) return;
+
+		let faceTexture: string;
+		if (this.foodValue <= 3) {
+			faceTexture = 'face-frown'; // Sad - low food
+		} else if (this.foodValue <= 6) {
+			faceTexture = 'face-neutral'; // Neutral - middle food
+		} else {
+			faceTexture = 'face-smile'; // Happy - high food
+		}
+
+		this.faceSVG.setTexture(faceTexture);
 	}
 }
