@@ -737,6 +737,7 @@ export class CarMechanics {
     // Remove exit previews that are off screen
     this.exitPreviews.forEach(previewData => {
       if (previewData.preview.y > this.scene.cameras.main.height) {
+        // Clean up preview and its visual
         previewData.preview.destroy();
         previewData.visual.destroy();
         const index = this.exitPreviews.indexOf(previewData);
@@ -744,6 +745,11 @@ export class CarMechanics {
           this.exitPreviews.splice(index, 1);
         }
       }
+    });
+    
+    // Move exit previews down the road
+    this.exitPreviews.forEach(previewData => {
+      previewData.preview.y += this.config.potholeSpeed;
     });
 
     // Record last steering value used for visual horizontal updates
@@ -1126,10 +1132,9 @@ export class CarMechanics {
     
     readyPreviews.forEach(previewData => {
       this.spawnExitFromPreview(previewData);
+      // Mark preview as spawned so it gets cleaned up when off-screen
+      previewData.preview.setData('spawned', true);
     });
-    
-    // Remove processed previews
-    this.exitPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation > 0);
     
     // Decrement remaining steps for all previews
     this.exitPreviews.forEach(previewData => {
