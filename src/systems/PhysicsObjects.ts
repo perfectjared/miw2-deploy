@@ -460,6 +460,8 @@ export class Keys implements PhysicsObject {
       if (isDragging) {
         isDragging = false;
         (this.gameObject as any).isDragging = false; // Clear flag
+        // Mark release time for attraction window
+        (this.gameObject as any)._justReleasedAt = Date.now();
         this.gameObject.setFillStyle(originalColor);
         (this.scene as any).isDraggingObject = false;
         const originalParent: any = (this.gameObject as any)._originalParent;

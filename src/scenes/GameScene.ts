@@ -43,6 +43,8 @@ export class GameScene extends Phaser.Scene {
   private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
   private dragOverlayCamera?: Phaser.Cameras.Scene2D.Camera;
   private feedingDebug?: Phaser.GameObjects.Graphics;
+  // Only allow ignition magnet to attract keys for a brief window after release
+  private keysAttractionUntil: number = 0;
   
   // ============================================================================
   // PHYSICS OBJECTS
@@ -819,6 +821,13 @@ export class GameScene extends Phaser.Scene {
       this.hotdogSVG.setRotation(this.frontseatTrash.gameObject.rotation);
     }
 
+    // Small: open a short attraction window when keys were just released from drag
+    const keyGO: any = this.frontseatKeys?.gameObject;
+    if (keyGO && keyGO._justReleasedAt && Date.now() - keyGO._justReleasedAt < 50) {
+      this.keysAttractionUntil = Date.now() + 900; // ~0.9s window
+      keyGO._justReleasedAt = undefined;
+    }
+
     // Fast tutorial updates while keys are out (no menu)
     const menuScene = this.scene.get('MenuScene');
     const hasOpenMenu = !!(menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog);
@@ -888,9 +897,10 @@ export class GameScene extends Phaser.Scene {
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     const isDraggingKeys = !!(this.frontseatKeys.gameObject as any).isDragging;
+    const attractionWindowActive = Date.now() <= this.keysAttractionUntil;
     
     // Snap threshold - when Keys gets close enough, create a constraint (only when not dragging)
-    if (!isDraggingKeys && distance <= magneticConfig.snapThreshold && !this.keysConstraint) {
+    if (attractionWindowActive && !isDraggingKeys && distance <= magneticConfig.snapThreshold && !this.keysConstraint) {
       // Create constraint to snap Keys to the center of magnetic target
       this.keysConstraint = this.matter.add.constraint(keysBody as any, magneticBody as any, 0, 0.1, {
         pointA: { x: 0, y: 0 },
@@ -980,7 +990,7 @@ export class GameScene extends Phaser.Scene {
       // Update tutorial overlay after a small delay (debounced)
       this.scheduleTutorialUpdate(50);
       
-    } else if (!isDraggingKeys && distance <= magneticConfig.magneticRange && distance > magneticConfig.snapThreshold && !this.keysConstraint) {
+    } else if (attractionWindowActive && !isDraggingKeys && distance <= magneticConfig.magneticRange && distance > magneticConfig.snapThreshold && !this.keysConstraint) {
       // Apply magnetic attraction when close but not snapped (only when not dragging)
       const attractionForce = magneticConfig.magneticStrength * (1 - distance / magneticConfig.magneticRange);
       if (distance > 0) {
