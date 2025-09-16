@@ -109,6 +109,14 @@ export class CarMechanics {
   private laneSpacingBottom: number = 130;
   private horizontalSpacing: number = 28;
   private getLensStrength(): number { return this.config.lensStrength ?? 60; }
+  
+  // Exit Preview System
+  private exitPreviews: Array<{
+    preview: Phaser.GameObjects.Rectangle;
+    visual: Phaser.GameObjects.Rectangle;
+    stepsUntilActivation: number;
+    originalData: any;
+  }> = [];
 
   // Debug Radar
   private radarContainer?: Phaser.GameObjects.Container;
@@ -725,6 +733,18 @@ export class CarMechanics {
         this.handleCollisionWithObstacle(obstacle);
       }
     });
+    
+    // Remove exit previews that are off screen
+    this.exitPreviews.forEach(previewData => {
+      if (previewData.preview.y > this.scene.cameras.main.height) {
+        previewData.preview.destroy();
+        previewData.visual.destroy();
+        const index = this.exitPreviews.indexOf(previewData);
+        if (index > -1) {
+          this.exitPreviews.splice(index, 1);
+        }
+      }
+    });
 
     // Record last steering value used for visual horizontal updates
     this.lastSteeringValueForVisual = this.currentSteeringValue;
@@ -812,21 +832,88 @@ export class CarMechanics {
       obstacle.setPosition(xProjected + jitter, initialY);
       obstacle.setData('laneIndex', laneIndexChosen);
     } else {
-      // Create exit occupying right 30% of road width
+      // Create exit preview (non-collidable) occupying right 30% of road width
       const roadWidthPx = gameWidth; // using full width road representation
       const exitWidthPx = Math.floor(roadWidthPx * 0.30);
       const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
+      
+      // Create preview obstacle (not collidable yet)
       obstacle = this.scene.add.rectangle(
         exitX,
         horizonY + 2,
         exitWidthPx,
         this.config.exitHeight,
-        this.config.exitColor
+        this.config.exitColor,
+        0.5 // Semi-transparent to indicate it's a preview
       );
-      obstacle.setData('isExit', true);
+      
+      // Generate bell-curved delay between 5-20 steps
+      const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
+      
+      // Store original data for later conversion
+      const originalData = {
+        baseW: exitWidthPx,
+        baseH: this.config.exitHeight,
+        laneIndex: this.laneIndices[this.laneIndices.length - 1],
+        laneOffset: (exitX - gameWidth / 2) / this.laneSpacingBottom,
+        baseX: exitX
+      };
+      
+      // Create visual for preview
+      const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
+      visual.setDepth(this.config.roadDepth + 0.5);
+      
+      // Add to exit previews array instead of obstacles
+      this.exitPreviews.push({
+        preview: obstacle,
+        visual: visual,
+        stepsUntilActivation: stepsUntilActivation,
+        originalData: originalData
+      });
+      
+      // Don't add to obstacles array yet - it's not collidable
+      obstacle.setData('isExitPreview', true);
       obstacle.setData('exitWidthPx', exitWidthPx);
+      obstacle.setData('stepsUntilActivation', stepsUntilActivation);
+      
+      // Add to driving container
+      this.drivingContainer.add(obstacle);
+      this.drivingContainer.add(visual);
+      
+      // Store data for later use
+      obstacle.setData('baseX', exitX);
+      obstacle.setData('laneOffset', (exitX - gameWidth / 2) / this.laneSpacingBottom);
+      obstacle.setData('baseW', exitWidthPx);
+      obstacle.setData('baseH', this.config.exitHeight);
+      obstacle.setData('visual', visual);
+      obstacle.setData('laneIndex', this.laneIndices[this.laneIndices.length - 1]);
+      
+      // Initialize visual position
+      const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
+      const snappedY = horizonY + Math.max(0, Math.floor(((obstacle.y - horizonY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
+      const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+      const bendStrength = this.config.roadBendStrength ?? 140;
+      const end = this.currentCurve * bendStrength;
+      const control = end * 0.6;
+      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+      const lensBase = this.getLensStrength();
+      const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+      const laneIndexForVis: number = this.laneIndices[this.laneIndices.length - 1];
+      const lensOffset = (laneIndexForVis >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
+      const xProjectedVis = gameWidth / 2 + bez(tVis) + laneIndexForVis * (this.laneSpacingBottom * tVis) + lensOffset;
+      visual.setPosition(xProjectedVis, snappedY);
+      const widthScale = 0.2 + 0.8 * tVis;
+      const heightScale = 0.4 + 0.6 * tVis;
+      visual.displayWidth = exitWidthPx * widthScale;
+      visual.displayHeight = this.config.exitHeight * heightScale;
+      
+      // Don't add to obstacles array - it's a preview
+      // Schedule next obstacle and return early
+      this.startObstacleSpawning();
+      return;
     }
     
+    // Handle regular obstacles (potholes) - same as before
     obstacle.setDepth(this.config.roadDepth + 0.5);
     // Hide logic rectangle; create visible twin for render-only stepping
     obstacle.setVisible(false);
@@ -955,6 +1042,7 @@ export class CarMechanics {
     const control = end * 0.6;
     const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
     
+    // Update regular obstacles
     this.obstacles.forEach(obstacle => {
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (!visual) return;
@@ -983,6 +1071,92 @@ export class CarMechanics {
       visual.displayWidth = baseW * widthScale;
       visual.displayHeight = baseH * heightScale;
     });
+    
+    // Process exit previews
+    this.processExitPreviews(step, gameHeight, gameWidth, horizonY, roadY, phaseOffset, bez, centerX);
+  }
+
+  /**
+   * Generate bell-curved random delay between min and max steps
+   */
+  private generateBellCurvedDelay(minSteps: number, maxSteps: number): number {
+    // Generate two random numbers and use Box-Muller transform for bell curve
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const z0 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    
+    // Normalize to 0-1 range (assuming 3 standard deviations covers most cases)
+    const normalized = (z0 + 3) / 6; // Shift and scale to 0-1
+    const clamped = Math.max(0, Math.min(1, normalized));
+    
+    // Map to min-max range
+    return Math.floor(minSteps + clamped * (maxSteps - minSteps));
+  }
+
+  /**
+   * Process exit previews - update visuals and convert to obstacles when ready
+   */
+  private processExitPreviews(step: number, gameHeight: number, gameWidth: number, horizonY: number, roadY: number, phaseOffset: number, bez: Function, centerX: number) {
+    // Update preview visuals
+    this.exitPreviews.forEach(previewData => {
+      const { preview, visual } = previewData;
+      
+      // Update preview visual position
+      const snappedY = roadY + Math.max(0, Math.floor(((preview.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
+      const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+      
+      const laneIndex = this.laneIndices[this.laneIndices.length - 1]; // Exit lane
+      const worldOffset = -this.worldLateralOffset;
+      const laneTermVis = laneIndex * (this.laneSpacingBottom * tVis);
+      const xProjectedVis = centerX + bez(tVis) + laneTermVis + worldOffset;
+      
+      visual.setPosition(xProjectedVis, snappedY);
+      
+      // Update perspective scaling
+      const baseW = preview.getData('baseW') ?? preview.width;
+      const baseH = preview.getData('baseH') ?? preview.height;
+      const widthScale = 0.2 + 0.8 * tVis;
+      const heightScale = 0.4 + 0.6 * tVis;
+      visual.displayWidth = baseW * widthScale;
+      visual.displayHeight = baseH * heightScale;
+    });
+    
+    // Check for previews ready to become obstacles
+    const readyPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation <= 0);
+    
+    readyPreviews.forEach(previewData => {
+      this.convertPreviewToObstacle(previewData);
+    });
+    
+    // Remove processed previews
+    this.exitPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation > 0);
+    
+    // Decrement remaining steps for all previews
+    this.exitPreviews.forEach(previewData => {
+      previewData.stepsUntilActivation--;
+    });
+  }
+
+  /**
+   * Convert exit preview to collidable obstacle
+   */
+  private convertPreviewToObstacle(previewData: any) {
+    const { preview, visual, originalData } = previewData;
+    
+    // Make preview collidable by adding it to obstacles array
+    preview.setData('isExit', true);
+    preview.setData('visual', visual);
+    preview.setData('baseW', originalData.baseW);
+    preview.setData('baseH', originalData.baseH);
+    preview.setData('laneIndex', originalData.laneIndex);
+    preview.setData('laneOffset', originalData.laneOffset);
+    preview.setData('baseX', originalData.baseX);
+    
+    this.obstacles.push(preview);
+    
+    // Clean up preview data
+    previewData.preview.destroy();
+    previewData.visual.destroy();
   }
 
   /** Update radar each frame */
