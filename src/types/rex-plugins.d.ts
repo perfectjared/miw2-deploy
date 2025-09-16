@@ -17,13 +17,11 @@
 
 declare namespace Phaser {
   interface Scene {
-    rexUI: any;
-  }
-  
-  namespace GameObjects {
-    interface GameObjectFactory {
-      rexTextPlayer: (config?: any) => any;
-    }
+    rexUI: {
+      add: {
+        textPlayer: (config?: any) => any;
+      };
+    };
   }
 }
 

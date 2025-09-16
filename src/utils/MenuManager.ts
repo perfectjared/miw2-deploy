@@ -192,7 +192,7 @@ export class MenuManager {
     const titleText = this.scene.add.text(0, -70, title, { fontSize: '22px', color: '#ffffff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5);
     
     // Use TextPlayer for story content
-    const contentTextPlayer = this.scene.add.rexTextPlayer({
+    const contentTextPlayer = this.scene.rexUI.add.textPlayer({
       x: 0,
       y: 0,
       width: 260,
@@ -1560,7 +1560,7 @@ export class MenuManager {
     
     // Content - use TextPlayer for typing effect
     if (menuConfig.content) {
-      const contentTextPlayer = this.scene.add.rexTextPlayer({
+      const contentTextPlayer = this.scene.rexUI.add.textPlayer({
         x: 0,
         y: -20,
         width: 250,
