@@ -244,16 +244,35 @@ export class TutorialSystem {
     // Create cutouts for both keys and ignition
     this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
     
-    // Keys cutout with 20% padding
+    // Keys cutout with 20% padding (convert world -> screen if needed)
     if (this.frontseatKeys?.gameObject) {
       const keysPos = this.frontseatKeys.gameObject;
+      let sx = keysPos.x;
+      let sy = keysPos.y;
+      try {
+        const gc: any = (this.scene as any).gameContentContainer;
+        if (gc && gc.getWorldTransformMatrix) {
+          const m = gc.getWorldTransformMatrix();
+          const p = m.transformPoint(keysPos.x, keysPos.y);
+          sx = p.x; sy = p.y;
+        }
+      } catch {}
       const keysHoleRadius = this.config.keysHoleRadius * 1.2; // 20% larger
-      this.tutorialMaskGraphics.fillCircle(keysPos.x, keysPos.y, keysHoleRadius);
+      this.tutorialMaskGraphics.fillCircle(sx, sy, keysHoleRadius);
     }
     
-    // Ignition cutout with 20% padding
-    const ignitionX = this.config.magneticTargetX;
-    const ignitionY = this.config.magneticTargetY;
+    // Ignition cutout with 20% padding (prefer live magnetic target position)
+    let ignitionX = this.config.magneticTargetX;
+    let ignitionY = this.config.magneticTargetY;
+    try {
+      const mt: any = (this.scene as any).magneticTarget;
+      const gc: any = (this.scene as any).gameContentContainer;
+      if (mt && gc && gc.getWorldTransformMatrix) {
+        const m = gc.getWorldTransformMatrix();
+        const p = m.transformPoint(mt.x ?? ignitionX, mt.y ?? ignitionY);
+        ignitionX = p.x; ignitionY = p.y;
+      }
+    } catch {}
     const ignitionHoleRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2; // 20% larger
     this.tutorialMaskGraphics.fillCircle(ignitionX, ignitionY, ignitionHoleRadius);
   }
@@ -291,11 +310,11 @@ export class TutorialSystem {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Steering dial is typically on the left side
-    const steeringX = gameWidth * 0.3; // Left side
-    const steeringY = gameHeight * 0.6; // Middle height
-    
-    this.tutorialMaskGraphics.fillCircle(steeringX, steeringY, 60); // Larger radius for steering dial
+    // Match GameUI dial placement (x: 0.3, y: 0.7) and knob radius (~80) with padding
+    const steeringX = gameWidth * 0.3;
+    const steeringY = gameHeight * 0.7;
+    const radius = 80 + 16; // knobRadius + padding
+    this.tutorialMaskGraphics.fillCircle(steeringX, steeringY, radius);
   }
 
   /**
