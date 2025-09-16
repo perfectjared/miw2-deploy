@@ -68,6 +68,11 @@ const config: Phaser.Types.Core.GameConfig = {
         key: 'rexUI',
         plugin: rexuiplugin,
         mapping: 'rexUI'
+      },
+      {
+        key: 'rexTextPlayer',
+        plugin: rexuiplugin,
+        mapping: 'rexTextPlayer'
       }
     ]
   },

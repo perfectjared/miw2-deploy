@@ -19,6 +19,12 @@ declare namespace Phaser {
   interface Scene {
     rexUI: any;
   }
+  
+  namespace GameObjects {
+    interface GameObjectFactory {
+      rexTextPlayer: (config?: any) => any;
+    }
+  }
 }
 
 declare module 'phaser3-rex-plugins/dist/rexuiplugin.js';

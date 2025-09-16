@@ -190,8 +190,31 @@ export class MenuManager {
     this.currentDialog.add(dialogBackground);
 
     const titleText = this.scene.add.text(0, -70, title, { fontSize: '22px', color: '#ffffff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5);
-    const contentText = this.scene.add.text(0, 0, content, { fontSize: '16px', color: '#ffffff', wordWrap: { width: 260 }, align: 'center' }).setOrigin(0.5);
-    this.currentDialog.add([titleText, contentText]);
+    
+    // Use TextPlayer for story content
+    const contentTextPlayer = this.scene.add.rexTextPlayer({
+      x: 0,
+      y: 0,
+      width: 260,
+      height: 80,
+      text: content,
+      style: {
+        fontSize: '16px',
+        color: '#ffffff',
+        wordWrap: { width: 260 },
+        align: 'center'
+      },
+      typingSpeed: 60, // Slightly faster for story overlays
+      wrap: {
+        mode: 'word',
+        width: 260
+      }
+    });
+    contentTextPlayer.setOrigin(0.5);
+    this.currentDialog.add([titleText, contentTextPlayer]);
+    
+    // Start typing immediately
+    contentTextPlayer.start();
 
     // Mark as ephemeral and set step countdown
     (this.currentDialog as any).isStory = true;
@@ -1535,16 +1558,31 @@ export class MenuManager {
     
     console.log('MenuManager: Dialog background and title added. Dialog children count:', this.currentDialog.list.length);
     
-    // Content
+    // Content - use TextPlayer for typing effect
     if (menuConfig.content) {
-      const content = this.scene.add.text(0, -20, menuConfig.content, {
-        fontSize: '16px',
-        color: '#ffffff',
-        wordWrap: { width: 250 },
-        align: 'center'
+      const contentTextPlayer = this.scene.add.rexTextPlayer({
+        x: 0,
+        y: -20,
+        width: 250,
+        height: 100,
+        text: menuConfig.content,
+        style: {
+          fontSize: '16px',
+          color: '#ffffff',
+          wordWrap: { width: 250 },
+          align: 'center'
+        },
+        typingSpeed: 50, // Characters per second
+        wrap: {
+          mode: 'word',
+          width: 250
+        }
       });
-      content.setOrigin(0.5);
-      this.currentDialog.add(content);
+      contentTextPlayer.setOrigin(0.5);
+      this.currentDialog.add(contentTextPlayer);
+      
+      // Start typing immediately
+      contentTextPlayer.start();
     }
     
     // Buttons
