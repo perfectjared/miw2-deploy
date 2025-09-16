@@ -640,10 +640,9 @@ export class CarMechanics {
    * Update obstacles
    */
   private updateObstacles() {
-    // Move existing obstacles
+    // Move existing obstacles - REMOVED CONTINUOUS MOVEMENT
+    // All movement is now step-based in onStepChanged()
     this.obstacles.forEach(obstacle => {
-      // Advance logical position continuously
-      obstacle.y += this.config.potholeSpeed;
       // Apply lateral offset so obstacles follow road/world movement
       const gameWidth = this.scene.cameras.main.width;
       const gameHeight = this.scene.cameras.main.height;
@@ -753,10 +752,11 @@ export class CarMechanics {
       }
     });
     
-    // Move exit previews down the road
-    this.exitPreviews.forEach(previewData => {
-      previewData.preview.y += this.config.potholeSpeed;
-    });
+    // Move exit previews down the road - REMOVED CONTINUOUS MOVEMENT
+    // All movement is now step-based in onStepChanged()
+    // this.exitPreviews.forEach(previewData => {
+    //   previewData.preview.y += this.config.potholeSpeed;
+    // });
     
     // Clean up previews that have spawned their exit (after a delay)
     this.exitPreviews.forEach(previewData => {
@@ -1076,6 +1076,9 @@ export class CarMechanics {
     
     // Update regular obstacles
     this.obstacles.forEach(obstacle => {
+      // Step-based movement: advance logical position
+      obstacle.y += this.config.potholeSpeed;
+      
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (!visual) return;
       
@@ -1132,6 +1135,9 @@ export class CarMechanics {
     // Update preview visuals
     this.exitPreviews.forEach(previewData => {
       const { preview, visual } = previewData;
+      
+      // Step-based movement: advance logical position
+      preview.y += this.config.potholeSpeed;
       
       // Update preview visual position
       const snappedY = roadY + Math.max(0, Math.floor(((preview.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
