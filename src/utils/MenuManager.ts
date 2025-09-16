@@ -204,17 +204,21 @@ export class MenuManager {
         wordWrap: { width: 260 },
         align: 'center'
       },
-      typingSpeed: 60, // Slightly faster for story overlays
-      wrap: {
-        mode: 'word',
-        width: 260
-      }
+      typingSpeed: 60 // Slightly faster for story overlays
     });
     contentTextPlayer.setOrigin(0.5);
     this.currentDialog.add([titleText, contentTextPlayer]);
     
-    // Start typing immediately
-    contentTextPlayer.start();
+    // Start typing immediately - try different method names
+    if (typeof contentTextPlayer.play === 'function') {
+      contentTextPlayer.play();
+    } else if (typeof contentTextPlayer.start === 'function') {
+      contentTextPlayer.start();
+    } else if (typeof contentTextPlayer.startTyping === 'function') {
+      contentTextPlayer.startTyping();
+    } else {
+      console.log('TextPlayer methods available:', Object.getOwnPropertyNames(contentTextPlayer));
+    }
 
     // Mark as ephemeral and set step countdown
     (this.currentDialog as any).isStory = true;
@@ -1572,17 +1576,21 @@ export class MenuManager {
           wordWrap: { width: 250 },
           align: 'center'
         },
-        typingSpeed: 50, // Characters per second
-        wrap: {
-          mode: 'word',
-          width: 250
-        }
+        typingSpeed: 50 // Characters per second
       });
       contentTextPlayer.setOrigin(0.5);
       this.currentDialog.add(contentTextPlayer);
       
-      // Start typing immediately
-      contentTextPlayer.start();
+      // Start typing immediately - try different method names
+      if (typeof contentTextPlayer.play === 'function') {
+        contentTextPlayer.play();
+      } else if (typeof contentTextPlayer.start === 'function') {
+        contentTextPlayer.start();
+      } else if (typeof contentTextPlayer.startTyping === 'function') {
+        contentTextPlayer.startTyping();
+      } else {
+        console.log('TextPlayer methods available:', Object.getOwnPropertyNames(contentTextPlayer));
+      }
     }
     
     // Buttons
