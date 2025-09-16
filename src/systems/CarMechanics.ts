@@ -116,6 +116,7 @@ export class CarMechanics {
     visual: Phaser.GameObjects.Rectangle;
     stepsUntilActivation: number;
     originalData: any;
+    hasExitedScreen: boolean;
   }> = [];
 
   // Debug Radar
@@ -735,9 +736,16 @@ export class CarMechanics {
       }
     });
     
-    // Remove exit previews that are off screen
+    // Handle exit previews that have exited screen
     this.exitPreviews.forEach(previewData => {
-      if (previewData.preview.y > this.scene.cameras.main.height) {
+      if (previewData.preview.y > this.scene.cameras.main.height && !previewData.hasExitedScreen) {
+        // Mark as exited screen and start timer
+        previewData.hasExitedScreen = true;
+        console.log('Preview exited screen, starting timer with', previewData.stepsUntilActivation, 'steps');
+      }
+      
+      // Clean up previews that have spawned their exit
+      if (previewData.hasExitedScreen && previewData.stepsUntilActivation <= 0) {
         // Clean up preview and its visual
         previewData.preview.destroy();
         previewData.visual.destroy();
@@ -748,9 +756,11 @@ export class CarMechanics {
       }
     });
     
-    // Move exit previews down the road
+    // Move exit previews down the road (only those still on screen)
     this.exitPreviews.forEach(previewData => {
-      previewData.preview.y += this.config.potholeSpeed;
+      if (!previewData.hasExitedScreen) {
+        previewData.preview.y += this.config.potholeSpeed;
+      }
     });
 
     // Record last steering value used for visual horizontal updates
@@ -881,7 +891,8 @@ export class CarMechanics {
         preview: obstacle,
         visual: visual,
         stepsUntilActivation: stepsUntilActivation,
-        originalData: originalData
+        originalData: originalData,
+        hasExitedScreen: false
       });
       
       // Don't add to obstacles array yet - it's not collidable
@@ -1110,8 +1121,10 @@ export class CarMechanics {
    * Process exit previews - update visuals and spawn new obstacles when ready
    */
   private processExitPreviews(step: number, gameHeight: number, gameWidth: number, horizonY: number, roadY: number, phaseOffset: number, bez: Function, centerX: number) {
-    // Update preview visuals
+    // Update preview visuals (only for previews still on screen)
     this.exitPreviews.forEach(previewData => {
+      if (previewData.hasExitedScreen) return; // Skip visual updates for exited previews
+      
       const { preview, visual } = previewData;
       
       // Update preview visual position
@@ -1134,18 +1147,22 @@ export class CarMechanics {
       visual.displayHeight = baseH * heightScale;
     });
     
-    // Check for previews ready to spawn new obstacles
-    const readyPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation <= 0);
+    // Check for previews ready to spawn new obstacles (only those that have exited screen)
+    const readyPreviews = this.exitPreviews.filter(previewData => 
+      previewData.hasExitedScreen && previewData.stepsUntilActivation <= 0
+    );
     
     readyPreviews.forEach(previewData => {
       this.spawnExitFromPreview(previewData);
-      // Mark preview as spawned so it gets cleaned up when off-screen
+      // Mark preview as spawned so it gets cleaned up
       previewData.preview.setData('spawned', true);
     });
     
-    // Decrement remaining steps for all previews
+    // Decrement remaining steps for all previews that have exited screen
     this.exitPreviews.forEach(previewData => {
-      previewData.stepsUntilActivation--;
+      if (previewData.hasExitedScreen) {
+        previewData.stepsUntilActivation--;
+      }
     });
   }
 
