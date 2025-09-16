@@ -261,16 +261,16 @@ export class TutorialSystem {
       this.tutorialMaskGraphics.fillCircle(sx, sy, keysHoleRadius);
     }
     
-    // Ignition cutout with 20% padding (prefer live magnetic target position)
+    // Ignition cutout with 20% padding (prefer live magnetic body position in world/screen space)
     let ignitionX = this.config.magneticTargetX;
     let ignitionY = this.config.magneticTargetY;
     try {
       const mt: any = (this.scene as any).magneticTarget;
-      const gc: any = (this.scene as any).gameContentContainer;
-      if (mt && gc && gc.getWorldTransformMatrix) {
-        const m = gc.getWorldTransformMatrix();
-        const p = m.transformPoint(mt.x ?? ignitionX, mt.y ?? ignitionY);
-        ignitionX = p.x; ignitionY = p.y;
+      const magneticBody: any = mt && (mt as any).magneticBody;
+      if (magneticBody && magneticBody.position) {
+        // Matter body position is already in world/screen coordinates
+        ignitionX = magneticBody.position.x;
+        ignitionY = magneticBody.position.y;
       }
     } catch {}
     const ignitionHoleRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2; // 20% larger
