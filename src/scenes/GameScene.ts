@@ -904,25 +904,25 @@ export class GameScene extends Phaser.Scene {
       this.gameState.updateState({ keysInIgnition: true });
       console.log('Keys snapped to ignition');
       
-      // Disable physics body for the key when it's constrained
-      if (this.frontseatKeys.gameObject.body) {
-        (this.frontseatKeys.gameObject.body as any).isStatic = true;
-        console.log('Key physics disabled (static)');
-      }
-      
-      // Set up collision filtering to prevent key from colliding with other items
+      // Disable physics body for the key when it's constrained & prevent collisions
       if (this.frontseatKeys.gameObject.body) {
         const keyBody = this.frontseatKeys.gameObject.body as any;
-        // Store original collision filter for restoration later
-        keyBody.originalCollisionFilter = keyBody.collisionFilter || { group: 0, category: 0x0001, mask: 0xFFFF };
-        
-        // Use collision groups - put key in group -1 (negative group = no collisions with other objects)
-        keyBody.collisionFilter = {
-          group: -1,        // Negative group prevents collisions with other objects
-          category: 0x0001, // Key category
-          mask: 0x0001      // Only collide with pointer/ground
+        keyBody.isStatic = true;
+        // Store originals for restoration later
+        keyBody._originalCollisionFilter = {
+          group: keyBody.collisionFilter?.group ?? 0,
+          category: keyBody.collisionFilter?.category ?? 0x0001,
+          mask: keyBody.collisionFilter?.mask ?? 0xFFFF
         };
-        console.log('Key collision filtering enabled - using collision group -1');
+        keyBody._originalIsSensor = !!keyBody.isSensor;
+        // Easiest way: make it a sensor and mask out collisions
+        keyBody.isSensor = true;
+        keyBody.collisionFilter = {
+          group: -1,        // negative group avoids collisions
+          category: 0x0001,
+          mask: 0x0000      // collide with nothing
+        };
+        // console.log('Key collision disabled while constrained');
       }
       
       // Update tutorial overlay (debounced)

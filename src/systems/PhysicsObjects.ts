@@ -400,6 +400,17 @@ export class Keys implements PhysicsObject {
       if ((this.scene as any).keysConstraint) {
         this.scene.matter.world.removeConstraint((this.scene as any).keysConstraint);
         (this.scene as any).keysConstraint = null;
+        // Restore key physics & collisions
+        if (this.gameObject.body) {
+          const keyBody = this.gameObject.body as any;
+          keyBody.isStatic = false;
+          if (keyBody._originalCollisionFilter) {
+            keyBody.collisionFilter = { ...keyBody._originalCollisionFilter };
+          } else {
+            keyBody.collisionFilter = { group: 0, category: 0x0001, mask: 0xFFFF };
+          }
+          keyBody.isSensor = !!keyBody._originalIsSensor;
+        }
         // Reflect state change immediately so tutorial can react
         (this.scene as any).keysInIgnition = false;
         if ((this.scene as any).gameState?.updateState) {
