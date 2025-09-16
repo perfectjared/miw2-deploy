@@ -179,10 +179,7 @@ export class CarMechanics {
     // Reset camera to center position when starting
     this.resetDrivingCamera();
     
-    // Update car position
-    if (this.drivingCar) {
-      this.drivingCar.setX(this.carX);
-    }
+    // Keep visual car fixed; do not set X here
     
     this.startForwardMovementTimer();
     this.startNeutralReturnTimer();
@@ -444,8 +441,7 @@ export class CarMechanics {
       // decay turn to neutral when nearly stopped
       this.turn = Math.abs(this.turn) < 0.01 ? 0 : Phaser.Math.Linear(this.turn, 0, this.config.turnResetMultiplier);
       // still allow car to keep its current lateral position (no forced recenter)
-      // update visual position
-      this.drivingCar.setX(this.carX);
+      // keep visual car fixed; do not move rectangle here
       return;
     }
     
@@ -511,8 +507,7 @@ export class CarMechanics {
     // Clamp car within road bounds
     const gameWidthLocal = this.scene.cameras.main.width;
     this.carX = Phaser.Math.Clamp(this.carX, this.config.boundaryPadding, gameWidthLocal - this.config.boundaryPadding);
-    // Update car visual position
-    this.drivingCar.setX(this.carX);
+    // Keep visual car fixed at screen center; do not move rectangle here
     
     // Debug log disabled to avoid console flooding during interaction
     
@@ -541,16 +536,9 @@ export class CarMechanics {
     const cameraTrackingFactor = 0.3; // 30% of car movement translates to camera movement
     const cameraOffsetX = carOffsetFromCenter * cameraTrackingFactor;
     
-    // Combine world offset with camera tracking offset
-    const totalOffsetX = offsetX + cameraOffsetX;
-    
-    // Limit camera scroll to prevent UI elements from going offscreen
-    // Clamp the total offset to reasonable bounds (e.g., ±200 pixels)
-    const maxScrollOffset = 200;
-    const clampedOffsetX = Phaser.Math.Clamp(totalOffsetX, -maxScrollOffset, maxScrollOffset);
-    
-    // Apply horizontal camera scroll to follow the car
-    this.scene.cameras.main.setScroll(clampedOffsetX, 0);
+    // Keep main camera fixed; do not scroll horizontally
+    const totalOffsetX = 0;
+    this.scene.cameras.main.setScroll(0, 0);
     
     // Store camera angle for dash elements to use (but don't apply to main camera)
     const speedFactor = this.carSpeed / Math.max(1, this.config.carMaxSpeed);
