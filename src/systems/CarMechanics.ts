@@ -174,7 +174,11 @@ export class CarMechanics {
     // Listen for step changes to update obstacle visuals
     this.scene.events.on('step', this.onStepChanged, this);
 
-    // (low-res RT disabled)
+    // Add 'E' key handler for testing exit spawning
+    this.scene.input.keyboard?.on('keydown-E', () => {
+      console.log('E key pressed - spawning test exit preview');
+      this.spawnTestExitPreview();
+    });
   }
 
   /**
@@ -994,6 +998,93 @@ export class CarMechanics {
     
     // Schedule next obstacle
     this.startObstacleSpawning();
+  }
+
+  /**
+   * Spawn a test exit preview for debugging (triggered by 'E' key)
+   */
+  private spawnTestExitPreview() {
+    console.log('Spawning test exit preview');
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
+    
+    // Create exit preview (non-collidable) occupying right 30% of road width
+    const roadWidthPx = gameWidth;
+    const exitWidthPx = Math.floor(roadWidthPx * 0.30);
+    const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
+    
+    // Create preview obstacle (not collidable yet)
+    const obstacle = this.scene.add.rectangle(
+      exitX,
+      horizonY + 2,
+      exitWidthPx,
+      this.config.exitHeight,
+      this.config.exitColor,
+      0.5 // Semi-transparent to indicate it's a preview
+    );
+    
+    // Generate bell-curved delay between 5-20 steps
+    const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
+    
+    // Store original data for later conversion
+    const originalData = {
+      baseW: exitWidthPx,
+      baseH: this.config.exitHeight,
+      laneIndex: this.laneIndices[this.laneIndices.length - 1],
+      laneOffset: (exitX - gameWidth / 2) / this.laneSpacingBottom,
+      baseX: exitX
+    };
+    
+    // Create visual for preview
+    const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
+    visual.setDepth(this.config.roadDepth + 0.5);
+    
+    // Add to exit previews array instead of obstacles
+    this.exitPreviews.push({
+      preview: obstacle,
+      visual: visual,
+      stepsUntilActivation: stepsUntilActivation,
+      originalData: originalData
+    });
+    
+    // Don't add to obstacles array yet - it's not collidable
+    obstacle.setData('isExitPreview', true);
+    obstacle.setData('exitWidthPx', exitWidthPx);
+    obstacle.setData('stepsUntilActivation', stepsUntilActivation);
+    
+    // Add to driving container
+    this.drivingContainer.add(obstacle);
+    this.drivingContainer.add(visual);
+    
+    // Store data for later use
+    obstacle.setData('baseX', exitX);
+    obstacle.setData('laneOffset', (exitX - gameWidth / 2) / this.laneSpacingBottom);
+    obstacle.setData('baseW', exitWidthPx);
+    obstacle.setData('baseH', this.config.exitHeight);
+    obstacle.setData('visual', visual);
+    obstacle.setData('laneIndex', this.laneIndices[this.laneIndices.length - 1]);
+    
+    // Initialize visual position
+    const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
+    const snappedY = horizonY + Math.max(0, Math.floor(((obstacle.y - horizonY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
+    const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+    const bendStrength = this.config.roadBendStrength ?? 140;
+    const end = this.currentCurve * bendStrength;
+    const control = end * 0.6;
+    const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+    const lensBase = this.getLensStrength();
+    const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+    const laneIndexForVis: number = this.laneIndices[this.laneIndices.length - 1];
+    const lensOffset = (laneIndexForVis >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
+    const xProjectedVis = gameWidth / 2 + bez(tVis) + laneIndexForVis * (this.laneSpacingBottom * tVis) + lensOffset;
+    visual.setPosition(xProjectedVis, snappedY);
+    const widthScale = 0.2 + 0.8 * tVis;
+    const heightScale = 0.4 + 0.6 * tVis;
+    visual.displayWidth = exitWidthPx * widthScale;
+    visual.displayHeight = this.config.exitHeight * heightScale;
+    
+    console.log('Test exit preview created with', stepsUntilActivation, 'steps until activation');
   }
 
   /**
