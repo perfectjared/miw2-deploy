@@ -544,8 +544,13 @@ export class CarMechanics {
     // Combine world offset with camera tracking offset
     const totalOffsetX = offsetX + cameraOffsetX;
     
+    // Limit camera scroll to prevent UI elements from going offscreen
+    // Clamp the total offset to reasonable bounds (e.g., ±200 pixels)
+    const maxScrollOffset = 200;
+    const clampedOffsetX = Phaser.Math.Clamp(totalOffsetX, -maxScrollOffset, maxScrollOffset);
+    
     // Apply horizontal camera scroll to follow the car
-    this.scene.cameras.main.setScroll(totalOffsetX, 0);
+    this.scene.cameras.main.setScroll(clampedOffsetX, 0);
     
     // Store camera angle for dash elements to use (but don't apply to main camera)
     const speedFactor = this.carSpeed / Math.max(1, this.config.carMaxSpeed);

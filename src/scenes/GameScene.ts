@@ -1068,25 +1068,20 @@ export class GameScene extends Phaser.Scene {
     if (this.keySVG) {
       const physicsRotation = (this.keySVG as any).physicsRotation || 0;
       const combinedAngle = physicsRotation + angle;
-      console.log('GameScene: Rotating key SVG from angle', this.keySVG.angle, 'to', combinedAngle, '(physics:', physicsRotation, '+ camera:', angle, ')');
       this.keySVG.setAngle(combinedAngle);
-      console.log('GameScene: Key SVG now at angle:', this.keySVG.angle);
     }
     
-    // Rotate magnetic target graphics
-    if (this.magneticTarget) {
-      console.log('GameScene: Rotating magnetic target from angle', this.magneticTarget.angle, 'to', angle);
-      this.magneticTarget.setAngle(angle);
-      console.log('GameScene: Magnetic target now at angle:', this.magneticTarget.angle);
-    }
+    // Keep magnetic target and rearview rectangle upright (no rotation)
+    // These elements should stay fixed relative to the screen, not rotate with camera
+    // if (this.magneticTarget) {
+    //   this.magneticTarget.setAngle(angle);
+    // }
     
-    // Rotate rearview mirror container
-    const rearviewContainer = this.children.getByName('rearviewContainer');
-    if (rearviewContainer) {
-      console.log('GameScene: Rotating rearview container from angle', (rearviewContainer as any).angle, 'to', angle);
-      (rearviewContainer as any).setAngle(angle);
-      console.log('GameScene: Rearview container now at angle:', (rearviewContainer as any).angle);
-    }
+    // Keep rearview mirror container upright (no rotation)
+    // const rearviewContainer = this.children.getByName('rearviewContainer');
+    // if (rearviewContainer) {
+    //   (rearviewContainer as any).setAngle(angle);
+    // }
   }
 
   /**
