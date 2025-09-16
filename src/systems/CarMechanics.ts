@@ -1076,8 +1076,8 @@ export class CarMechanics {
     
     // Update regular obstacles
     this.obstacles.forEach(obstacle => {
-      // Step-based movement: advance logical position
-      obstacle.y += this.config.potholeSpeed;
+      // Step-based movement: advance logical position (increased speed for step-based)
+      obstacle.y += this.config.potholeSpeed * 4; // Multiply by 4 since steps happen every 4th countdown
       
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (!visual) return;
@@ -1136,8 +1136,8 @@ export class CarMechanics {
     this.exitPreviews.forEach(previewData => {
       const { preview, visual } = previewData;
       
-      // Step-based movement: advance logical position
-      preview.y += this.config.potholeSpeed;
+      // Step-based movement: advance logical position (increased speed for step-based)
+      preview.y += this.config.potholeSpeed * 4; // Multiply by 4 since steps happen every 4th countdown
       
       // Update preview visual position
       const snappedY = roadY + Math.max(0, Math.floor(((preview.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
