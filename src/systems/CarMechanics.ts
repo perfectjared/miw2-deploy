@@ -1094,7 +1094,7 @@ export class CarMechanics {
   }
 
   /**
-   * Process exit previews - update visuals and convert to obstacles when ready
+   * Process exit previews - update visuals and spawn new obstacles when ready
    */
   private processExitPreviews(step: number, gameHeight: number, gameWidth: number, horizonY: number, roadY: number, phaseOffset: number, bez: Function, centerX: number) {
     // Update preview visuals
@@ -1121,11 +1121,11 @@ export class CarMechanics {
       visual.displayHeight = baseH * heightScale;
     });
     
-    // Check for previews ready to become obstacles
+    // Check for previews ready to spawn new obstacles
     const readyPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation <= 0);
     
     readyPreviews.forEach(previewData => {
-      this.convertPreviewToObstacle(previewData);
+      this.spawnExitFromPreview(previewData);
     });
     
     // Remove processed previews
@@ -1138,25 +1138,49 @@ export class CarMechanics {
   }
 
   /**
-   * Convert exit preview to collidable obstacle
+   * Spawn new collidable exit obstacle from preview data
    */
-  private convertPreviewToObstacle(previewData: any) {
-    const { preview, visual, originalData } = previewData;
+  private spawnExitFromPreview(previewData: any) {
+    const { preview, originalData } = previewData;
     
-    // Make preview collidable by adding it to obstacles array
-    preview.setData('isExit', true);
-    preview.setData('visual', visual);
-    preview.setData('baseW', originalData.baseW);
-    preview.setData('baseH', originalData.baseH);
-    preview.setData('laneIndex', originalData.laneIndex);
-    preview.setData('laneOffset', originalData.laneOffset);
-    preview.setData('baseX', originalData.baseX);
+    // Create a completely new collidable exit obstacle
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
     
-    this.obstacles.push(preview);
+    // Create new exit obstacle at the same position as preview
+    const newExit = this.scene.add.rectangle(
+      preview.x,
+      preview.y,
+      originalData.baseW,
+      originalData.baseH,
+      this.config.exitColor,
+      1.0 // Fully opaque for collidable obstacle
+    );
     
-    // Clean up preview data
-    previewData.preview.destroy();
-    previewData.visual.destroy();
+    // Set up the new obstacle with all necessary data
+    newExit.setData('isExit', true);
+    newExit.setData('exitWidthPx', originalData.baseW);
+    newExit.setData('baseX', originalData.baseX);
+    newExit.setData('laneOffset', originalData.laneOffset);
+    newExit.setData('baseW', originalData.baseW);
+    newExit.setData('baseH', originalData.baseH);
+    newExit.setData('laneIndex', originalData.laneIndex);
+    
+    // Create visual for the new obstacle
+    const visual = this.scene.add.rectangle(newExit.x, newExit.y, newExit.width, newExit.height, this.config.exitColor, 1.0);
+    visual.setDepth(this.config.roadDepth + 0.5);
+    newExit.setData('visual', visual);
+    
+    // Add to driving container
+    this.drivingContainer.add(newExit);
+    this.drivingContainer.add(visual);
+    
+    // Add to obstacles array so it becomes collidable
+    this.obstacles.push(newExit);
+    
+    // Clean up the preview (it continues moving down and will be removed when off-screen)
+    // Don't destroy it immediately - let it continue moving down naturally
   }
 
   /** Update radar each frame */
