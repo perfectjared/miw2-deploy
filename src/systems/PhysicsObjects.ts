@@ -65,6 +65,8 @@ export class Trash implements PhysicsObject {
     let lastPointerY = 0;
     let velocityX = 0;
     let velocityY = 0;
+    let pointerBody: any = null;
+    let dragConstraint: any = null;
     
     this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       isDragging = true;
@@ -88,44 +90,32 @@ export class Trash implements PhysicsObject {
         this.scene.children.bringToTop(this.gameObject);
       }
       
-      // Disable physics during drag
-      if (this.gameObject.body) {
-        (this.gameObject.body as any).isStatic = true;
+      // Springy drag: create a static pointer body and a soft constraint to the object
+      if (this.gameObject.body && !pointerBody) {
+        pointerBody = this.scene.matter.add.circle(pointer.x, pointer.y, 1, {
+          isStatic: true,
+          isSensor: true,
+          collisionFilter: { group: 0, category: 0x0001, mask: 0x0000 }
+        });
+        // Short, stiff spring for tighter follow
+        dragConstraint = this.scene.matter.add.constraint(pointerBody, this.gameObject.body as any, 0, 0.02, { damping: 0.15 });
       }
-    });
 
-    // Use global pointer move instead of object-specific
-    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!this.gameObject || !this.gameObject.scene) {
-        isDragging = false;
-        (this.scene as any).isDraggingObject = false;
-        if ((this.scene as any).draggingItem === this.gameObject) {
-          (this.scene as any).draggingItem = null;
-        }
-        return;
-      }
-      if (isDragging) {
-        // Calculate velocity for momentum
-        velocityX = pointer.x - lastPointerX;
-        velocityY = pointer.y - lastPointerY;
-        lastPointerX = pointer.x;
-        lastPointerY = pointer.y;
-        
-        // Convert screen coordinates to container-relative coordinates for Trash
-        this.gameObject.x = pointer.x;
-        this.gameObject.y = pointer.y;
-      }
-    });
-
-    // Use global pointer up instead of object-specific
-    this.scene.input.on('pointerup', () => {
-      if (isDragging) {
+      // Register transient move/up handlers for this drag only
+      const moveHandler = (p: Phaser.Input.Pointer) => {
+        if (!isDragging) return;
+        velocityX = p.x - lastPointerX;
+        velocityY = p.y - lastPointerY;
+        lastPointerX = p.x;
+        lastPointerY = p.y;
+        if (pointerBody) this.scene.matter.body.setPosition(pointerBody, { x: p.x, y: p.y });
+      };
+      const upHandler = () => {
+        if (!isDragging) return;
         isDragging = false;
         this.gameObject.setFillStyle(originalColor);
         (this.scene as any).isDraggingObject = false;
-        // Keep item in overlay until it either feeds or leaves pointer.
-        // If it still exists at pointerup (not fed), restore parent/depth.
-        if (!this.gameObject.scene) return; // destroyed by feed
+        if (!this.gameObject.scene) { cleanup(); return; }
         const originalParent: any = (this.gameObject as any)._originalParent;
         if (originalParent) {
           const overlayParent: any = (this.gameObject as any).parentContainer;
@@ -135,14 +125,25 @@ export class Trash implements PhysicsObject {
         }
         const od = (this.gameObject as any)._originalDepth;
         if (typeof od === 'number') this.gameObject.setDepth(od);
-        
-        // Re-enable physics and apply momentum
+        if (dragConstraint) {
+          this.scene.matter.world.removeConstraint(dragConstraint);
+          dragConstraint = null;
+        }
+        if (pointerBody) {
+          this.scene.matter.world.remove(pointerBody);
+          pointerBody = null;
+        }
         if (this.gameObject.body) {
-          (this.gameObject.body as any).isStatic = false;
-          // Apply velocity as momentum
           this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.1, y: velocityY * 0.1 });
         }
-      }
+        cleanup();
+      };
+      const cleanup = () => {
+        this.scene.input.off('pointermove', moveHandler as any, undefined, false as any);
+        this.scene.input.off('pointerup', upHandler as any, undefined, false as any);
+      };
+      this.scene.input.on('pointermove', moveHandler);
+      this.scene.input.once('pointerup', upHandler);
     });
 
     // Hover effects
@@ -226,9 +227,15 @@ export class Item implements PhysicsObject {
         this.scene.children.bringToTop(this.gameObject);
       }
       
-      // Disable physics during drag
-      if (this.gameObject.body) {
-        (this.gameObject.body as any).isStatic = true;
+      // Springy drag: create a static pointer body and a soft constraint to the object
+      if (this.gameObject.body && !pointerBody) {
+        pointerBody = this.scene.matter.add.circle(pointer.x, pointer.y, 1, {
+          isStatic: true,
+          isSensor: true,
+          collisionFilter: { group: 0, category: 0x0001, mask: 0x0000 }
+        });
+        // Short, stiffer spring to follow pointer closely
+        dragConstraint = this.scene.matter.add.constraint(pointerBody, this.gameObject.body as any, 0, 0.02, { damping: 0.15 });
       }
     });
 
@@ -241,10 +248,8 @@ export class Item implements PhysicsObject {
         lastPointerX = pointer.x;
         lastPointerY = pointer.y;
         
-        // Convert screen coordinates to item position in overlay (screen space)
-        this.gameObject.setScrollFactor(0);
-        this.gameObject.x = pointer.x;
-        this.gameObject.y = pointer.y;
+        // Move pointer body; constraint pulls the item for a springy effect
+        if (pointerBody) this.scene.matter.body.setPosition(pointerBody, { x: pointer.x, y: pointer.y });
 
         // Feeding interaction handled at GameScene level via pointer hover.
         const gameScene = this.scene.scene.get('GameScene');
@@ -306,10 +311,16 @@ export class Item implements PhysicsObject {
           }
         }
         
-        // Re-enable physics and apply momentum
+        // Cleanup springy drag helpers and apply momentum to object body
+        if (dragConstraint) {
+          this.scene.matter.world.removeConstraint(dragConstraint);
+          dragConstraint = null;
+        }
+        if (pointerBody) {
+          this.scene.matter.world.remove(pointerBody);
+          pointerBody = null;
+        }
         if (this.gameObject && this.gameObject.scene && this.gameObject.body) {
-          (this.gameObject.body as any).isStatic = false;
-          // Apply velocity as momentum
           this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.1, y: velocityY * 0.1 });
         }
       }
@@ -376,6 +387,8 @@ export class Keys implements PhysicsObject {
     let lastPointerY = 0;
     let velocityX = 0;
     let velocityY = 0;
+    let pointerBody: any = null;
+    let dragConstraint: any = null;
     
     this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       isDragging = true;
@@ -428,9 +441,15 @@ export class Keys implements PhysicsObject {
         }
       }
       
-      // Disable physics during drag
-      if (this.gameObject.body) {
-        (this.gameObject.body as any).isStatic = true;
+      // Springy drag: create a static pointer body and a soft constraint to the object
+      if (this.gameObject.body && !pointerBody) {
+        pointerBody = this.scene.matter.add.circle(pointer.x, pointer.y, 1, {
+          isStatic: true,
+          isSensor: true,
+          collisionFilter: { group: 0, category: 0x0001, mask: 0x0000 }
+        });
+        // Match food/trash behavior: short, stiffer spring for tighter follow
+        dragConstraint = this.scene.matter.add.constraint(pointerBody, this.gameObject.body as any, 0, 0.02, { damping: 0.15 });
       }
     });
 
@@ -443,9 +462,8 @@ export class Keys implements PhysicsObject {
         lastPointerX = pointer.x;
         lastPointerY = pointer.y;
         
-        // Convert screen coordinates to container-relative coordinates for Keys
-        this.gameObject.x = pointer.x;
-        this.gameObject.y = pointer.y;
+        // Move pointer body; constraint pulls the item for a springy effect
+        if (pointerBody) this.scene.matter.body.setPosition(pointerBody, { x: pointer.x, y: pointer.y });
         
         // Update tutorial mask in real-time
         const gameScene = this.scene.scene.get('GameScene');
@@ -475,10 +493,17 @@ export class Keys implements PhysicsObject {
           if (typeof od === 'number') this.gameObject.setDepth(od);
         }
         
-        // Re-enable physics and apply momentum
+        // Cleanup springy drag helpers and apply momentum to object body
+        if (dragConstraint) {
+          this.scene.matter.world.removeConstraint(dragConstraint);
+          dragConstraint = null;
+        }
+        if (pointerBody) {
+          this.scene.matter.world.remove(pointerBody);
+          pointerBody = null;
+        }
         if (this.gameObject.body) {
           (this.gameObject.body as any).isStatic = false;
-          // Apply velocity as momentum
           this.scene.matter.body.setVelocity(this.gameObject.body as any, { x: velocityX * 0.1, y: velocityY * 0.1 });
         }
       }

@@ -135,6 +135,8 @@ export class GameUI {
   private moneyText!: Phaser.GameObjects.Text;
   private healthText!: Phaser.GameObjects.Text;
   private progressText!: Phaser.GameObjects.Text;
+  private progressBarBG!: Phaser.GameObjects.Rectangle;
+  private progressBarFill!: Phaser.GameObjects.Rectangle;
   private managerValuesText!: Phaser.GameObjects.Text;
   private frontseatButton!: Phaser.GameObjects.Graphics;
   private backseatButton!: Phaser.GameObjects.Graphics;
@@ -267,6 +269,20 @@ export class GameUI {
     
     this.progressText.setScrollFactor(0);
     this.progressText.setDepth(10000);
+
+    // Simple progress meter just above countdown
+    const barWidth = 160;
+    const barHeight = 6;
+    const gameWidth2 = this.scene.cameras.main.width;
+    const gameHeight2 = this.scene.cameras.main.height;
+    const countdownX = gameWidth2 * this.config.countdownPositionX;
+    const countdownY = gameHeight2 * this.config.countdownPositionY;
+    const barX = countdownX - barWidth / 2;
+    const barY = countdownY - 16;
+    this.progressBarBG = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x000000, 0.4).setOrigin(0, 0.5);
+    this.progressBarFill = this.scene.add.rectangle(barX, barY, 0, barHeight, 0x00ff00, 0.9).setOrigin(0, 0.5);
+    this.progressBarBG.setScrollFactor(0); this.progressBarBG.setDepth(10000);
+    this.progressBarFill.setScrollFactor(0); this.progressBarFill.setDepth(10001);
   }
 
   /**
@@ -527,29 +543,19 @@ export class GameUI {
       this.scene.events.emit('speedCrankInput', snappedPercentage);
     });
     
-    this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (isDragging) {
-        const crankTop = crankY - this.config.speedCrankHeight / 2;
-        const crankBottom = crankY + this.config.speedCrankHeight / 2;
-        
-        // Calculate new percentage based on current pointer position
-        const newY = Phaser.Math.Clamp(pointer.y, crankTop, crankBottom);
-        const percentage = ((newY - crankTop) / this.config.speedCrankHeight) * 100;
-        
-        // Snap to nearest snap position
-        const snappedPercentage = this.snapToNearestPosition(percentage);
-        this.updateSpeedCrank(snappedPercentage);
-        
-        // Emit event to game scene
-        this.scene.events.emit('speedCrankInput', snappedPercentage);
-      }
-    });
-    
-    this.scene.input.on('pointerup', () => {
-      if (isDragging) {
-        isDragging = false;
-      }
-    });
+    const moveHandler = (p: Phaser.Input.Pointer) => {
+      if (!isDragging) return;
+      const crankTop = crankY - this.config.speedCrankHeight / 2;
+      const crankBottom = crankY + this.config.speedCrankHeight / 2;
+      const newY = Phaser.Math.Clamp(p.y, crankTop, crankBottom);
+      const percentage = ((newY - crankTop) / this.config.speedCrankHeight) * 100;
+      const snappedPercentage = this.snapToNearestPosition(percentage);
+      this.updateSpeedCrank(snappedPercentage);
+      this.scene.events.emit('speedCrankInput', snappedPercentage);
+    };
+    const upHandler = () => { isDragging = false; this.scene.input.off('pointermove', moveHandler as any, undefined, false as any); };
+    this.scene.input.on('pointermove', moveHandler);
+    this.scene.input.once('pointerup', upHandler);
   }
 
   /**
@@ -644,7 +650,7 @@ export class GameUI {
      });
     
      // Track pointer globally while dragging so it keeps responding even off the knob
-     this.scene.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+     const dialMove = (pointer: Phaser.Input.Pointer) => {
        if (isDragging) {
          // Calculate delta movement from last position
          const deltaX = pointer.x - lastPointerX;
@@ -685,7 +691,9 @@ export class GameUI {
          lastPointerX = pointer.x;
          lastPointerY = pointer.y;
        }
-     });
+     };
+     const dialUp = () => { endDrag(); this.scene.input.off('pointermove', dialMove as any, undefined, false as any); };
+     this.scene.input.on('pointermove', dialMove);
     
     const endDrag = () => {
       if (!isDragging) return;
@@ -704,8 +712,8 @@ export class GameUI {
 
     knob.on('pointerup', endDrag);
     knob.on('pointerupoutside', endDrag as any);
-    this.scene.input.on('pointerup', endDrag);
-    this.scene.input.on('gameout', endDrag);
+    this.scene.input.once('pointerup', dialUp);
+    this.scene.input.once('gameout', endDrag as any);
   }
 
   /**
@@ -802,6 +810,10 @@ export class GameUI {
   private updateProgress(progress: number) {
     if (this.progressText) {
       this.progressText.setText(`${Math.round(progress)}%`); // Removed "Progress:" label
+    }
+    if (this.progressBarFill && this.progressBarBG) {
+      const pct = Phaser.Math.Clamp(progress, 0, 100) / 100;
+      this.progressBarFill.width = this.progressBarBG.width * pct;
     }
   }
 

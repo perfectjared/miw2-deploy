@@ -26,6 +26,11 @@ import { MenuScene } from './scenes/MenuScene';
 import { StoryScene } from './scenes/StoryScene';
 import { GameScene } from './scenes/GameScene';
 
+// Ensure single Phaser instance across Vite HMR reloads
+declare global {
+  interface Window { __phaserGame?: Phaser.Game }
+}
+
 // Debug: Check if RexUI is available
 //console.log('rexuiplugin available:', rexuiplugin);
 
@@ -82,4 +87,15 @@ const config: Phaser.Types.Core.GameConfig = {
   powerPreference: 'high-performance'
 };
 
-new Phaser.Game(config);
+if (!window.__phaserGame) {
+  window.__phaserGame = new Phaser.Game(config);
+}
+
+if (import.meta && (import.meta as any).hot) {
+  (import.meta as any).hot.dispose(() => {
+    try {
+      window.__phaserGame?.destroy(true);
+    } catch {}
+    window.__phaserGame = undefined;
+  });
+}

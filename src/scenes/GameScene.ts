@@ -918,6 +918,21 @@ export class GameScene extends Phaser.Scene {
     
     const isDraggingKeys = !!(this.frontseatKeys.gameObject as any).isDragging;
     const attractionWindowActive = Date.now() <= this.keysAttractionUntil;
+
+    // Always reflect visual highlight regardless of dragging
+    if (distance <= magneticConfig.snapThreshold) {
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(5, 0x00ff00, 1);
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+    } else if (distance <= magneticConfig.magneticRange) {
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(3, 0xffff00, 1);
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+    } else {
+      this.magneticTarget.clear();
+      this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
+      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+    }
     
     // Snap threshold - when Keys gets close enough, create a constraint (only when not dragging)
     if (attractionWindowActive && !isDraggingKeys && distance <= magneticConfig.snapThreshold && !this.keysConstraint) {
@@ -999,10 +1014,7 @@ export class GameScene extends Phaser.Scene {
       // Reset Keys scroll factor to horizontal only
       this.frontseatKeys.gameObject.setScrollFactor(1, 0);
       
-      // Reset target color
-      this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
-      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+      // Visual highlight handled above
       
       // Snap speed crank to 0% when keys leave ignition
       this.resetCrankToZero();
@@ -1018,16 +1030,8 @@ export class GameScene extends Phaser.Scene {
         const forceY = (dy / distance) * attractionForce;
         this.matter.body.applyForce(keysBody as any, keysPos, { x: forceX, y: forceY });
       }
-      // Visual feedback: make target glow when Keys is close
-      this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(3, 0xffff00, 1);
-      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
+      // Visual highlight handled above
       
-    } else if (distance > magneticConfig.magneticRange) {
-      // Reset target color when far away
-      this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
-      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
     }
   }
 

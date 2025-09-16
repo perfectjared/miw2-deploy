@@ -504,9 +504,11 @@ export class CarMechanics {
       this.carX += distanceFromCenter * this.config.centerReturnForce * dlt;
     }
     
-    // Clamp car within road bounds
+    // Clamp car within road bounds, symmetrically around screen center
     const gameWidthLocal = this.scene.cameras.main.width;
-    this.carX = Phaser.Math.Clamp(this.carX, this.config.boundaryPadding, gameWidthLocal - this.config.boundaryPadding);
+    const centerXLocal = gameWidthLocal / 2;
+    const maxOffset = centerXLocal - this.config.boundaryPadding;
+    this.carX = Phaser.Math.Clamp(this.carX, centerXLocal - maxOffset, centerXLocal + maxOffset);
     // Keep visual car fixed at screen center; do not move rectangle here
     
     // Debug log disabled to avoid console flooding during interaction
@@ -648,7 +650,8 @@ export class CarMechanics {
         laneIndex = this.laneIndices.reduce((prev, curr) => Math.abs(curr - approx) < Math.abs(prev - approx) ? curr : prev, this.laneIndices[0]);
         obstacle.setData('laneIndex', laneIndex);
       }
-      const worldOffset = -this.worldLateralOffset;
+      // Do not apply world lateral offset so obstacles don't move with steering
+      const worldOffset = 0;
       let laneTerm = laneIndex * (laneSpacingBottom * t);
       if (obstacle.getData('isExit')) {
         // Project exit along the far-right lane, not by initial laneIndex
@@ -658,8 +661,8 @@ export class CarMechanics {
 
       // Update visual rectangle X only when steering (dial) changes
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
-      const steeringChanged = this.currentSteeringValue !== this.lastSteeringValueForVisual;
-      if (visual && steeringChanged) {
+      // Always keep visual twin lane-locked; don't drift with steering
+      if (visual) {
         const gameWidth2 = this.scene.cameras.main.width;
         const centerX2 = gameWidth2 / 2;
         const tVisConst = Phaser.Math.Clamp(((obstacle.getData('visualY') ?? obstacle.y) - horizonY) / (gameHeight - horizonY), 0, 1);
@@ -668,7 +671,7 @@ export class CarMechanics {
         const lensBaseConst = this.getLensStrength();
         const lensFactorConst = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
         const lensOffsetConst = (laneIndexConst >= 0 ? 1 : -1) * lensBaseConst * (tVisConst * tVisConst) * lensFactorConst;
-        const xProjectedVisConst = centerX2 + bez(tVisConst) + laneIndexConst * (laneSpacingBottom * tVisConst) + lensOffsetConst + worldOffset;
+        const xProjectedVisConst = centerX2 + bez(tVisConst) + laneIndexConst * (laneSpacingBottom * tVisConst) + lensOffsetConst;
         visual.setX(xProjectedVisConst);
       }
       
@@ -711,9 +714,11 @@ export class CarMechanics {
       // const isExit = !!obstacle.getData('isExit'); // Unused
       const isPothole = !!obstacle.getData('isPothole');
       const visualBounds = visualTwin ? visualTwin.getBounds() : obsBounds;
-      // Slightly shrink pothole bounds to avoid aggressive hits
+      // Shrink bounds to make collisions less wide, especially for potholes
       const tightBounds = Phaser.Geom.Rectangle.Clone(visualBounds);
-      Phaser.Geom.Rectangle.Inflate(tightBounds, -4, -(isPothole ? 6 : 2));
+      const shrinkW = isPothole ? 12 : 4; // narrower pothole collision
+      const shrinkH = isPothole ? 6 : 2;
+      Phaser.Geom.Rectangle.Inflate(tightBounds, -shrinkW, -shrinkH);
       if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, tightBounds)) {
         // Debug log disabled to avoid console flooding during collisions
         // console.log('COLLISION: car vs obstacle', {
@@ -788,20 +793,34 @@ export class CarMechanics {
     let obstacle: Phaser.GameObjects.Rectangle;
     
     if (isPothole) {
-      // Create pothole
-      const x = Phaser.Math.Between(
-        Math.floor(gameWidth * this.config.potholeMinPos),
-        Math.floor(gameWidth * (this.config.potholeMaxPos - this.config.potholeWidth))
-      );
-      
-      obstacle = this.scene.add.rectangle(
-        x,
-        horizonY + 2,
-        gameWidth * this.config.potholeWidth,
-        gameHeight * this.config.potholeHeight,
-        this.config.potholeColor
-      );
+      // Create pothole with randomized lane and a small initial Y offset so lane separation is visible
+      const widthPx = gameWidth * this.config.potholeWidth;
+      const heightPx = gameHeight * this.config.potholeHeight;
+      obstacle = this.scene.add.rectangle(0, 0, widthPx, heightPx, this.config.potholeColor);
       obstacle.setData('isPothole', true);
+
+      // Choose a random lane index
+      const laneIdx = Math.floor(Math.random() * this.laneIndices.length);
+      const laneIndexChosen = this.laneIndices[laneIdx];
+
+      // Place slightly below horizon so projected lane offset is noticeable
+      const initialY = horizonY + Phaser.Math.Between(12, 90);
+      const t0 = Phaser.Math.Clamp((initialY - horizonY) / (gameHeight - horizonY), 0, 1);
+
+      const bendStrength = this.config.roadBendStrength ?? 140;
+      const end = this.currentCurve * bendStrength;
+      const control = end * 0.6;
+      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+      const lensBase = this.getLensStrength();
+      const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+      const lensOffset = (laneIndexChosen >= 0 ? 1 : -1) * lensBase * (t0 * t0) * lensFactorBase;
+      const centerX = gameWidth / 2;
+      const xProjected = centerX + bez(t0) + laneIndexChosen * (this.laneSpacingBottom * t0) + lensOffset;
+
+      // Apply small horizontal jitter within projected lane
+      const jitter = Phaser.Math.Between(-6, 6);
+      obstacle.setPosition(xProjected + jitter, initialY);
+      obstacle.setData('laneIndex', laneIndexChosen);
     } else {
       // Create exit occupying right 30% of road width
       const roadWidthPx = gameWidth; // using full width road representation
@@ -836,9 +855,11 @@ export class CarMechanics {
     obstacle.setData('baseH', obstacle.height);
     obstacle.setData('visual', visual);
 
-    // Initialize laneIndex now so first visual placement uses exact lane
-    const laneIndexInit = this.laneIndices.reduce((prev, curr) => Math.abs(curr - (obstacle.getData('laneOffset'))) < Math.abs(prev - (obstacle.getData('laneOffset'))) ? curr : prev, this.laneIndices[0]);
-    obstacle.setData('laneIndex', laneIndexInit);
+    // Initialize laneIndex if not already set (exits or legacy)
+    if (typeof obstacle.getData('laneIndex') !== 'number') {
+      const laneIndexInit = this.laneIndices.reduce((prev, curr) => Math.abs(curr - (obstacle.getData('laneOffset'))) < Math.abs(prev - (obstacle.getData('laneOffset'))) ? curr : prev, this.laneIndices[0]);
+      obstacle.setData('laneIndex', laneIndexInit);
+    }
 
     // Initialize visual position/scale snapped to current phase at horizon
     const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
@@ -850,8 +871,9 @@ export class CarMechanics {
     const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
     const lensBase = this.getLensStrength();
     const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
-    const lensOffset = (laneIndexInit >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
-    const xProjectedVis = centerX + bez(tVis) + laneIndexInit * (this.laneSpacingBottom * tVis) + lensOffset - this.worldLateralOffset;
+    const laneIndexForVis: number = Number(obstacle.getData('laneIndex')) || 0;
+    const lensOffset = (laneIndexForVis >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
+    const xProjectedVis = centerX + bez(tVis) + laneIndexForVis * (this.laneSpacingBottom * tVis) + lensOffset;
     visual.setPosition(xProjectedVis, snappedY);
     const baseW = obstacle.getData('baseW') ?? obstacle.width;
     const baseH = obstacle.getData('baseH') ?? obstacle.height;

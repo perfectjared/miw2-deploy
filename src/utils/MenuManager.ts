@@ -893,15 +893,20 @@ export class MenuManager {
       loop: true
     });
     
-    // Add event listeners (global - works anywhere on screen)
+    // Add transient listeners for this dialog only
     this.scene.input.on('pointerdown', pointerDownHandler);
-    this.scene.input.on('pointermove', pointerMoveHandler);
-    this.scene.input.on('pointerup', pointerUpHandler);
+    const moveWrapper = (p: Phaser.Input.Pointer) => pointerMoveHandler(p);
+    const upWrapper = () => pointerUpHandler();
+    this.scene.input.on('pointermove', moveWrapper);
+    this.scene.input.once('pointerup', () => {
+      upWrapper();
+      this.scene.input.off('pointermove', moveWrapper as any, undefined, false as any);
+    });
     
     // Store handlers for cleanup
     (this.currentDialog as any).pointerDownHandler = pointerDownHandler;
-    (this.currentDialog as any).pointerMoveHandler = pointerMoveHandler;
-    (this.currentDialog as any).pointerUpHandler = pointerUpHandler;
+    (this.currentDialog as any).pointerMoveHandler = moveWrapper;
+    (this.currentDialog as any).pointerUpHandler = upWrapper;
     (this.currentDialog as any).momentumTimer = momentumTimer;
     
     // Store references for cleanup
