@@ -933,23 +933,21 @@ export class CarMechanics {
   }
 
   private onCountdownChanged(payload: any) {
-    const keysInIgnition = !!payload?.keysInIgnition;
-    const crank = Number(payload?.speedCrankPercentage ?? 0);
-    // Only shift when car is effectively on
-    if (keysInIgnition && crank >= 40) {
-      // Increase shift amount per step for a more dramatic change
-      const stepShift = 10; // pixels per countdown step
-      this.horizontalLinePhase = (this.horizontalLinePhase + stepShift) % 1000000;
-      // Obstacle visual positioning is now handled in onStepChanged()
-    }
+    // Countdown changes no longer handle road movement - that's now step-based
+    // This method is kept for potential future countdown-specific functionality
   }
 
   private onStepChanged(step: number) {
-    // Update obstacle visuals on every step: compute snapped Y and projected X for the visual-only rect
+    // Update road lines and obstacle visuals on every step
     const gameHeight = this.scene.cameras.main.height;
     const gameWidth = this.scene.cameras.main.width;
     const horizonY = gameHeight * 0.3;
     const roadY = gameHeight * 0.3 + 10;
+    
+    // Update horizontal line phase for road movement on every step
+    const stepShift = 10; // pixels per step
+    this.horizontalLinePhase = (this.horizontalLinePhase + stepShift) % 1000000;
+    
     const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
     const bendStrength = this.config.roadBendStrength ?? 140;
     const centerX = gameWidth / 2;
