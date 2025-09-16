@@ -48,7 +48,7 @@ export const CAR_CONFIG = {
   // Obstacle Settings
   obstacleMinDelayMs: 9000,
   obstacleMaxDelayMs: 18000,
-  potholeProbability: 0.8,
+  potholeProbability: 0.5, // Temporarily lowered to test exit spawning
   potholeWidth: 0.3,
   potholeHeight: 0.08,
   potholeMinPos: 0.45,

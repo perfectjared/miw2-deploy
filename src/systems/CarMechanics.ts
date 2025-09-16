@@ -404,6 +404,7 @@ export class CarMechanics {
     this.stopObstacleSpawning(); // Stop existing timer
     
     const delay = Phaser.Math.Between(this.config.obstacleMinDelayMs, this.config.obstacleMaxDelayMs);
+    console.log('Starting obstacle spawning timer with delay:', delay, 'ms');
     this.obstacleSpawnTimer = this.scene.time.delayedCall(delay, this.spawnObstacle, [], this);
   }
 
@@ -797,8 +798,12 @@ export class CarMechanics {
    * Spawn obstacle
    */
   private spawnObstacle() {
-    if (!this.drivingMode || this.drivingPaused) return;
+    if (!this.drivingMode || this.drivingPaused) {
+      console.log('SpawnObstacle blocked - drivingMode:', this.drivingMode, 'drivingPaused:', this.drivingPaused);
+      return;
+    }
     
+    console.log('SpawnObstacle called');
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     const horizonY = gameHeight * 0.3;
