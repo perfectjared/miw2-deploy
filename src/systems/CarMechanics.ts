@@ -805,6 +805,7 @@ export class CarMechanics {
     
     // Determine obstacle type
     const isPothole = Math.random() < this.config.potholeProbability;
+    console.log('Spawning obstacle - isPothole:', isPothole, 'potholeProbability:', this.config.potholeProbability);
     
     let obstacle: Phaser.GameObjects.Rectangle;
     
@@ -839,6 +840,7 @@ export class CarMechanics {
       obstacle.setData('laneIndex', laneIndexChosen);
     } else {
       // Create exit preview (non-collidable) occupying right 30% of road width
+      console.log('Creating exit preview');
       const roadWidthPx = gameWidth; // using full width road representation
       const exitWidthPx = Math.floor(roadWidthPx * 0.30);
       const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
@@ -1147,6 +1149,7 @@ export class CarMechanics {
    */
   private spawnExitFromPreview(previewData: any) {
     const { preview, originalData } = previewData;
+    console.log('Spawning new exit from preview at position:', preview.x, preview.y);
     
     // Create a completely new collidable exit obstacle
     const gameWidth = this.scene.cameras.main.width;

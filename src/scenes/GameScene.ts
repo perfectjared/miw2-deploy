@@ -259,11 +259,11 @@ export class GameScene extends Phaser.Scene {
     
     // Manual positioning for each virtual pet using x/y percentages
     const petPositions = [
-      { xPercent: 0.12, yPercent: 0.7 }, // Pet 1
+      { xPercent: 0.12, yPercent: 0.8 }, // Pet 1
       { xPercent: 0.3, yPercent: 0.6 }, // Pet 2
       { xPercent: 0.5, yPercent: 0.7 }, // Pet 3
-      { xPercent: 0.73, yPercent: 0.65 }, // Pet 4
-      { xPercent: 0.9, yPercent: 0.7 }  // Pet 5
+      { xPercent: 0.73, yPercent: 0.68 }, // Pet 4
+      { xPercent: 0.9, yPercent: 0.73 }  // Pet 5
     ];
     
     // Create five virtual pets with manual positioning
