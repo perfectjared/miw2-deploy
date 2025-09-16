@@ -406,6 +406,8 @@ export class CarMechanics {
     
     const delay = Phaser.Math.Between(this.config.obstacleMinDelayMs, this.config.obstacleMaxDelayMs);
     console.log('Starting obstacle spawning timer with delay:', delay, 'ms');
+    console.log('Current drivingMode:', this.drivingMode, 'drivingPaused:', this.drivingPaused);
+    console.log('Current potholeProbability:', this.config.potholeProbability);
     this.obstacleSpawnTimer = this.scene.time.delayedCall(delay, this.spawnObstacle, [], this);
   }
 
@@ -742,10 +744,12 @@ export class CarMechanics {
         // Mark as exited screen and start timer
         previewData.hasExitedScreen = true;
         console.log('Preview exited screen, starting timer with', previewData.stepsUntilActivation, 'steps');
+        console.log('Total exit previews:', this.exitPreviews.length);
       }
       
       // Clean up previews that have spawned their exit
       if (previewData.hasExitedScreen && previewData.stepsUntilActivation <= 0) {
+        console.log('Cleaning up preview that spawned its exit');
         // Clean up preview and its visual
         previewData.preview.destroy();
         previewData.visual.destroy();
@@ -1152,7 +1156,10 @@ export class CarMechanics {
       previewData.hasExitedScreen && previewData.stepsUntilActivation <= 0
     );
     
+    console.log('Processing exit previews - total:', this.exitPreviews.length, 'ready to spawn:', readyPreviews.length);
+    
     readyPreviews.forEach(previewData => {
+      console.log('Spawning exit from preview');
       this.spawnExitFromPreview(previewData);
       // Mark preview as spawned so it gets cleaned up
       previewData.preview.setData('spawned', true);
@@ -1162,6 +1169,9 @@ export class CarMechanics {
     this.exitPreviews.forEach(previewData => {
       if (previewData.hasExitedScreen) {
         previewData.stepsUntilActivation--;
+        if (previewData.stepsUntilActivation <= 0) {
+          console.log('Preview timer reached 0, will spawn exit next step');
+        }
       }
     });
   }
@@ -1178,6 +1188,8 @@ export class CarMechanics {
     const horizonY = gameHeight * 0.3;
     
     console.log('Spawning new exit at origin position:', originalData.baseX, horizonY + 2);
+    console.log('Exit dimensions:', originalData.baseW, 'x', originalData.baseH);
+    console.log('Exit color:', this.config.exitColor);
     
     // Create new exit obstacle at origin (top of screen) like other obstacles
     const newExit = this.scene.add.rectangle(
@@ -1210,8 +1222,9 @@ export class CarMechanics {
     // Add to obstacles array so it becomes collidable
     this.obstacles.push(newExit);
     
-    // Clean up the preview (it continues moving down and will be removed when off-screen)
-    // Don't destroy it immediately - let it continue moving down naturally
+    console.log('Exit added to obstacles array. Total obstacles:', this.obstacles.length);
+    console.log('Exit position after creation:', newExit.x, newExit.y);
+    console.log('Exit visual position:', visual.x, visual.y);
   }
 
   /** Update radar each frame */
