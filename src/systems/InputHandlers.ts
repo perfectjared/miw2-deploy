@@ -18,6 +18,13 @@
 
 import Phaser from 'phaser';
 
+// Tunable input handler constants
+const INPUT_TUNABLES = {
+  swipe: {
+    requireInteractiveBypassNames: ['Button', 'Crank', 'Dial']
+  }
+} as const;
+
 export interface InputHandlersConfig {
   // Swipe Parameters
   swipeMinDistance: number;
@@ -162,9 +169,7 @@ export class InputHandlers {
         const hasInteractiveObject = hitObjects.some(obj => 
           obj.input?.enabled || 
           obj.body || // Matter.js objects have a body
-          obj.name?.includes('Button') ||
-          obj.name?.includes('Crank') ||
-          obj.name?.includes('Dial')
+          INPUT_TUNABLES.swipe.requireInteractiveBypassNames.some(key => obj.name?.includes(key))
         );
         if (hasInteractiveObject) {
           return;

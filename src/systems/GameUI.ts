@@ -19,6 +19,33 @@
 
 import Phaser from 'phaser';
 
+// Tunable UI constants for quick tweaking
+const UI_TUNABLES = {
+  // Steering dial
+  steering: {
+    dialXPercent: 0.3,
+    dialYPercent: 0.7,
+    knobRadius: 80,
+    svgScale: 0.2,
+    svgAlpha: 0.8,
+    svgDepth: 998,
+    indicatorLength: 50,
+    indicatorMaxAngleDeg: 60,
+    angleTextOffset: 18,
+    // Steering sensitivity
+    horizontalSensitivity: 2.0,
+    verticalSensitivity: 1.5,
+    returnToCenterSpeed: 0.02
+  },
+  // Speed crank
+  crank: {
+    xPercent: 0.7,
+    yPercent: 0.6,
+    svgScale: 0.1,
+    svgAlpha: 0.8
+  }
+} as const;
+
 export interface GameUIConfig {
   // Text Parameters
   gameLayerText: string;
@@ -454,8 +481,8 @@ export class GameUI {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    const crankX = gameWidth * 0.7; // Right side
-    const crankY = gameHeight * 0.6; // Middle height
+    const crankX = gameWidth * UI_TUNABLES.crank.xPercent; // Right side
+    const crankY = gameHeight * UI_TUNABLES.crank.yPercent; // Middle height
     
     // Create track
     this.speedCrankTrack = this.scene.add.graphics();
@@ -513,9 +540,9 @@ export class GameUI {
     
     // Create speed crank SVG overlay
     this.speedCrankSVG = this.scene.add.sprite(crankX, crankY, 'bat');
-    this.speedCrankSVG.setScale(0.1); // Much smaller scale to fit the crank area
+    this.speedCrankSVG.setScale(UI_TUNABLES.crank.svgScale); // Fit the crank area
     this.speedCrankSVG.setOrigin(0.5, 0.5);
-    this.speedCrankSVG.setAlpha(0.8); // Semi-transparent overlay
+    this.speedCrankSVG.setAlpha(UI_TUNABLES.crank.svgAlpha); // Semi-transparent overlay
     this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1); // Just above the handle
     
     // Add pointer interaction to the speed crank
@@ -601,11 +628,11 @@ export class GameUI {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    const dialX = gameWidth * 0.3; // Left side
-    const dialY = gameHeight * 0.7; // Bottom area
+    const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent; // Left side
+    const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent; // Bottom area
     
     // Create a simple custom knob using graphics
-    const knobRadius = 80;
+    const knobRadius = UI_TUNABLES.steering.knobRadius;
     const knob = this.scene.add.graphics();
     
     // Draw the knob
@@ -621,10 +648,10 @@ export class GameUI {
     
     // Create SVG overlay for visual appeal
     this.steeringWheelSVG = this.scene.add.sprite(dialX, dialY, 'steering-wheel');
-    this.steeringWheelSVG.setScale(0.2); // 2x bigger: was 0.1, now 0.2
+    this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale);
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
-    this.steeringWheelSVG.setAlpha(0.8); // Semi-transparent overlay
-    this.steeringWheelSVG.setDepth(998); // Just above the circle
+    this.steeringWheelSVG.setAlpha(UI_TUNABLES.steering.svgAlpha); // Semi-transparent overlay
+    this.steeringWheelSVG.setDepth(UI_TUNABLES.steering.svgDepth); // Just above the circle
     
     // SVG will be positioned independently but follow the graphics circle
     
@@ -634,7 +661,7 @@ export class GameUI {
     // Visual feedback overlay: an indicator line and angle text
     this.steeringDialIndicator = this.scene.add.graphics();
     this.steeringDialIndicator.setDepth(999);
-    this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + 18, '0%', {
+    this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + UI_TUNABLES.steering.angleTextOffset, '0%', {
       fontSize: '14px',
       color: '#ffffff'
     }).setOrigin(0.5).setDepth(999);
@@ -671,8 +698,8 @@ export class GameUI {
          const deltaY = pointer.y - lastPointerY;
          
          // Calculate steering rotation based on both horizontal and vertical movement
-         const horizontalSteering = deltaX * 2.0; // Horizontal sensitivity
-         const verticalSteering = deltaY * 1.5; // Vertical sensitivity
+         const horizontalSteering = deltaX * UI_TUNABLES.steering.horizontalSensitivity; // Horizontal sensitivity
+         const verticalSteering = deltaY * UI_TUNABLES.steering.verticalSensitivity; // Vertical sensitivity
          
          // Determine which side of the dial we're on for vertical movement
          const relativeX = pointer.x - dialX;
@@ -746,7 +773,7 @@ export class GameUI {
   public update(delta: number) {
     // Only return to center if not currently being dragged
     if (!this.isDragging && this.currentSteeringPosition !== 0) {
-      const returnSpeed = 0.02; // Adjust this value to control return speed (0.01 = slow, 0.05 = fast)
+      const returnSpeed = UI_TUNABLES.steering.returnToCenterSpeed; // Adjust to control return speed
       
       // Gradually move toward center
       if (this.currentSteeringPosition > 0) {
@@ -773,9 +800,9 @@ export class GameUI {
       const angleRad = Phaser.Math.DegToRad(angleDeg - 90); // Match original calculation
       const gameWidth = this.scene.cameras.main.width;
       const gameHeight = this.scene.cameras.main.height;
-      const dialX = gameWidth * 0.3;
-      const dialY = gameHeight * 0.7;
-      const lineLen = 50;
+      const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent;
+      const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent;
+      const lineLen = UI_TUNABLES.steering.indicatorLength;
       const endX = dialX + Math.cos(angleRad) * lineLen;
       const endY = dialY + Math.sin(angleRad) * lineLen;
       
@@ -795,7 +822,7 @@ export class GameUI {
     
     // Update SVG rotation to match steering position
     if (this.steeringWheelSVG) {
-      const angleDeg = Phaser.Math.Clamp((steeringValue / 100) * 60, -60, 60);
+      const angleDeg = Phaser.Math.Clamp((steeringValue / 100) * UI_TUNABLES.steering.indicatorMaxAngleDeg, -UI_TUNABLES.steering.indicatorMaxAngleDeg, UI_TUNABLES.steering.indicatorMaxAngleDeg);
       this.steeringWheelSVG.setRotation(Phaser.Math.DegToRad(angleDeg));
     }
   }

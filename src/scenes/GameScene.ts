@@ -27,6 +27,23 @@ import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
 import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG } from '../config/GameConfig';
 
+// Tunable scene constants (for quick tweaking)
+const SCENE_TUNABLES = {
+  gravity: {
+    baseY: 0.5,
+    maxLateralGx: 0.8
+  },
+  tutorial: {
+    scheduleDelayMs: 50
+  },
+  magnetic: {
+    attractionWindowMs: 900
+  },
+  performance: {
+    uiUpdateDeltaMs: 16
+  }
+} as const;
+
 export class GameScene extends Phaser.Scene {
   // ============================================================================
   // SYSTEM MODULES
@@ -87,7 +104,7 @@ export class GameScene extends Phaser.Scene {
   private potholeHitStep: number | null = null;
   private stopMenuOpen: boolean = false;
   // Matter tilt-gravity based on steering
-  private gravityBaseY: number = 0.5;
+  private gravityBaseY: number = SCENE_TUNABLES.gravity.baseY;
   private gravityXCurrent: number = 0;
   private gravityXTarget: number = 0;
   
@@ -797,7 +814,7 @@ export class GameScene extends Phaser.Scene {
     
     // Update game UI (steering wheel gradual return to center)
     if (this.gameUI) {
-      this.gameUI.update(16); // Use 16ms as typical delta time
+      this.gameUI.update(SCENE_TUNABLES.performance.uiUpdateDeltaMs); // Typical delta time
     }
     
     // HUD camera remains unrotated; no per-frame virtual pet counter-rotation needed
@@ -849,7 +866,7 @@ export class GameScene extends Phaser.Scene {
     // Small: open a short attraction window when keys were just released from drag
     const keyGO: any = this.frontseatKeys?.gameObject;
     if (keyGO && keyGO._justReleasedAt && Date.now() - keyGO._justReleasedAt < 50) {
-      this.keysAttractionUntil = Date.now() + 900; // ~0.9s window
+      this.keysAttractionUntil = Date.now() + SCENE_TUNABLES.magnetic.attractionWindowMs;
       keyGO._justReleasedAt = undefined;
     }
 
@@ -1023,7 +1040,7 @@ export class GameScene extends Phaser.Scene {
       this.resetCrankToZero();
       
       // Update tutorial overlay after a small delay (debounced)
-      this.scheduleTutorialUpdate(50);
+      this.scheduleTutorialUpdate(SCENE_TUNABLES.tutorial.scheduleDelayMs);
       
     } else if (attractionWindowActive && !isDraggingKeys && distance <= magneticConfig.magneticRange && distance > magneticConfig.snapThreshold && !this.keysConstraint) {
       // Apply magnetic attraction when close but not snapped (only when not dragging)
@@ -1422,7 +1439,7 @@ export class GameScene extends Phaser.Scene {
     const crankPct = this.gameState.getState().speedCrankPercentage ?? 0;
     if (crankPct >= 40) {
       // Map dial value (-100..100) to lateral gravity (-gx..gx)
-      const maxGx = 0.8; // tune lateral gravity strength
+      const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
       this.gravityXTarget = (Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
     } else {
       // Below threshold: no lateral gravity influence from steering
