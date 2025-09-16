@@ -659,31 +659,8 @@ export class CarMechanics {
       }
       obstacle.x = centerX + bez(t) + laneTerm + worldOffset;
 
-      // Update visual rectangle position continuously for smooth movement
-      const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
-      if (visual) {
-        const gameWidth2 = this.scene.cameras.main.width;
-        const centerX2 = gameWidth2 / 2;
-        // Use current logical Y position for smooth visual movement
-        const tVisConst = Phaser.Math.Clamp((obstacle.y - horizonY) / (gameHeight - horizonY), 0, 1);
-        // Use same bezier, lane term and lens as road lines
-        const laneIndexConst: number = obstacle.getData('isExit') ? this.laneIndices[this.laneIndices.length - 1] : (Number(obstacle.getData('laneIndex')) || 0);
-        const lensBaseConst = this.getLensStrength();
-        const lensFactorConst = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
-        const lensOffsetConst = (laneIndexConst >= 0 ? 1 : -1) * lensBaseConst * (tVisConst * tVisConst) * lensFactorConst;
-        const xProjectedVisConst = centerX2 + bez(tVisConst) + laneIndexConst * (laneSpacingBottom * tVisConst) + lensOffsetConst;
-        
-        // Update both X and Y positions continuously for smooth movement
-        visual.setPosition(xProjectedVisConst, obstacle.y);
-        
-        // Update perspective scaling continuously
-        const baseW = obstacle.getData('baseW') ?? obstacle.width;
-        const baseH = obstacle.getData('baseH') ?? obstacle.height;
-        const widthScale = 0.2 + 0.8 * tVisConst;
-        const heightScale = 0.4 + 0.6 * tVisConst;
-        visual.displayWidth = baseW * widthScale;
-        visual.displayHeight = baseH * heightScale;
-      }
+      // Visual positioning is now handled step-based in onCountdownChanged()
+      // Only update logical position here, visual updates happen on step changes
       
       // Remove obstacles that are off screen
       if (obstacle.y > this.scene.cameras.main.height) {
@@ -959,8 +936,47 @@ export class CarMechanics {
       // Increase shift amount per step for a more dramatic change
       const stepShift = 10; // pixels per countdown step
       this.horizontalLinePhase = (this.horizontalLinePhase + stepShift) % 1000000;
-      // Visual obstacle positioning is now handled continuously in updateObstacles()
-      // This method only needs to update the horizontal line phase for road lines
+      
+      // Update obstacle visuals step-based: compute snapped Y and projected X for the visual-only rect
+      const gameHeight = this.scene.cameras.main.height;
+      const gameWidth = this.scene.cameras.main.width;
+      const horizonY = gameHeight * 0.3;
+      const roadY = gameHeight * 0.3 + 10;
+      const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
+      const bendStrength = this.config.roadBendStrength ?? 140;
+      const centerX = gameWidth / 2;
+      const end = this.currentCurve * bendStrength;
+      const control = end * 0.6;
+      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+      
+      this.obstacles.forEach(obstacle => {
+        const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+        if (!visual) return;
+        
+        // Step-based Y positioning: snap to horizontal line grid
+        const snappedY = roadY + Math.max(0, Math.floor(((obstacle.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
+        const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
+        
+        // Calculate X position with lane and lens effects
+        let laneIndex: number | undefined = obstacle.getData('laneIndex');
+        const worldOffset = -this.worldLateralOffset;
+        if (obstacle.getData('isExit')) {
+          laneIndex = this.laneIndices[this.laneIndices.length - 1];
+        }
+        const laneTermVis = (laneIndex ?? 0) * (this.laneSpacingBottom * tVis);
+        const xProjectedVis = centerX + bez(tVis) + laneTermVis + worldOffset;
+        
+        // Update visual position step-based
+        visual.setPosition(xProjectedVis, snappedY);
+        
+        // Update perspective scaling step-based
+        const baseW = obstacle.getData('baseW') ?? obstacle.width;
+        const baseH = obstacle.getData('baseH') ?? obstacle.height;
+        const widthScale = 0.2 + 0.8 * tVis;
+        const heightScale = 0.4 + 0.6 * tVis;
+        visual.displayWidth = baseW * widthScale;
+        visual.displayHeight = baseH * heightScale;
+      });
     }
   }
 

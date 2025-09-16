@@ -917,20 +917,25 @@ export class GameUI {
   }
 
   /**
-   * Update speed crank triangle indicator position
+   * Update progress meter triangle indicator position
    */
   private updateSpeedCrankTriangle(percentage: number) {
     if (!this.speedCrankTriangle) return;
     
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
-    const crankX = gameWidth * UI_TUNABLES.crank.xPercent;
-    const crankY = gameHeight * UI_TUNABLES.crank.yPercent;
     
-    // Calculate triangle position based on percentage
-    const crankTop = crankY - this.config.speedCrankHeight / 2;
-    const crankBottom = crankY + this.config.speedCrankHeight / 2;
-    const triangleY = crankTop + (percentage / 100) * this.config.speedCrankHeight;
+    // Position triangle above the progress meter (near countdown)
+    const countdownX = gameWidth * this.config.countdownPositionX;
+    const countdownY = gameHeight * this.config.countdownPositionY;
+    const barWidth = 160;
+    const barHeight = 6;
+    const barX = countdownX - barWidth / 2;
+    const barY = countdownY - 16;
+    
+    // Calculate triangle position based on percentage along the progress bar
+    const triangleX = barX + (percentage / 100) * barWidth;
+    const triangleY = barY;
     
     // Clear and redraw triangle
     this.speedCrankTriangle.clear();
@@ -940,11 +945,11 @@ export class GameUI {
     const triangleSize = UI_TUNABLES.crank.triangleSize;
     const triangleOffsetY = UI_TUNABLES.crank.triangleOffsetY;
     
-    // Draw triangle pointing down
+    // Draw triangle pointing down above the progress meter
     this.speedCrankTriangle.beginPath();
-    this.speedCrankTriangle.moveTo(crankX, triangleY + triangleOffsetY);
-    this.speedCrankTriangle.lineTo(crankX - triangleSize/2, triangleY + triangleOffsetY + triangleSize);
-    this.speedCrankTriangle.lineTo(crankX + triangleSize/2, triangleY + triangleOffsetY + triangleSize);
+    this.speedCrankTriangle.moveTo(triangleX, triangleY + triangleOffsetY);
+    this.speedCrankTriangle.lineTo(triangleX - triangleSize/2, triangleY + triangleOffsetY + triangleSize);
+    this.speedCrankTriangle.lineTo(triangleX + triangleSize/2, triangleY + triangleOffsetY + triangleSize);
     this.speedCrankTriangle.closePath();
     this.speedCrankTriangle.fillPath();
     this.speedCrankTriangle.strokePath();
