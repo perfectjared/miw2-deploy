@@ -350,7 +350,9 @@ export class GameUI {
     const gameHeight = this.scene.cameras.main.height;
     
     // Temporarily disabled LOOK UP / LOOK DOWN buttons per request
-    return;
+    if (true) {
+      return;
+    }
 
     // Look Up / Look Down buttons (large, centered, 85% width)
     const btnWidth = Math.floor(gameWidth * 0.85);

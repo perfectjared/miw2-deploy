@@ -44,8 +44,12 @@ export class VirtualPet {
 		if (this.config.depth !== undefined) this.container.setDepth(this.config.depth);
 		this.container.setScrollFactor(0);
 		
-		// Make container interactive to handle pet clicks
-		this.container.setInteractive();
+		// Make container interactive to handle pet clicks (define hit area)
+		// Use a rectangle covering the intended pet area
+		const hitW = width > 0 ? width : Math.floor(this.scene.cameras.main.width * 0.5);
+		const hitH = height > 0 ? height : Math.floor(this.scene.cameras.main.height * 0.25);
+		this.container.setSize(hitW, hitH);
+		this.container.setInteractive(new Phaser.Geom.Rectangle(-hitW / 2, -hitH / 2, hitW, hitH), Phaser.Geom.Rectangle.Contains);
 
 		// Only create rectangle if width/height are not 0 (shared rectangle mode)
 		if (width > 0 && height > 0) {

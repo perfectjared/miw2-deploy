@@ -907,6 +907,13 @@ export class MenuManager {
     (this.currentDialog as any).pointerDownHandler = pointerDownHandler;
     (this.currentDialog as any).pointerMoveHandler = moveWrapper;
     (this.currentDialog as any).pointerUpHandler = upWrapper;
+    // While dialog open, disable gameplay input to reduce competing hit-tests
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    if (gameScene && gameScene.input) {
+      gameScene.input.enabled = true; // ensure enabled before toggling
+      gameScene.input.enabled = false;
+      (this.currentDialog as any).__restoreInput = () => { try { gameScene.input.enabled = true; } catch {} };
+    }
     (this.currentDialog as any).momentumTimer = momentumTimer;
     
     // Store references for cleanup
@@ -1604,6 +1611,10 @@ export class MenuManager {
           console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
           gameScene.events.emit('ignitionMenuHidden');
         }
+      }
+      // Restore input if we disabled it for this dialog
+      if ((this.currentDialog as any)?.__restoreInput) {
+        try { (this.currentDialog as any).__restoreInput(); } catch {}
       }
       
       // Resume game when destination menu is closed

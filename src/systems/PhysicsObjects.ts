@@ -146,16 +146,22 @@ export class Trash implements PhysicsObject {
       this.scene.input.once('pointerup', upHandler);
     });
 
-    // Hover effects
+    // Hover effects (throttled to reduce cost when console is open)
+    let lastHoverSet = 0;
+    const hoverInterval = 100; // ms
     this.gameObject.on('pointerover', () => {
-      if (!isDragging) {
+      const now = Date.now();
+      if (now - lastHoverSet > hoverInterval && !isDragging) {
         this.gameObject.setFillStyle(hoverColor);
+        lastHoverSet = now;
       }
     });
 
     this.gameObject.on('pointerout', () => {
-      if (!isDragging) {
+      const now = Date.now();
+      if (now - lastHoverSet > hoverInterval && !isDragging) {
         this.gameObject.setFillStyle(originalColor);
+        lastHoverSet = now;
       }
     });
 

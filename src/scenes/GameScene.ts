@@ -43,6 +43,8 @@ export class GameScene extends Phaser.Scene {
   private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
   private dragOverlayCamera?: Phaser.Cameras.Scene2D.Camera;
   private feedingDebug?: Phaser.GameObjects.Graphics;
+  // Cache to avoid redrawing magnetic target every frame
+  private magneticVisualState: 'default' | 'near' | 'snap' = 'default';
   // Only allow ignition magnet to attract keys for a brief window after release
   private keysAttractionUntil: number = 0;
   
@@ -103,6 +105,8 @@ export class GameScene extends Phaser.Scene {
     try {
       console.log('🎯 === GAMESCENE CREATE CALLED ===');
       console.log('GameScene: Initializing modular systems...');
+      // Favor topmost hit-test only to reduce pointerover processing cost
+      this.input.topOnly = true;
       
       // Navigation UI will be initialized when needed
       
@@ -919,18 +923,16 @@ export class GameScene extends Phaser.Scene {
     const isDraggingKeys = !!(this.frontseatKeys.gameObject as any).isDragging;
     const attractionWindowActive = Date.now() <= this.keysAttractionUntil;
 
-    // Always reflect visual highlight regardless of dragging
-    if (distance <= magneticConfig.snapThreshold) {
+    // Always reflect visual highlight regardless of dragging (but avoid redundant redraws)
+    let nextState: 'default' | 'near' | 'snap' = 'default';
+    if (distance <= magneticConfig.snapThreshold) nextState = 'snap';
+    else if (distance <= magneticConfig.magneticRange) nextState = 'near';
+    if (nextState !== this.magneticVisualState) {
+      this.magneticVisualState = nextState;
       this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(5, 0x00ff00, 1);
-      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
-    } else if (distance <= magneticConfig.magneticRange) {
-      this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(3, 0xffff00, 1);
-      this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
-    } else {
-      this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
+      if (nextState === 'snap') this.magneticTarget.lineStyle(5, 0x00ff00, 1);
+      else if (nextState === 'near') this.magneticTarget.lineStyle(3, 0xffff00, 1);
+      else this.magneticTarget.lineStyle(3, magneticConfig.color, 1);
       this.magneticTarget.strokeCircle(magneticConfig.x, magneticConfig.y, magneticConfig.radius);
     }
     
@@ -1123,6 +1125,8 @@ export class GameScene extends Phaser.Scene {
    */
   private onIgnitionMenuShown() {
     console.log('Ignition menu shown');
+    // Disable underlying gameplay input while menu is open
+    this.input.enabled = false;
   }
 
   /**
@@ -1130,6 +1134,8 @@ export class GameScene extends Phaser.Scene {
    */
   private onIgnitionMenuHidden() {
     console.log('Ignition menu hidden');
+    // Re-enable gameplay input when menu closes
+    this.input.enabled = true;
   }
 
   /**
