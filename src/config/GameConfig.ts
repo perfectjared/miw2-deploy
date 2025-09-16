@@ -85,7 +85,7 @@ export const CAR_CONFIG = {
 export const TUTORIAL_CONFIG = {
   overlayColor: 0x000000,
   overlayAlpha: 0.7,
-  overlayDepth: 60000,
+  overlayDepth: 90000,
   maskColor: 0xffffff,
   keysHoleRadius: 30,
   targetHoleMultiplier: 1.5,
