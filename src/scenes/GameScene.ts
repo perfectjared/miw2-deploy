@@ -259,14 +259,14 @@ export class GameScene extends Phaser.Scene {
     
     // Create five virtual pets within the shared rectangle
     for (let i = 0; i < 5; i++) {
-      // Random height within the rectangle (between 20% and 80% of rectangle height)
-      const randomHeightPercent = 0.2 + (Math.random() * 0.6); // 0.2 to 0.8
-      const randomYOffset = Math.floor((randomHeightPercent - 0.5) * rectHeight);
+      // Standard height positioning - evenly spaced vertically
+      const standardHeightPercent = 0.3 + (i * 0.1); // 0.3, 0.4, 0.5, 0.6, 0.7
+      const standardYOffset = Math.floor((standardHeightPercent - 0.5) * rectHeight);
       
       const pet = new VirtualPet(this, { 
         depth: 70001 + i, 
         xPercent: 0.2 + (i * 0.15), // Spread across the rectangle
-        yOffset: 8 + randomYOffset, // Random height within rectangle
+        yOffset: 8 + standardYOffset, // Standard height within rectangle
         petColor: PET_CONFIG.petColor, // Use centralized pet color
         width: 0, // Don't create individual rectangles
         height: 0

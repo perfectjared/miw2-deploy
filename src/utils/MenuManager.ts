@@ -1285,15 +1285,7 @@ export class MenuManager {
           (this.currentDialog as any).add(label);
         }
         
-        // Add simple idle animation to the copy
-        this.scene.tweens.add({
-          targets: petCopy,
-          y: petCopy.y - 3,
-          duration: 1000,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut'
-        });
+        // Bobbing animation removed - pet copy stays in fixed position
 
         // Add food meter to the menu
         const gameScene = this.scene.scene.get('GameScene');

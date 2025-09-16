@@ -67,15 +67,7 @@ export class VirtualPet {
 		this.pet.setStrokeStyle(2, 0x000000, 1);
 		this.pet.setScrollFactor(0);
 
-		// Add simple idle bobbing animation
-		this.scene.tweens.add({
-			targets: this.pet,
-			y: this.pet.y - 4,
-			duration: 800,
-			yoyo: true,
-			repeat: -1,
-			ease: 'Sine.easeInOut'
-		});
+		// Bobbing animation removed - pets now stay in fixed positions
 
 		// Create face SVG overlay
 		this.faceSVG = this.scene.add.sprite(this.pet.x, this.pet.y, 'face-neutral');
