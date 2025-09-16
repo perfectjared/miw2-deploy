@@ -1,42 +1,44 @@
 name: Deploy to GitHub Pages
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+# DISABLED: Automatic deployment disabled to prevent performance issues during development
+# on:
+#   push:
+#     branches: [ main ]
+#   pull_request:
+#     branches: [ main ]
 
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build
-      run: npm run build
-      
-    - name: Prepare deployment files
-      run: |
-        cp dist/index.html .
-        cp -r dist/assets .
-        cp dist/rexuiplugin.js .
-        echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' > vite.svg
-        
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v3
-      if: github.ref == 'refs/heads/main'
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./
+# DISABLED: Entire workflow commented out to prevent automatic deployments
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
+#     
+#     steps:
+#     - name: Checkout
+#       uses: actions/checkout@v4
+#       
+#     - name: Setup Node.js
+#       uses: actions/setup-node@v4
+#       with:
+#         node-version: '18'
+#         cache: 'npm'
+#         
+#     - name: Install dependencies
+#       run: npm ci
+#       
+#     - name: Build
+#       run: npm run build
+#       
+#     - name: Prepare deployment files
+#       run: |
+#         cp dist/index.html .
+#         cp -r dist/assets .
+#         cp dist/rexuiplugin.js .
+#         echo '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>' > vite.svg
+#         
+#     - name: Deploy to GitHub Pages
+#       uses: peaceiris/actions-gh-pages@v3
+#       if: github.ref == 'refs/heads/main'
+#       with:
+#         github_token: ${{ secrets.GITHUB_TOKEN }}
+#         publish_dir: ./
 
