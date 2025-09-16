@@ -545,6 +545,7 @@ export class GameUI {
       this.scene.events.emit('speedCrankInput', snappedPercentage);
     });
     
+    // Use a single move handler reference so we don't attach duplicates
     const moveHandler = (p: Phaser.Input.Pointer) => {
       if (!isDragging) return;
       const crankTop = crankY - this.config.speedCrankHeight / 2;
@@ -555,9 +556,20 @@ export class GameUI {
       this.updateSpeedCrank(snappedPercentage);
       this.scene.events.emit('speedCrankInput', snappedPercentage);
     };
-    const upHandler = () => { isDragging = false; this.scene.input.off('pointermove', moveHandler as any, undefined, false as any); };
-    this.scene.input.on('pointermove', moveHandler);
+    // Attach once at setup time
+    if (!(this as any)._speedCrankMoveAttached) {
+      this.scene.input.on('pointermove', moveHandler);
+      (this as any)._speedCrankMoveAttached = true;
+      (this as any)._speedCrankMoveHandler = moveHandler;
+    }
+    const upHandler = () => {
+      isDragging = false;
+    };
+    // End drag per-interaction without removing the global move listener
     this.scene.input.once('pointerup', upHandler);
+    this.scene.input.once('gameout', upHandler as any);
+    this.speedCrankArea.once('pointerup', upHandler);
+    this.speedCrankArea.once('pointerupoutside', upHandler as any);
   }
 
   /**
@@ -694,8 +706,13 @@ export class GameUI {
          lastPointerY = pointer.y;
        }
      };
-     const dialUp = () => { endDrag(); this.scene.input.off('pointermove', dialMove as any, undefined, false as any); };
-     this.scene.input.on('pointermove', dialMove);
+     // Attach dial move once to avoid duplicates across scene reloads
+     if (!(this as any)._dialMoveAttached) {
+       this.scene.input.on('pointermove', dialMove);
+       (this as any)._dialMoveAttached = true;
+       (this as any)._dialMoveHandler = dialMove;
+     }
+     const dialUp = () => { endDrag(); };
     
     const endDrag = () => {
       if (!isDragging) return;
@@ -714,8 +731,13 @@ export class GameUI {
 
     knob.on('pointerup', endDrag);
     knob.on('pointerupoutside', endDrag as any);
+    knob.on('pointerout', endDrag as any);
+    knob.on('pointercancel', endDrag as any);
     this.scene.input.once('pointerup', dialUp);
     this.scene.input.once('gameout', endDrag as any);
+    // Also end drag if the game loses focus or is hidden
+    this.scene.game.events.once('hidden', endDrag as any);
+    this.scene.game.events.once('blur', endDrag as any);
   }
 
   /**
@@ -968,5 +990,19 @@ export class GameUI {
         element.destroy();
       }
     });
+
+    // Clean up input listeners we attached globally (if any)
+    try {
+      if ((this as any)._speedCrankMoveAttached && (this as any)._speedCrankMoveHandler) {
+        this.scene.input.off('pointermove', (this as any)._speedCrankMoveHandler);
+        (this as any)._speedCrankMoveAttached = false;
+        (this as any)._speedCrankMoveHandler = undefined;
+      }
+      if ((this as any)._dialMoveAttached && (this as any)._dialMoveHandler) {
+        this.scene.input.off('pointermove', (this as any)._dialMoveHandler);
+        (this as any)._dialMoveAttached = false;
+        (this as any)._dialMoveHandler = undefined;
+      }
+    } catch {}
   }
 }

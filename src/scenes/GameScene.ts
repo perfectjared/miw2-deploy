@@ -142,8 +142,9 @@ export class GameScene extends Phaser.Scene {
       this.gameUI.initialize();
       console.log('🎯 GameUI.initialize() completed successfully');
     } catch (error) {
-      console.error('🎯 ERROR calling gameUI.initialize():', error);
-      console.error('🎯 Error stack:', error.stack);
+      const err = error as any;
+      console.error('🎯 ERROR calling gameUI.initialize():', err);
+      try { console.error('🎯 Error stack:', err?.stack); } catch {}
     }
     
     // Initialize tutorial system
@@ -1432,7 +1433,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onSpeedCrankInput(percentage: number) {
-    console.log('Speed crank input:', percentage);
+    // Avoid spamming console on high-frequency pointer moves (causes DevTools slowdown)
+    // console.log('Speed crank input:', percentage);
     this.gameState.updateState({ speedCrankPercentage: percentage });
     
     // Update car mechanics with new speed
