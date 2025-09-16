@@ -737,15 +737,18 @@ export class CarMechanics {
       }
     });
     
-    // Remove exit previews that are off screen or have spawned their exit
+    // Remove exit previews that are off screen (but not those that have spawned)
     this.exitPreviews.forEach(previewData => {
-      if (previewData.preview.y > this.scene.cameras.main.height || previewData.preview.getData('spawned')) {
-        // Clean up preview and its visual
-        previewData.preview.destroy();
-        previewData.visual.destroy();
-        const index = this.exitPreviews.indexOf(previewData);
-        if (index > -1) {
-          this.exitPreviews.splice(index, 1);
+      if (previewData.preview.y > this.scene.cameras.main.height) {
+        // Only clean up if it hasn't spawned an exit yet
+        if (!previewData.preview.getData('spawned')) {
+          console.log('Cleaning up preview that exited screen without spawning');
+          previewData.preview.destroy();
+          previewData.visual.destroy();
+          const index = this.exitPreviews.indexOf(previewData);
+          if (index > -1) {
+            this.exitPreviews.splice(index, 1);
+          }
         }
       }
     });
@@ -753,6 +756,20 @@ export class CarMechanics {
     // Move exit previews down the road
     this.exitPreviews.forEach(previewData => {
       previewData.preview.y += this.config.potholeSpeed;
+    });
+    
+    // Clean up previews that have spawned their exit (after a delay)
+    this.exitPreviews.forEach(previewData => {
+      if (previewData.preview.getData('spawned')) {
+        // Clean up preview and its visual after spawning
+        console.log('Cleaning up spawned preview');
+        previewData.preview.destroy();
+        previewData.visual.destroy();
+        const index = this.exitPreviews.indexOf(previewData);
+        if (index > -1) {
+          this.exitPreviews.splice(index, 1);
+        }
+      }
     });
 
     // Record last steering value used for visual horizontal updates
@@ -1182,6 +1199,10 @@ export class CarMechanics {
       1.0 // Fully opaque for collidable obstacle
     );
     
+    console.log('Created exit rectangle:', newExit);
+    console.log('Exit visible:', newExit.visible);
+    console.log('Exit alpha:', newExit.alpha);
+    
     // Set up the new obstacle with all necessary data
     newExit.setData('isExit', true);
     newExit.setData('exitWidthPx', originalData.baseW);
@@ -1195,6 +1216,11 @@ export class CarMechanics {
     const visual = this.scene.add.rectangle(newExit.x, newExit.y, newExit.width, newExit.height, this.config.exitColor, 1.0);
     visual.setDepth(this.config.roadDepth + 0.5);
     newExit.setData('visual', visual);
+    
+    console.log('Created exit visual:', visual);
+    console.log('Visual visible:', visual.visible);
+    console.log('Visual alpha:', visual.alpha);
+    console.log('Visual depth:', visual.depth);
     
     // Add to driving container
     this.drivingContainer.add(newExit);
