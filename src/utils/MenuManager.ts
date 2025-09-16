@@ -103,7 +103,7 @@ export class MenuManager {
     EXIT: 50,         // Medium priority - exit choice menu
     SHOP: 50,         // Medium priority - shop menu
     CYOA: 50,         // Medium priority - choose-your-own-adventure menu
-    VIRTUAL_PET: 50,  // Medium priority - virtual pet menu
+    VIRTUAL_PET: 50,  // Medium priority -  menu
     MORAL_DECISION: 50, // Medium priority - moral decision menu
     PET_STORY: 40,    // Low priority - pet story UI
     TURN_KEY: 30      // Lowest priority - ignition menu
@@ -239,7 +239,7 @@ export class MenuManager {
     // Non-blocking: don't use menu stack or overlay background
     this.clearCurrentDialog();
     
-    // Get virtual pet position to position the UI above it
+    // Get  position to position the UI above it
     const gameScene = this.scene.scene.get('GameScene');
     if (!gameScene || !(gameScene as any).virtualPet) return;
     
@@ -303,7 +303,7 @@ export class MenuManager {
     // Non-blocking: don't use menu stack or overlay background
     this.clearCurrentDialog();
     
-    // Get virtual pet position to position the UI above it
+    // Get  position to position the UI above it
     const gameScene = this.scene.scene.get('GameScene');
     if (!gameScene || !(gameScene as any).getVirtualPet) return;
     const pet = (gameScene as any).getVirtualPet(petIndex);
@@ -1255,7 +1255,7 @@ export class MenuManager {
     };
     this.createDialog(menuConfig, 'VIRTUAL_PET');
 
-    // Add a copy of the virtual pet sprite in the menu, plus its digit label
+    // Add a copy of the  sprite in the menu, plus its digit label
     if (petSprite) {
       try {
         // Create a copy of the pet sprite

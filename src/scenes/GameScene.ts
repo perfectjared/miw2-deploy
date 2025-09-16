@@ -257,16 +257,27 @@ export class GameScene extends Phaser.Scene {
     rearviewRect.setScrollFactor(0);
     rearviewContainer.add(rearviewRect);
     
-    // Create five virtual pets within the shared rectangle
+    // Manual positioning for each virtual pet using x/y percentages
+    const petPositions = [
+      { xPercent: 0.25, yPercent: 0.35 }, // Pet 1
+      { xPercent: 0.40, yPercent: 0.45 }, // Pet 2
+      { xPercent: 0.55, yPercent: 0.55 }, // Pet 3
+      { xPercent: 0.70, yPercent: 0.65 }, // Pet 4
+      { xPercent: 0.85, yPercent: 0.75 }  // Pet 5
+    ];
+    
+    // Create five virtual pets with manual positioning
     for (let i = 0; i < 5; i++) {
-      // Standard height positioning - evenly spaced vertically
-      const standardHeightPercent = 0.3 + (i * 0.1); // 0.3, 0.4, 0.5, 0.6, 0.7
-      const standardYOffset = Math.floor((standardHeightPercent - 0.5) * rectHeight);
+      const position = petPositions[i];
+      
+      // Convert percentage to pixel offset from rectangle center
+      const xOffset = Math.floor((position.xPercent - 0.5) * rectWidth);
+      const yOffset = Math.floor((position.yPercent - 0.5) * rectHeight);
       
       const pet = new VirtualPet(this, { 
         depth: 70001 + i, 
-        xPercent: 0.2 + (i * 0.15), // Spread across the rectangle
-        yOffset: 8 + standardYOffset, // Standard height within rectangle
+        xPercent: position.xPercent, // Manual X percentage
+        yOffset: 8 + yOffset, // Manual Y offset from rectangle center
         petColor: PET_CONFIG.petColor, // Use centralized pet color
         width: 0, // Don't create individual rectangles
         height: 0
