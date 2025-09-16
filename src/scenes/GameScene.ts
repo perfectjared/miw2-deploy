@@ -102,6 +102,7 @@ export class GameScene extends Phaser.Scene {
   private hasShownSteeringTutorial: boolean = false;
   private hasClearedSteeringTutorial: boolean = false;
   private potholeHitStep: number | null = null;
+  private exitHitStep: number | null = null;
   private stopMenuOpen: boolean = false;
   // Matter tilt-gravity based on steering
   private gravityBaseY: number = SCENE_TUNABLES.gravity.baseY;
@@ -694,10 +695,10 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
-    // Listen for pothole hits from CarMechanics and schedule a story overlay
-    this.events.on('potholeHit', () => {
+    // Listen for exit hits from CarMechanics and schedule a story overlay
+    this.events.on('exitHit', () => {
       const currentStep = this.gameState.getState().step || 0;
-      this.potholeHitStep = currentStep + 3;
+      this.exitHitStep = currentStep + 1; // Show on next step
     });
 
     // Scene events
@@ -1385,7 +1386,7 @@ export class GameScene extends Phaser.Scene {
       this.scheduleTutorialUpdate(0);
     }
 
-    // Show pothole overlay 3 steps after hit (cancel if any real menu is open)
+    // Show pothole overlay on next step after hit (cancel if any real menu is open)
     if (this.potholeHitStep !== null && step >= this.potholeHitStep) {
       const curState = this.gameState.getState();
       if (curState.hasOpenMenu) {
@@ -1404,6 +1405,28 @@ export class GameScene extends Phaser.Scene {
         this.scene.bringToTop('MenuScene');
       }
       this.potholeHitStep = null;
+      }
+    }
+
+    // Show exit overlay on next step after hit (cancel if any real menu is open)
+    if (this.exitHitStep !== null && step >= this.exitHitStep) {
+      const curState = this.gameState.getState();
+      if (curState.hasOpenMenu) {
+        // Prevent pending exit overlays while a real menu is up
+        this.exitHitStep = null;
+      } else {
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('showStoryOverlay', 'Exit Found!', 'You found an exit! Choose your destination.');
+        // Fallback direct call if event not wired
+        const mm: any = (menuScene as any).menuManager;
+        if (mm?.showStoryOverlay) {
+          mm.showStoryOverlay('Exit Found!', 'You found an exit! Choose your destination.');
+        }
+        // Ensure MenuScene is on top so the overlay is visible
+        this.scene.bringToTop('MenuScene');
+      }
+      this.exitHitStep = null;
       }
     }
   }

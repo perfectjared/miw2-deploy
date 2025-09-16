@@ -37,13 +37,15 @@ const UI_TUNABLES = {
     verticalSensitivity: 1.5,
     returnToCenterSpeed: 0.02
   },
-  // Speed crank
-  crank: {
-    xPercent: 0.7,
-    yPercent: 0.6,
-    svgScale: 0.1,
-    svgAlpha: 0.8
-  }
+    // Speed crank
+    crank: {
+      xPercent: 0.7,
+      yPercent: 0.6,
+      svgScale: 0.1,
+      svgAlpha: 0.8,
+      triangleSize: 8,
+      triangleOffsetY: -25
+    }
 } as const;
 
 export interface GameUIConfig {
@@ -183,6 +185,7 @@ export class GameUI {
     
     // Speed Crank SVG
     private speedCrankSVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    private speedCrankTriangle!: Phaser.GameObjects.Graphics; // Triangle indicator
     
     // Key SVG
     // private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay - moved to GameScene
@@ -544,6 +547,11 @@ export class GameUI {
     this.speedCrankSVG.setOrigin(0.5, 0.5);
     this.speedCrankSVG.setAlpha(UI_TUNABLES.crank.svgAlpha); // Semi-transparent overlay
     this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1); // Just above the handle
+
+    // Create triangle indicator above the meter
+    this.speedCrankTriangle = this.scene.add.graphics();
+    this.speedCrankTriangle.setDepth(this.config.speedCrankDepthHandle + 2);
+    this.updateSpeedCrankTriangle(0); // Initialize with 0%
     
     // Add pointer interaction to the speed crank
     this.setupSpeedCrankInteraction(crankX, crankY);
@@ -905,6 +913,41 @@ export class GameUI {
     }
     
     this.updateSpeedCrankHandle(percentage);
+    this.updateSpeedCrankTriangle(percentage);
+  }
+
+  /**
+   * Update speed crank triangle indicator position
+   */
+  private updateSpeedCrankTriangle(percentage: number) {
+    if (!this.speedCrankTriangle) return;
+    
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const crankX = gameWidth * UI_TUNABLES.crank.xPercent;
+    const crankY = gameHeight * UI_TUNABLES.crank.yPercent;
+    
+    // Calculate triangle position based on percentage
+    const crankTop = crankY - this.config.speedCrankHeight / 2;
+    const crankBottom = crankY + this.config.speedCrankHeight / 2;
+    const triangleY = crankTop + (percentage / 100) * this.config.speedCrankHeight;
+    
+    // Clear and redraw triangle
+    this.speedCrankTriangle.clear();
+    this.speedCrankTriangle.fillStyle(0xffffff, 1);
+    this.speedCrankTriangle.lineStyle(1, 0x000000, 1);
+    
+    const triangleSize = UI_TUNABLES.crank.triangleSize;
+    const triangleOffsetY = UI_TUNABLES.crank.triangleOffsetY;
+    
+    // Draw triangle pointing down
+    this.speedCrankTriangle.beginPath();
+    this.speedCrankTriangle.moveTo(crankX, triangleY + triangleOffsetY);
+    this.speedCrankTriangle.lineTo(crankX - triangleSize/2, triangleY + triangleOffsetY + triangleSize);
+    this.speedCrankTriangle.lineTo(crankX + triangleSize/2, triangleY + triangleOffsetY + triangleSize);
+    this.speedCrankTriangle.closePath();
+    this.speedCrankTriangle.fillPath();
+    this.speedCrankTriangle.strokePath();
   }
 
   /**
@@ -1016,6 +1059,8 @@ export class GameUI {
       this.speedCrankValueIndicator,
       this.speedCrankArea,
       this.speedCrankPercentageText,
+      this.speedCrankSVG,
+      this.speedCrankTriangle,
       this.frontseatDragDial
     ];
     

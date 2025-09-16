@@ -661,6 +661,14 @@ export class MenuManager {
         }
       })).concat([
         {
+          text: 'Back',
+          onClick: () => {
+            this.closeDialog();
+            this.showExitMenu();
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        },
+        {
           text: 'Close',
           onClick: () => this.closeDialog(),
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }

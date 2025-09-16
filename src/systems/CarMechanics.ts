@@ -769,6 +769,8 @@ export class CarMechanics {
         (menuScene as any).events.emit('showObstacleMenu', 'exit');
         this.scene.scene.bringToTop('MenuScene');
       }
+      // Also emit exitHit for story overlay timing
+      this.scene.events.emit('exitHit');
     }
     obstacle.destroy();
     const index = this.obstacles.indexOf(obstacle);
