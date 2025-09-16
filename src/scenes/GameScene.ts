@@ -102,8 +102,8 @@ export class GameScene extends Phaser.Scene {
   private hasShownSteeringTutorial: boolean = false;
   private hasClearedSteeringTutorial: boolean = false;
   private potholeHitStep: number | null = null;
-  private exitHitStep: number | null = null;
   private stopMenuOpen: boolean = false;
+  private countdownStepCounter: number = 0; // Track steps for countdown timing
   // Matter tilt-gravity based on steering
   private gravityBaseY: number = SCENE_TUNABLES.gravity.baseY;
   private gravityXCurrent: number = 0;
@@ -695,10 +695,10 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
-    // Listen for exit hits from CarMechanics and schedule a story overlay
-    this.events.on('exitHit', () => {
+    // Listen for pothole hits from CarMechanics and schedule a story overlay
+    this.events.on('potholeHit', () => {
       const currentStep = this.gameState.getState().step || 0;
-      this.exitHitStep = currentStep + 1; // Show on next step
+      this.potholeHitStep = currentStep + 1; // Show on next step
     });
 
     // Scene events
@@ -1325,17 +1325,22 @@ export class GameScene extends Phaser.Scene {
     if ((this.tutorialSystem as any).handleStep) {
       (this.tutorialSystem as any).handleStep(step);
     }
-    // Step-based countdown: only when game and car have both started
+    // Step-based countdown: only when game and car have both started, and every fourth step
     const state = this.gameState.getState();
     if (state.gameStarted && this.carStarted && state.gameTime > 0) {
-      const newTime = state.gameTime - 1;
-      this.gameState.updateState({ gameTime: newTime });
-      // Notify systems (e.g., driving scene) that countdown changed
-      this.events.emit('countdownChanged', {
-        time: newTime,
-        keysInIgnition: state.keysInIgnition,
-        speedCrankPercentage: state.speedCrankPercentage
-      });
+      this.countdownStepCounter++;
+      // Only decrement countdown every fourth step
+      if (this.countdownStepCounter >= 4) {
+        this.countdownStepCounter = 0; // Reset counter
+        const newTime = state.gameTime - 1;
+        this.gameState.updateState({ gameTime: newTime });
+        // Notify systems (e.g., driving scene) that countdown changed
+        this.events.emit('countdownChanged', {
+          time: newTime,
+          keysInIgnition: state.keysInIgnition,
+          speedCrankPercentage: state.speedCrankPercentage
+        });
+      }
     }
 
     // Increment progress by 1 per step while driving (independent of countdown)
@@ -1347,7 +1352,8 @@ export class GameScene extends Phaser.Scene {
         this.stopMenuOpen = true;
         const newStops = (this.gameState.getState().stops || 0) + 1;
         // Reset progress and countdown
-        this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 99 });
+        this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 8 });
+        this.countdownStepCounter = 0; // Reset countdown step counter
         const appScene = this.scene.get('AppScene');
         if (appScene) {
           (appScene as any).isPaused = true;
@@ -1408,27 +1414,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Show exit overlay on next step after hit (cancel if any real menu is open)
-    if (this.exitHitStep !== null && step >= this.exitHitStep) {
-      const curState = this.gameState.getState();
-      if (curState.hasOpenMenu) {
-        // Prevent pending exit overlays while a real menu is up
-        this.exitHitStep = null;
-      } else {
-      const menuScene = this.scene.get('MenuScene');
-      if (menuScene) {
-        menuScene.events.emit('showStoryOverlay', 'Exit Found!', 'You found an exit! Choose your destination.');
-        // Fallback direct call if event not wired
-        const mm: any = (menuScene as any).menuManager;
-        if (mm?.showStoryOverlay) {
-          mm.showStoryOverlay('Exit Found!', 'You found an exit! Choose your destination.');
-        }
-        // Ensure MenuScene is on top so the overlay is visible
-        this.scene.bringToTop('MenuScene');
-      }
-      this.exitHitStep = null;
-      }
-    }
+    // Exit overlay removed - we now have the exit menu that opens immediately
   }
 
   private onGamePaused() {

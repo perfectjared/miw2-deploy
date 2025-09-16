@@ -405,7 +405,7 @@ export const PET_CONFIG = {
 
 export const GAME_STATE_CONFIG = {
   // Initial Values
-  initialGameTime: 99,
+  initialGameTime: 8,
   initialMoney: 100,
   initialHealth: 100,
   initialPlayerSkill: 50,
