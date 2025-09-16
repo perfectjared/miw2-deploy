@@ -28,7 +28,7 @@ import { GameScene } from './scenes/GameScene';
 
 // Ensure single Phaser instance across Vite HMR reloads
 declare global {
-  interface Window { __phaserGame?: Phaser.Game }
+  interface Window { __phaserGame?: Phaser.Game; __ENABLE_LOGS?: boolean }
 }
 
 // Debug: Check if RexUI is available
@@ -99,3 +99,16 @@ if (import.meta && (import.meta as any).hot) {
     window.__phaserGame = undefined;
   });
 }
+
+// Reduce dev-console overhead: disable verbose logs by default; enable via window.__ENABLE_LOGS=true
+(() => {
+  const originalLog = console.log.bind(console);
+  if (typeof window !== 'undefined') {
+    window.__ENABLE_LOGS = false;
+  }
+  console.log = (...args: any[]) => {
+    if ((window as any)?.__ENABLE_LOGS) {
+      originalLog(...args);
+    }
+  };
+})();
