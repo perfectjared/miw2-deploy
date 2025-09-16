@@ -574,6 +574,8 @@ export class GameUI {
     
     // Use a single move handler reference so we don't attach duplicates
     const moveHandler = (p: Phaser.Input.Pointer) => {
+      // If the pointer is no longer down, force end drag to avoid sticky state
+      if (!p.isDown) { isDragging = false; return; }
       if (!isDragging) return;
       const crankTop = crankY - this.config.speedCrankHeight / 2;
       const crankBottom = crankY + this.config.speedCrankHeight / 2;
@@ -597,6 +599,11 @@ export class GameUI {
     this.scene.input.once('gameout', upHandler as any);
     this.speedCrankArea.once('pointerup', upHandler);
     this.speedCrankArea.once('pointerupoutside', upHandler as any);
+    this.speedCrankArea.once('pointerout', upHandler as any);
+    this.speedCrankArea.once('pointercancel', upHandler as any);
+    // Also end drag if the game loses focus or is hidden
+    this.scene.game.events.once('hidden', upHandler as any);
+    this.scene.game.events.once('blur', upHandler as any);
   }
 
   /**

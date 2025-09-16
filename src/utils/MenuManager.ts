@@ -100,6 +100,7 @@ export class MenuManager {
     OBSTACLE: 60,     // Medium priority - obstacle collision menu
     SAVE: 50,         // Medium priority - save menu
     DESTINATION: 50,  // Medium priority - destination menu
+    EXIT: 50,         // Medium priority - exit choice menu
     CYOA: 50,         // Medium priority - choose-your-own-adventure menu
     VIRTUAL_PET: 50,  // Medium priority - virtual pet menu
     MORAL_DECISION: 50, // Medium priority - moral decision menu
@@ -604,8 +605,28 @@ export class MenuManager {
   }
 
   public showExitMenu() {
-    // Adapt exit menu to the Destination-style menu flow
-    this.showDestinationMenu();
+    if (!this.canShowMenu('EXIT')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('EXIT');
+    const menuConfig: MenuConfig = {
+      title: 'EXIT',
+      content: 'Choose a shop to visit.',
+      buttons: [
+        { text: 'Shop 1', onClick: () => { this.handleExitShopChoice('Shop 1'); } },
+        { text: 'Shop 2', onClick: () => { this.handleExitShopChoice('Shop 2'); } },
+        { text: 'Shop 3', onClick: () => { this.handleExitShopChoice('Shop 3'); } },
+        { text: 'Close', onClick: () => this.closeDialog() }
+      ]
+    };
+    this.createDialog(menuConfig, 'EXIT');
+  }
+
+  private handleExitShopChoice(shopName: string) {
+    // Placeholder: simply close the dialog and resume game. Hook narrative/transition later.
+    try { console.log('Exit menu choice:', shopName); } catch {}
+    this.closeDialog();
+    // Optionally emit an event for GameScene to react to
+    try { this.scene.events.emit('exitShopChosen', shopName); } catch {}
   }
 
   public showTurnKeyMenu() {
@@ -924,6 +945,12 @@ export class MenuManager {
 
   public showObstacleMenu(obstacleType: string, damage: number) {
     if (!this.canShowMenu('OBSTACLE')) return;
+    
+    // Special-case: obstacle type 'exit' should show the dedicated Exit menu
+    if (obstacleType === 'exit') {
+      this.showExitMenu();
+      return;
+    }
     
     this.clearCurrentDialog();
     this.pushMenu('OBSTACLE', { type: obstacleType, damage });
@@ -1618,7 +1645,7 @@ export class MenuManager {
       }
       
       // Resume game when destination menu is closed
-      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP') {
+      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP' || this.currentDisplayedMenuType === 'EXIT') {
         console.log('MenuManager: Resuming game after destination menu closed');
         this.resumeGameAfterDestinationMenu();
       }
