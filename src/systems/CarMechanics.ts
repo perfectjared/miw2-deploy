@@ -1057,6 +1057,8 @@ export class CarMechanics {
   }
 
   private onStepChanged(step: number) {
+    console.log('Step changed to:', step);
+    
     // Update road lines and obstacle visuals on every step
     const gameHeight = this.scene.cameras.main.height;
     const gameWidth = this.scene.cameras.main.width;
@@ -1129,6 +1131,8 @@ export class CarMechanics {
    * Process exit previews - update visuals and spawn new obstacles when ready
    */
   private processExitPreviews(step: number, gameHeight: number, gameWidth: number, horizonY: number, roadY: number, phaseOffset: number, bez: Function, centerX: number) {
+    console.log('Processing exit previews - step:', step, 'total previews:', this.exitPreviews.length);
+    
     // Update preview visuals
     this.exitPreviews.forEach(previewData => {
       const { preview, visual } = previewData;
@@ -1168,6 +1172,7 @@ export class CarMechanics {
     // Decrement remaining steps for all previews
     this.exitPreviews.forEach(previewData => {
       previewData.stepsUntilActivation--;
+      console.log('Preview timer:', previewData.stepsUntilActivation, 'steps remaining');
       if (previewData.stepsUntilActivation <= 0) {
         console.log('Preview timer reached 0, will spawn exit next step');
       }
