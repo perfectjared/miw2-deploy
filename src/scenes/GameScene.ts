@@ -270,6 +270,7 @@ export class GameScene extends Phaser.Scene {
 
     // Create a second HUD camera for car controls (ignition/crank/wheel) to keep them upright
     const controlObjs = (this.gameUI as any).getControlObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
+    const tutObjsInit = (this.tutorialSystem as any).getOverlayObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
     if (controlObjs && controlObjs.length > 0) {
       // Exclude control objects from main camera
       this.cameras.main.ignore(controlObjs);
@@ -278,7 +279,12 @@ export class GameScene extends Phaser.Scene {
       this.controlsCamera.setScroll(0, 0);
       this.controlsCamera.setName('controlsCamera');
       const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
-      const toIgnoreForControls = allObjects.filter(obj => !controlObjs.includes(obj));
+      // Allow both control objects and tutorial overlay objects to render on controls camera
+      const allowed = new Set<Phaser.GameObjects.GameObject>([
+        ...controlObjs,
+        ...(tutObjsInit || [])
+      ]);
+      const toIgnoreForControls = allObjects.filter(obj => !allowed.has(obj));
       if (toIgnoreForControls.length > 0) this.controlsCamera.ignore(toIgnoreForControls);
     }
     // Ensure tutorial overlay renders above controls: add it to controls camera allowlist
