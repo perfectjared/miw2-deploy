@@ -1331,6 +1331,7 @@ export class GameScene extends Phaser.Scene {
    * Event handlers
    */
   private onStepEvent(step: number) {
+    console.log('GameScene: Received step event:', step);
     this.gameState.updateState({ step });
     // Drive tutorial blink text every step
     if ((this.tutorialSystem as any).handleStep) {

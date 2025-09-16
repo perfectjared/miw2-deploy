@@ -173,6 +173,7 @@ export class CarMechanics {
     
     // Listen for step changes to update obstacle visuals
     this.scene.events.on('step', this.onStepChanged, this);
+    console.log('CarMechanics: Registered step event listener');
 
     // Add 'E' key handler for testing exit spawning
     this.scene.input.keyboard?.on('keydown-E', () => {
