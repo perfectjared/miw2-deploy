@@ -110,13 +110,12 @@ export class CarMechanics {
   private horizontalSpacing: number = 28;
   private getLensStrength(): number { return this.config.lensStrength ?? 60; }
   
-  // Exit Preview System
+  // Exit Preview System - simplified
   private exitPreviews: Array<{
     preview: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Rectangle;
     stepsUntilActivation: number;
     originalData: any;
-    hasExitedScreen: boolean;
   }> = [];
 
   // Debug Radar
@@ -738,18 +737,9 @@ export class CarMechanics {
       }
     });
     
-    // Handle exit previews that have exited screen
+    // Remove exit previews that are off screen or have spawned their exit
     this.exitPreviews.forEach(previewData => {
-      if (previewData.preview.y > this.scene.cameras.main.height && !previewData.hasExitedScreen) {
-        // Mark as exited screen and start timer
-        previewData.hasExitedScreen = true;
-        console.log('Preview exited screen, starting timer with', previewData.stepsUntilActivation, 'steps');
-        console.log('Total exit previews:', this.exitPreviews.length);
-      }
-      
-      // Clean up previews that have spawned their exit
-      if (previewData.hasExitedScreen && previewData.stepsUntilActivation <= 0) {
-        console.log('Cleaning up preview that spawned its exit');
+      if (previewData.preview.y > this.scene.cameras.main.height || previewData.preview.getData('spawned')) {
         // Clean up preview and its visual
         previewData.preview.destroy();
         previewData.visual.destroy();
@@ -760,11 +750,9 @@ export class CarMechanics {
       }
     });
     
-    // Move exit previews down the road (only those still on screen)
+    // Move exit previews down the road
     this.exitPreviews.forEach(previewData => {
-      if (!previewData.hasExitedScreen) {
-        previewData.preview.y += this.config.potholeSpeed;
-      }
+      previewData.preview.y += this.config.potholeSpeed;
     });
 
     // Record last steering value used for visual horizontal updates
@@ -895,8 +883,7 @@ export class CarMechanics {
         preview: obstacle,
         visual: visual,
         stepsUntilActivation: stepsUntilActivation,
-        originalData: originalData,
-        hasExitedScreen: false
+        originalData: originalData
       });
       
       // Don't add to obstacles array yet - it's not collidable
@@ -1125,10 +1112,8 @@ export class CarMechanics {
    * Process exit previews - update visuals and spawn new obstacles when ready
    */
   private processExitPreviews(step: number, gameHeight: number, gameWidth: number, horizonY: number, roadY: number, phaseOffset: number, bez: Function, centerX: number) {
-    // Update preview visuals (only for previews still on screen)
+    // Update preview visuals
     this.exitPreviews.forEach(previewData => {
-      if (previewData.hasExitedScreen) return; // Skip visual updates for exited previews
-      
       const { preview, visual } = previewData;
       
       // Update preview visual position
@@ -1151,10 +1136,8 @@ export class CarMechanics {
       visual.displayHeight = baseH * heightScale;
     });
     
-    // Check for previews ready to spawn new obstacles (only those that have exited screen)
-    const readyPreviews = this.exitPreviews.filter(previewData => 
-      previewData.hasExitedScreen && previewData.stepsUntilActivation <= 0
-    );
+    // Check for previews ready to spawn new obstacles
+    const readyPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation <= 0);
     
     console.log('Processing exit previews - total:', this.exitPreviews.length, 'ready to spawn:', readyPreviews.length);
     
@@ -1165,13 +1148,11 @@ export class CarMechanics {
       previewData.preview.setData('spawned', true);
     });
     
-    // Decrement remaining steps for all previews that have exited screen
+    // Decrement remaining steps for all previews
     this.exitPreviews.forEach(previewData => {
-      if (previewData.hasExitedScreen) {
-        previewData.stepsUntilActivation--;
-        if (previewData.stepsUntilActivation <= 0) {
-          console.log('Preview timer reached 0, will spawn exit next step');
-        }
+      previewData.stepsUntilActivation--;
+      if (previewData.stepsUntilActivation <= 0) {
+        console.log('Preview timer reached 0, will spawn exit next step');
       }
     });
   }
