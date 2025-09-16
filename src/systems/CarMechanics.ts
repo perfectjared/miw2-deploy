@@ -1154,17 +1154,18 @@ export class CarMechanics {
    */
   private spawnExitFromPreview(previewData: any) {
     const { preview, originalData } = previewData;
-    console.log('Spawning new exit from preview at position:', preview.x, preview.y);
     
     // Create a completely new collidable exit obstacle
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     const horizonY = gameHeight * 0.3;
     
-    // Create new exit obstacle at the same position as preview
+    console.log('Spawning new exit at origin position:', originalData.baseX, horizonY + 2);
+    
+    // Create new exit obstacle at origin (top of screen) like other obstacles
     const newExit = this.scene.add.rectangle(
-      preview.x,
-      preview.y,
+      originalData.baseX, // Use original X position from when preview was created
+      horizonY + 2,      // Start at horizon like other obstacles
       originalData.baseW,
       originalData.baseH,
       this.config.exitColor,
