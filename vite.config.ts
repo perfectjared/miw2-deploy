@@ -2,8 +2,8 @@ import { defineConfig } from 'vite'
 import { copyFileSync } from 'fs'
 import { resolve } from 'path'
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? '/miw2-deploy/' : '/', // Only use base path for production builds
+export default defineConfig(({ command, mode }) => ({
+  base: mode === 'production' ? '/miw2-deploy/' : '/', // GitHub Pages base path only for production builds
   server: {
     host: true,
     // Add HMR settings to prevent issues with game state

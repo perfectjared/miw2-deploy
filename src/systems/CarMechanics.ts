@@ -463,15 +463,20 @@ export class CarMechanics {
     if (Math.abs(normalizedValue) > 0.001) {
       const steeringDirection = normalizedValue > 0 ? 1 : -1;
       // Make turn gain proportional to steering distance from center
-      // Further from center = more turn gain (exponential curve)
+      // Use inverse curve: easier to reach extremes, harder in middle
       const steeringDistance = Math.abs(normalizedValue);
       const baseTurnGain = this.config.baseTurnGain;
       const maxTurnGain = this.config.maxTurnGain;
       const turnGainPower = this.config.turnGainPower;
-      // Use a power curve: gain increases exponentially with distance from center
+      
+      // Use square root curve: gain increases quickly at extremes, slower in middle
+      // This makes it easier to reach road edges
       const turnGain = baseTurnGain + (maxTurnGain - baseTurnGain) * Math.pow(steeringDistance, turnGainPower);
       
-      this.turn += steeringDirection * dlt * turnGain;
+      // Additional boost for extreme steering to make road edges more accessible
+      const extremeBoost = steeringDistance > 0.7 ? 1.5 : 1.0;
+      
+      this.turn += steeringDirection * dlt * turnGain * extremeBoost;
     } else {
       // Instead of forcing turn to 0, let it decay slowly for momentum
       this.turn *= (1 - this.config.turnDecayRate);
@@ -526,14 +531,30 @@ export class CarMechanics {
     // Add slight curve sway to enhance bend sensation
     offsetX += this.currentCurve * 12;
     
-    // Do not pan the whole scene horizontally; keep scroll fixed
-    this.scene.cameras.main.setScroll(0, 0);
+    // NEW: Track car's horizontal position for camera movement
+    const gameWidth = this.scene.cameras.main.width;
+    const carCenterX = gameWidth / 2;
+    const carOffsetFromCenter = this.drivingCar.x - carCenterX;
     
-    // Camera tilt based on steering and speed
+    // Apply horizontal camera tracking - camera follows car movement
+    // Scale the offset to make camera movement feel natural (not too sensitive)
+    const cameraTrackingFactor = 0.3; // 30% of car movement translates to camera movement
+    const cameraOffsetX = carOffsetFromCenter * cameraTrackingFactor;
+    
+    // Combine world offset with camera tracking offset
+    const totalOffsetX = offsetX + cameraOffsetX;
+    
+    // Apply horizontal camera scroll to follow the car
+    this.scene.cameras.main.setScroll(totalOffsetX, 0);
+    
+    // Store camera angle for dash elements to use (but don't apply to main camera)
     const speedFactor = this.carSpeed / Math.max(1, this.config.carMaxSpeed);
     const targetAngle = Phaser.Math.Clamp((this.turn + this.currentCurve * 0.6) * 6 * speedFactor, -6, 6);
     this.cameraAngle = Phaser.Math.Linear(this.cameraAngle, targetAngle, 0.15);
-    (this.scene.cameras.main as any).setAngle?.(this.cameraAngle);
+    
+    // Emit camera angle for dash elements to use
+    this.scene.events.emit('cameraAngleChanged', this.cameraAngle);
+    // Debug log disabled to avoid console flooding during driving
   }
 
   /**
@@ -688,8 +709,8 @@ export class CarMechanics {
       }
       const nearLogged = obstacle.getData('nearLogged');
       if (!nearLogged && Math.abs(obstacle.y - this.drivingCar.y) < 80) {
-        // One-time near log to verify approach
-        console.log('Pothole near car: carX=', this.drivingCar.x, 'obsX=', obstacle.x, 'carY=', this.drivingCar.y, 'obsY=', obstacle.y);
+        // One-time near log to verify approach (disabled to avoid console spam)
+        // console.log('Pothole near car: carX=', this.drivingCar.x, 'obsX=', obstacle.x, 'carY=', this.drivingCar.y, 'obsY=', obstacle.y);
         obstacle.setData('nearLogged', true);
       }
       // Only allow collision once the obstacle's bottom reaches the car's top
@@ -701,14 +722,15 @@ export class CarMechanics {
       const tightBounds = Phaser.Geom.Rectangle.Clone(visualBounds);
       Phaser.Geom.Rectangle.Inflate(tightBounds, -4, -(isPothole ? 6 : 2));
       if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, tightBounds)) {
-        console.log('COLLISION: car vs obstacle', {
-          carX: this.drivingCar.x,
-          carY: this.drivingCar.y,
-          obsX: obstacle.x,
-          obsY: obstacle.y,
-          usingVisualBounds: !!visualTwin,
-          isPothole: !!obstacle.getData('isPothole')
-        });
+        // Debug log disabled to avoid console flooding during collisions
+        // console.log('COLLISION: car vs obstacle', {
+        //   carX: this.drivingCar.x,
+        //   carY: this.drivingCar.y,
+        //   obsX: obstacle.x,
+        //   obsY: obstacle.y,
+        //   usingVisualBounds: !!visualTwin,
+        //   isPothole: !!obstacle.getData('isPothole')
+        // });
         // Destroy obstacle on collision
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
         if (visualToDestroy) visualToDestroy.destroy();

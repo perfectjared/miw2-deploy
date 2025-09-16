@@ -58,7 +58,6 @@ export class GameScene extends Phaser.Scene {
   
   private gameContentContainer!: Phaser.GameObjects.Container;
   private magneticTarget!: Phaser.GameObjects.Graphics;
-  private keyholeSVG!: Phaser.GameObjects.Sprite; // SVG overlay
   private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay for keys
   private hotdogSVG!: Phaser.GameObjects.Sprite; // SVG overlay for food item
   private keysConstraint: any = null;
@@ -99,15 +98,24 @@ export class GameScene extends Phaser.Scene {
    * Main scene creation method - initializes all game systems
    */
   async create() {
-    console.log('GameScene: Initializing modular systems...');
-    
-    // Navigation UI will be initialized when needed
-    
-    // Initialize game state
-    this.initializeGameState();
-    
-    // Initialize all system modules
-    this.initializeSystems();
+    try {
+      console.log('🎯 === GAMESCENE CREATE CALLED ===');
+      console.log('GameScene: Initializing modular systems...');
+      
+      // Navigation UI will be initialized when needed
+      
+      // Initialize game state
+      console.log('🎯 About to initialize game state');
+      this.initializeGameState();
+      console.log('🎯 Game state initialized');
+      
+      // Initialize all system modules
+      console.log('🎯 About to initialize systems');
+      this.initializeSystems();
+      console.log('🎯 Systems initialized');
+    } catch (error) {
+      console.error('🎯 ERROR in GameScene.create():', error);
+    }
     
     // Create physics objects
     this.createPhysicsObjects();
@@ -122,7 +130,15 @@ export class GameScene extends Phaser.Scene {
     this.setupPhysicsWorlds();
     
     // Initialize UI
-    this.gameUI.initialize();
+    try {
+      console.log('🎯 About to call gameUI.initialize()');
+      console.log('🎯 GameUI object exists:', !!this.gameUI);
+      this.gameUI.initialize();
+      console.log('🎯 GameUI.initialize() completed successfully');
+    } catch (error) {
+      console.error('🎯 ERROR calling gameUI.initialize():', error);
+      console.error('🎯 Error stack:', error.stack);
+    }
     
     // Initialize tutorial system
     this.tutorialSystem.initialize();
@@ -200,6 +216,7 @@ export class GameScene extends Phaser.Scene {
 
     // Initialize five virtual pets within a single rectangle container (rearview)
     const rearviewContainer = this.add.container(0, 0);
+    rearviewContainer.setName('rearviewContainer');
     rearviewContainer.setScrollFactor(0);
     rearviewContainer.setDepth(70000);
     
@@ -446,6 +463,7 @@ export class GameScene extends Phaser.Scene {
       speedCrankSnapPositions: [...UI_CONFIG.speedCrankSnapPositions] // Convert readonly to mutable
     };
     this.gameUI = new GameUI(this, uiConfig);
+    console.log('🎯 GameUI created in GameScene');
     
     // Input Handlers Configuration
     const inputConfig: InputHandlersConfig = {
@@ -475,6 +493,15 @@ export class GameScene extends Phaser.Scene {
     this.keySVG.setOrigin(0.5, 0.5);
     this.keySVG.setAlpha(0.8); // Semi-transparent overlay
     this.keySVG.setDepth(1001); // Above the key circle
+    
+    // Debug: Log key SVG creation
+    console.log('🗝️ === KEY SVG CREATION DEBUG ===');
+    console.log('🗝️ Key SVG position:', this.keySVG.x, this.keySVG.y);
+    console.log('🗝️ Key SVG origin:', this.keySVG.originX, this.keySVG.originY);
+    console.log('🗝️ Key SVG scale:', this.keySVG.scaleX, this.keySVG.scaleY);
+    console.log('🗝️ Key SVG visible:', this.keySVG.visible);
+    console.log('🗝️ Key SVG angle:', this.keySVG.angle);
+    console.log('🗝️ ===============================');
     
     // Create hot-dog SVG overlay that will follow the food item's position (red Trash object)
     this.hotdogSVG = this.add.sprite(100, 200, 'hot-dog'); // Start at red food item's initial position
@@ -531,13 +558,7 @@ export class GameScene extends Phaser.Scene {
     // Store reference to the body for collision detection
     (this.magneticTarget as any).magneticBody = magneticBody;
     
-    // Create keyhole SVG overlay
-    this.keyholeSVG = this.add.sprite(200, 520, 'key-hole'); // Use correct magnetic target position
-    this.keyholeSVG.setScale(0.1); // Normal scale
-    this.keyholeSVG.setOrigin(0.5, 0.5);
-    this.keyholeSVG.setAlpha(0.8); // Semi-transparent overlay
-    this.keyholeSVG.setDepth(1000); // Above the magnetic target
-    this.keyholeSVG.setScrollFactor(0); // Don't move with camera
+    // Note: keyhole SVG is now created in GameUI dash container
     
     // Set scroll factor to move with camera
     this.magneticTarget.setScrollFactor(1, 1);
@@ -646,6 +667,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('speedUpdate', this.onSpeedUpdate, this);
     this.events.on('steeringInput', this.onSteeringInput, this);
     this.events.on('speedCrankInput', this.onSpeedCrankInput, this);
+    this.events.on('cameraAngleChanged', this.onCameraAngleChanged, this);
     
     // Handle window blur (game loses focus) - show pause menu
     this.game.events.on('hidden', () => {
@@ -780,7 +802,8 @@ export class GameScene extends Phaser.Scene {
         this.frontseatKeys.gameObject.y
       );
       this.keySVG.setPosition(worldPos.x, worldPos.y);
-      this.keySVG.setRotation(this.frontseatKeys.gameObject.rotation);
+      // Store physics rotation for later combination with camera angle
+      (this.keySVG as any).physicsRotation = this.frontseatKeys.gameObject.rotation;
     }
     
     // Keyhole SVG is now positioned independently and doesn't need updates
@@ -887,6 +910,21 @@ export class GameScene extends Phaser.Scene {
         console.log('Key physics disabled (static)');
       }
       
+      // Set up collision filtering to prevent key from colliding with other items
+      if (this.frontseatKeys.gameObject.body) {
+        const keyBody = this.frontseatKeys.gameObject.body as any;
+        // Store original collision filter for restoration later
+        keyBody.originalCollisionFilter = keyBody.collisionFilter || { group: 0, category: 0x0001, mask: 0xFFFF };
+        
+        // Use collision groups - put key in group -1 (negative group = no collisions with other objects)
+        keyBody.collisionFilter = {
+          group: -1,        // Negative group prevents collisions with other objects
+          category: 0x0001, // Key category
+          mask: 0x0001      // Only collide with pointer/ground
+        };
+        console.log('Key collision filtering enabled - using collision group -1');
+      }
+      
       // Update tutorial overlay (debounced)
       this.scheduleTutorialUpdate(0);
       
@@ -916,6 +954,16 @@ export class GameScene extends Phaser.Scene {
       if (this.frontseatKeys.gameObject.body) {
         (this.frontseatKeys.gameObject.body as any).isStatic = false;
         console.log('Key physics re-enabled (dynamic)');
+      }
+      
+      // Restore original collision filter for the key
+      if (this.frontseatKeys.gameObject.body) {
+        const keyBody = this.frontseatKeys.gameObject.body as any;
+        if (keyBody.originalCollisionFilter) {
+          keyBody.collisionFilter = keyBody.originalCollisionFilter;
+          delete keyBody.originalCollisionFilter; // Clean up
+          console.log('Key collision filtering restored - normal collisions enabled');
+        }
       }
       
       // Reset Keys scroll factor to horizontal only
@@ -1011,6 +1059,37 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Handle camera angle changes - rotate ignition elements
+   */
+  private onCameraAngleChanged(angle: number) {
+    // Debug log disabled to avoid console flooding during driving
+    
+    // Rotate key SVG (combine physics rotation with camera angle)
+    if (this.keySVG) {
+      const physicsRotation = (this.keySVG as any).physicsRotation || 0;
+      const combinedAngle = physicsRotation + angle;
+      console.log('GameScene: Rotating key SVG from angle', this.keySVG.angle, 'to', combinedAngle, '(physics:', physicsRotation, '+ camera:', angle, ')');
+      this.keySVG.setAngle(combinedAngle);
+      console.log('GameScene: Key SVG now at angle:', this.keySVG.angle);
+    }
+    
+    // Rotate magnetic target graphics
+    if (this.magneticTarget) {
+      console.log('GameScene: Rotating magnetic target from angle', this.magneticTarget.angle, 'to', angle);
+      this.magneticTarget.setAngle(angle);
+      console.log('GameScene: Magnetic target now at angle:', this.magneticTarget.angle);
+    }
+    
+    // Rotate rearview mirror container
+    const rearviewContainer = this.children.getByName('rearviewContainer');
+    if (rearviewContainer) {
+      console.log('GameScene: Rotating rearview container from angle', (rearviewContainer as any).angle, 'to', angle);
+      (rearviewContainer as any).setAngle(angle);
+      console.log('GameScene: Rearview container now at angle:', (rearviewContainer as any).angle);
+    }
+  }
+
+  /**
    * Handle ignition menu shown event
    */
   private onIgnitionMenuShown() {
@@ -1040,6 +1119,16 @@ export class GameScene extends Phaser.Scene {
       if (this.frontseatKeys.gameObject.body) {
         (this.frontseatKeys.gameObject.body as any).isStatic = false;
         console.log('Key physics re-enabled (manual removal - dynamic)');
+      }
+      
+      // Restore original collision filter for the key
+      if (this.frontseatKeys.gameObject.body) {
+        const keyBody = this.frontseatKeys.gameObject.body as any;
+        if (keyBody.originalCollisionFilter) {
+          keyBody.collisionFilter = keyBody.originalCollisionFilter;
+          delete keyBody.originalCollisionFilter; // Clean up
+          console.log('Key collision filtering restored (manual removal) - normal collisions enabled');
+        }
       }
       
       // Reset target color

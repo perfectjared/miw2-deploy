@@ -26,9 +26,9 @@ export const CAR_CONFIG = {
   centrifugal: 2.0,
   
   // Steering Turn Gain (distance-based)gi
-  baseTurnGain: 0.25,        // Minimum turn gain at center
-  maxTurnGain: 1.0,          // Maximum turn gain at full steering
-  turnGainPower: 2,          // Power curve exponent (2 = quadratic)
+  baseTurnGain: 0.3,         // Minimum turn gain at center
+  maxTurnGain: 1.5,          // Maximum turn gain at full steering (increased for easier extremes)
+  turnGainPower: 0.5,        // Power curve exponent (0.5 = square root - easier extremes)
   
   // Car Momentum & Stability
   turnDecayRate: 0.01,       // How quickly turn decays when not steering (much lower = more momentum)

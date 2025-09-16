@@ -1601,6 +1601,12 @@ export class MenuManager {
         }
       }
       
+      // Resume game when destination menu is closed
+      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP') {
+        console.log('MenuManager: Resuming game after destination menu closed');
+        this.resumeGameAfterDestinationMenu();
+      }
+      
       // Clear the displayed menu type
       this.currentDisplayedMenuType = null;
       
@@ -1656,5 +1662,30 @@ export class MenuManager {
     
     this.clearCurrentDialog();
     // Don't reset the flag immediately - let clearCurrentDialog handle it after restoration
+  }
+
+  /**
+   * Resume game after destination menu is closed
+   */
+  private resumeGameAfterDestinationMenu() {
+    // Resume AppScene step counting
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+      console.log('MenuManager: Resumed AppScene step counting');
+    }
+    
+    // Resume CarMechanics driving
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene && (gameScene as any).carMechanics) {
+      (gameScene as any).carMechanics.resumeDriving();
+      console.log('MenuManager: Resumed CarMechanics driving');
+    }
+    
+    // Emit game resumed event
+    if (gameScene) {
+      gameScene.events.emit('gameResumed');
+      console.log('MenuManager: Emitted gameResumed event');
+    }
   }
 }

@@ -150,6 +150,9 @@ export class AppScene extends Phaser.Scene {
       loop: true,
       paused: true // Start paused, will be unpaused when game starts
     });
+
+    // Listen for game events from other scenes
+    this.events.on('gameResumed', this.onGameResumed, this);
   }
 
   private setupOverlayCamera() {
@@ -201,6 +204,18 @@ export class AppScene extends Phaser.Scene {
     // Resume the step timer if game is started and not manually paused
     if (this.gameStarted && !this.isPaused && this.stepTimer) {
       this.stepTimer.paused = false;
+    }
+  }
+
+  /**
+   * Handle game resumed event from other scenes
+   */
+  private onGameResumed() {
+    console.log('AppScene: Received gameResumed event - resuming step timer');
+    this.isPaused = false;
+    if (this.stepTimer) {
+      this.stepTimer.paused = false;
+      console.log('AppScene: Step timer unpaused');
     }
   }
 

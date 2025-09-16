@@ -6,7 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build:deploy": "tsc && vite build --mode production",
+    "preview": "vite preview",
+    "deploy:original": "npm run build && git add . && git commit -m 'Build and deploy' && git push origin main",
+    "deploy:github": "npm run build:deploy && npm run copy:deploy && git add . && git commit -m 'Deploy to GitHub Pages' && git push deploy main",
+    "deploy": "./deploy.sh",
+    "deploy:orig": "./deploy.sh original",
+    "deploy:gh": "./deploy.sh github",
+    "copy:deploy": "cp dist/index.html . && cp -r dist/assets . && cp dist/rexuiplugin.js . && echo '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5\"/></svg>' > vite.svg"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
