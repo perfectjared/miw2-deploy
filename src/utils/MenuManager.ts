@@ -101,6 +101,7 @@ export class MenuManager {
     SAVE: 50,         // Medium priority - save menu
     DESTINATION: 50,  // Medium priority - destination menu
     EXIT: 50,         // Medium priority - exit choice menu
+    SHOP: 50,         // Medium priority - shop menu
     CYOA: 50,         // Medium priority - choose-your-own-adventure menu
     VIRTUAL_PET: 50,  // Medium priority - virtual pet menu
     MORAL_DECISION: 50, // Medium priority - moral decision menu
@@ -624,9 +625,79 @@ export class MenuManager {
   private handleExitShopChoice(shopName: string) {
     // Placeholder: simply close the dialog and resume game. Hook narrative/transition later.
     try { console.log('Exit menu choice:', shopName); } catch {}
-    this.closeDialog();
+    // Open shop menu instead of closing
+    this.showShopMenu();
     // Optionally emit an event for GameScene to react to
     try { this.scene.events.emit('exitShopChosen', shopName); } catch {}
+  }
+
+  public showShopMenu() {
+    if (!this.canShowMenu('SHOP')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('SHOP');
+    
+    // Get current money from GameScene
+    const gameScene = this.scene.scene.get('GameScene');
+    const currentMoney = gameScene ? (gameScene as any).gameState?.getState()?.money || 0 : 0;
+    
+    // Shop items with costs
+    const shopItems = [
+      { name: 'Health Pack', cost: 25 },
+      { name: 'Speed Boost', cost: 50 },
+      { name: 'Lucky Charm', cost: 100 }
+    ];
+    
+    const menuConfig: MenuConfig = {
+      title: 'SHOP',
+      content: `Money: $${currentMoney}`,
+      buttons: shopItems.map(item => ({
+        text: `${item.name} - $${item.cost}`,
+        onClick: () => this.handleShopPurchase(item.name, item.cost),
+        style: {
+          fontSize: '16px',
+          color: currentMoney >= item.cost ? '#ffffff' : '#666666',
+          backgroundColor: currentMoney >= item.cost ? '#34495e' : '#222222',
+          padding: { x: 15, y: 8 }
+        }
+      })).concat([
+        {
+          text: 'Close',
+          onClick: () => this.closeDialog(),
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        }
+      ])
+    };
+    
+    this.createDialog(menuConfig, 'SHOP');
+  }
+
+  private handleShopPurchase(itemName: string, cost: number) {
+    const gameScene = this.scene.scene.get('GameScene');
+    if (!gameScene) return;
+    
+    const gameState = (gameScene as any).gameState;
+    if (!gameState) return;
+    
+    const currentState = gameState.getState();
+    const currentMoney = currentState.money || 0;
+    
+    // Check if player has enough money
+    if (currentMoney < cost) {
+      console.log(`Cannot afford ${itemName} - need $${cost}, have $${currentMoney}`);
+      return;
+    }
+    
+    // Deduct cost and update state
+    const newMoney = currentMoney - cost;
+    gameState.updateState({ money: newMoney });
+    
+    console.log(`Purchased ${itemName} for $${cost}. Remaining money: $${newMoney}`);
+    
+    // Close shop menu
+    this.closeDialog();
+    
+    // Emit purchase event for potential game effects
+    try { this.scene.events.emit('shopPurchase', { item: itemName, cost: cost }); } catch {}
   }
 
   public showTurnKeyMenu() {
@@ -1645,7 +1716,7 @@ export class MenuManager {
       }
       
       // Resume game when destination menu is closed
-      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP' || this.currentDisplayedMenuType === 'EXIT') {
+      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP' || this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP') {
         console.log('MenuManager: Resuming game after destination menu closed');
         this.resumeGameAfterDestinationMenu();
       }
