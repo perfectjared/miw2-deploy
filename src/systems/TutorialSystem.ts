@@ -55,7 +55,7 @@ export class TutorialSystem {
   private tutorialOverlay!: Phaser.GameObjects.Container;
   private tutorialMaskGraphics!: Phaser.GameObjects.Graphics;
   private blinkText?: Phaser.GameObjects.Text;
-  private blinkIntervalSteps: number = 5;
+  private blinkIntervalSteps: number = 2;
   
   // State Tracking
   private lastTutorialState: string = '';
@@ -77,14 +77,14 @@ export class TutorialSystem {
     // Create blink text (hidden by default)
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
-    this.blinkText = this.scene.add.text(gameWidth / 2, gameHeight - 60, 'tutorial', {
+    this.blinkText = this.scene.add.text(gameWidth / 2, gameHeight / 2, 'tutorial', {
       fontSize: '28px',
       color: '#ffffff',
       fontStyle: 'bold',
       align: 'center'
     }).setOrigin(0.5);
     this.blinkText.setScrollFactor(0);
-    this.blinkText.setDepth(100);
+    this.blinkText.setDepth(10000);
     try { (this.blinkText as any).setStroke?.(); } catch {}
     try { (this.blinkText as any).setShadow?.(2, 2, '#000000', 6, true, true); } catch {}
     this.blinkText.setVisible(false);
