@@ -153,6 +153,10 @@ export class TutorialSystem {
     if (this.tutorialOverlay) {
       const shouldShow = tutorialState !== 'none';
       this.tutorialOverlay.setVisible(shouldShow);
+      try {
+        // Inform parent scene so other scenes (like AppScene) can react (hide Pause/Save)
+        (this.scene as any).events?.emit?.('tutorialOverlayVisible', shouldShow);
+      } catch {}
       if (shouldShow) {
         // Ensure blink text is above overlay gfx
         if (this.blinkText) {

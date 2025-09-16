@@ -112,18 +112,16 @@ export class AppScene extends Phaser.Scene {
       padding: { x: 10, y: 5 }
     });
     pauseButton.setScrollFactor(0);
-    pauseButton.setDepth(30000); // High depth but not extreme
+    pauseButton.setDepth(5000);
     pauseButton.setInteractive({ useHandCursor: true });
     pauseButton.on('pointerdown', () => {
-      pauseButton.setStyle({ backgroundColor: '#ff0000' }); // Visual feedback
+      pauseButton.setStyle({ backgroundColor: '#ff0000' });
       this.togglePauseMenu();
     });
-    
     pauseButton.on('pointerup', () => {
-      pauseButton.setStyle({ backgroundColor: '#0000ff' }); // Reset color
+      pauseButton.setStyle({ backgroundColor: '#0000ff' });
     });
 
-    // Add save menu button next to pause button
     const saveButton = this.add.text(80, 100, 'SAVE', {
       fontSize: '16px',
       color: '#ffffff',
@@ -131,16 +129,25 @@ export class AppScene extends Phaser.Scene {
       padding: { x: 10, y: 5 }
     });
     saveButton.setScrollFactor(0);
-    saveButton.setDepth(30000); // High depth but not extreme
+    saveButton.setDepth(5000);
     saveButton.setInteractive({ useHandCursor: true });
     saveButton.on('pointerdown', () => {
-      saveButton.setStyle({ backgroundColor: '#ff0000' }); // Visual feedback
+      saveButton.setStyle({ backgroundColor: '#ff0000' });
       this.showSaveMenu();
     });
-    
     saveButton.on('pointerup', () => {
-      saveButton.setStyle({ backgroundColor: '#27ae60' }); // Reset color
+      saveButton.setStyle({ backgroundColor: '#27ae60' });
     });
+
+    try {
+      const gameScene = this.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.on('tutorialOverlayVisible', (visible: boolean) => {
+          pauseButton.setVisible(!visible);
+          saveButton.setVisible(!visible);
+        });
+      }
+    } catch {}
 
     // Start the step timer (every 1000ms = 1 second) - but only when game is started
     this.stepTimer = this.time.addEvent({
