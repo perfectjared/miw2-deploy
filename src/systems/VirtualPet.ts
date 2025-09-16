@@ -78,15 +78,7 @@ export class VirtualPet {
 		this.faceSVG.setDepth(this.pet.depth + 1); // Ensure face is above the ellipse
 		this.container.add(this.faceSVG);
 		
-		// Make face follow the pet's bobbing animation
-		this.scene.tweens.add({
-			targets: this.faceSVG,
-			y: this.faceSVG.y - 4,
-			duration: 800,
-			yoyo: true,
-			repeat: -1,
-			ease: 'Sine.easeInOut'
-		});
+		// Face SVG bobbing animation removed - face now stays in fixed position
 		
 		// Update face based on initial food value
 		this.updateFaceEmotion();
