@@ -1387,9 +1387,16 @@ export class GameScene extends Phaser.Scene {
         this.firstSteeringLoggedStep = this.gameState.getState().step || 0;
       }
     }
-    // Map dial value (-100..100) to lateral gravity (-gx..gx)
-    const maxGx = 0.8; // tune lateral gravity strength
-    this.gravityXTarget = (Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
+    // Apply lateral gravity from steering ONLY when crank >= 40%
+    const crankPct = this.gameState.getState().speedCrankPercentage ?? 0;
+    if (crankPct >= 40) {
+      // Map dial value (-100..100) to lateral gravity (-gx..gx)
+      const maxGx = 0.8; // tune lateral gravity strength
+      this.gravityXTarget = (Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
+    } else {
+      // Below threshold: no lateral gravity influence from steering
+      this.gravityXTarget = 0;
+    }
     
     this.carMechanics.handleSteering(value);
   }
@@ -1400,6 +1407,10 @@ export class GameScene extends Phaser.Scene {
     
     // Update car mechanics with new speed
     this.carMechanics.handleSpeedCrank(percentage);
+    // If crank falls below threshold, immediately stop lateral gravity effects
+    if (percentage < 40) {
+      this.gravityXTarget = 0;
+    }
   }
 
   /**
