@@ -281,6 +281,20 @@ export class GameScene extends Phaser.Scene {
       const toIgnoreForControls = allObjects.filter(obj => !controlObjs.includes(obj));
       if (toIgnoreForControls.length > 0) this.controlsCamera.ignore(toIgnoreForControls);
     }
+    // Ensure tutorial overlay renders above controls: add it to controls camera allowlist
+    // Ensure tutorial overlay renders above controls
+    try {
+      const tutObjs = (this.tutorialSystem as any).getOverlayObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
+      if (tutObjs && tutObjs.length && this.controlsCamera) {
+        // controlsCamera currently ignores everything except controlObjs; here we ensure it DOES NOT ignore tutorial overlay
+        const currentIgnores = (this.controlsCamera as any).ignoreList as Phaser.GameObjects.GameObject[] | undefined;
+        if (currentIgnores) {
+          const newIgnores = currentIgnores.filter(obj => !tutObjs.includes(obj));
+          (this.controlsCamera as any).ignore(newIgnores);
+        }
+      }
+    } catch {}
+
     // Create a dedicated overlay container for dragged items (always above HUD/pet)
     this.dragOverlay = this.add.container(0, 0);
     this.dragOverlay.setDepth(60001);

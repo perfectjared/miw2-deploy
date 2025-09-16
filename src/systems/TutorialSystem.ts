@@ -323,6 +323,13 @@ export class TutorialSystem {
     return this.tutorialOverlay ? this.tutorialOverlay.visible : false;
   }
 
+  /** Expose overlay objects so cameras can render them above controls */
+  public getOverlayObjects(): Phaser.GameObjects.GameObject[] {
+    const objs: Phaser.GameObjects.GameObject[] = [];
+    if (this.tutorialOverlay) objs.push(this.tutorialOverlay);
+    return objs;
+  }
+
   /** Set the blinking tutorial text content */
   public setBlinkText(text: string) {
     if (!this.blinkText) return;
