@@ -86,7 +86,7 @@ export class Trash implements PhysicsObject {
         if (parent) parent.remove(this.gameObject);
         (gameScene as any).dragOverlay.add(this.gameObject);
       } else {
-        this.gameObject.setDepth(60001);
+        this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
         this.scene.children.bringToTop(this.gameObject);
       }
       
@@ -229,7 +229,7 @@ export class Item implements PhysicsObject {
         if (parent) parent.remove(this.gameObject);
         (gameScene as any).dragOverlay.add(this.gameObject);
       } else {
-        this.gameObject.setDepth(60001);
+        this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
         this.scene.children.bringToTop(this.gameObject);
       }
       
@@ -300,7 +300,7 @@ export class Item implements PhysicsObject {
         // If the item still exists (not fed/destroyed), keep it in main scene at high depth for a moment
         if (this.gameObject && this.gameObject.scene) {
           const od = (this.gameObject as any)._originalDepth;
-          this.gameObject.setDepth(60001);
+          this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
           // Restore original depth after short delay
           this.scene.time.delayedCall(100, () => {
             if (this.gameObject && this.gameObject.scene) {
@@ -411,7 +411,7 @@ export class Keys implements PhysicsObject {
         if (parent) parent.remove(this.gameObject);
         (gameScene as any).dragOverlay.add(this.gameObject);
       } else {
-        this.gameObject.setDepth(60001);
+        this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
         this.scene.children.bringToTop(this.gameObject);
       }
       

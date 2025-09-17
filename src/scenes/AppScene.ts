@@ -36,16 +36,16 @@ export class AppScene extends Phaser.Scene {
     this.setupOverlayCamera();
 
 
-    // Add step counter
-    this.stepText = this.add.text(10, 10, '(app) step 0', {
-      fontSize: '16px',
-      color: '#00ff00',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    this.stepText.setScrollFactor(0);
-    this.stepText.setDepth(25000);
+    // Add step counter (commented out for now)
+    // this.stepText = this.add.text(10, 10, '(app) step 0', {
+    //   fontSize: '16px',
+    //   color: '#00ff00',
+    //   fontStyle: 'bold',
+    //   backgroundColor: '#000000',
+    //   padding: { x: 8, y: 4 }
+    // });
+    // this.stepText.setScrollFactor(0);
+    // this.stepText.setDepth(25000);
 
     // Launch scenes in the correct layer order (bottom to top)
     // JARED'S NOTE: could this be simplified?
@@ -178,7 +178,7 @@ export class AppScene extends Phaser.Scene {
     if (!this.gameStarted || this.isPaused) return; // Don't increment if game hasn't started or is paused
     
     this.step++;
-    this.stepText.setText(`Step: ${this.step}`);
+    // this.stepText.setText(`Step: ${this.step}`);
     
     // Emit step event to GameScene
     const gameScene = this.scene.get('GameScene');
@@ -232,7 +232,7 @@ export class AppScene extends Phaser.Scene {
 
   public setStep(step: number): void {
     this.step = step;
-    this.stepText.setText(`Step: ${this.step}`);
+    // this.stepText.setText(`Step: ${this.step}`);
   }
 
   private togglePauseMenu() {
@@ -309,6 +309,6 @@ export class AppScene extends Phaser.Scene {
   public stopStepEvents() {
     this.gameStarted = false;
     this.step = 0; // Reset step counter
-    this.stepText.setText('App Layer; Step: 0'); // Reset display
+    // this.stepText.setText('App Layer; Step: 0'); // Reset display
   }
 }
