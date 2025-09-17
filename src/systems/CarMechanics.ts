@@ -1118,8 +1118,8 @@ export class CarMechanics {
     
     // Update regular obstacles
     this.obstacles.forEach(obstacle => {
-      // Step-based movement: advance logical position
-      obstacle.y += this.config.potholeSpeed;
+      // Step-based movement: advance logical position (compensated for step frequency)
+      obstacle.y += this.config.potholeSpeed * 60; // Multiply by 60 to match original 60fps speed
       
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (!visual) return;
@@ -1180,8 +1180,8 @@ export class CarMechanics {
     this.exitPreviews.forEach(previewData => {
       const { preview, visual } = previewData;
       
-      // Step-based movement: advance logical position
-      preview.y += this.config.potholeSpeed;
+      // Step-based movement: advance logical position (compensated for step frequency)
+      preview.y += this.config.potholeSpeed * 60; // Multiply by 60 to match original 60fps speed
       
       // Update preview visual position
       const snappedY = roadY + Math.max(0, Math.floor(((preview.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
