@@ -116,6 +116,15 @@ export class CarMechanics {
     visual: Phaser.GameObjects.Rectangle;
     stepsUntilActivation: number;
     originalData: any;
+    previewId: string;
+  }> = [];
+
+  // Independent Exit Timer System
+  private exitTimers: Array<{
+    id: string;
+    stepsRemaining: number;
+    originalData: any;
+    previewId: string;
   }> = [];
 
   // Debug Radar
@@ -742,32 +751,11 @@ export class CarMechanics {
       }
     });
     
-    // Remove exit previews that are off screen (but not those that have spawned)
+    // Remove exit previews that are off screen (but don't interfere with timers)
     this.exitPreviews.forEach(previewData => {
       if (previewData.preview.y > this.scene.cameras.main.height) {
-        // Only clean up if it hasn't spawned an exit yet
-        if (!previewData.preview.getData('spawned')) {
-          console.log('Cleaning up preview that exited screen without spawning. Timer was:', previewData.stepsUntilActivation);
-          previewData.preview.destroy();
-          previewData.visual.destroy();
-          const index = this.exitPreviews.indexOf(previewData);
-          if (index > -1) {
-            this.exitPreviews.splice(index, 1);
-          }
-        }
-      }
-    });
-    
-    // Move exit previews down the road
-    this.exitPreviews.forEach(previewData => {
-      previewData.preview.y += this.config.potholeSpeed;
-    });
-    
-    // Clean up previews that have spawned their exit (after a delay)
-    this.exitPreviews.forEach(previewData => {
-      if (previewData.preview.getData('spawned')) {
-        // Clean up preview and its visual after spawning
-        console.log('Cleaning up spawned preview');
+        // Clean up preview visuals but don't interfere with independent timers
+        console.log('Cleaning up preview that exited screen. Timer continues independently.');
         previewData.preview.destroy();
         previewData.visual.destroy();
         const index = this.exitPreviews.indexOf(previewData);
@@ -775,6 +763,11 @@ export class CarMechanics {
           this.exitPreviews.splice(index, 1);
         }
       }
+    });
+    
+    // Move exit previews down the road
+    this.exitPreviews.forEach(previewData => {
+      previewData.preview.y += this.config.potholeSpeed;
     });
 
     // Record last steering value used for visual horizontal updates
@@ -887,6 +880,10 @@ export class CarMechanics {
       // Generate bell-curved delay between 5-20 steps
       const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
       
+      // Create unique IDs for preview and timer
+      const previewId = `preview_${Date.now()}_${Math.random()}`;
+      const timerId = `timer_${Date.now()}_${Math.random()}`;
+      
       // Store original data for later conversion
       const originalData = {
         baseW: exitWidthPx,
@@ -895,6 +892,16 @@ export class CarMechanics {
         laneOffset: (exitX - gameWidth / 2) / this.laneSpacingBottom,
         baseX: exitX
       };
+      
+      // Create independent timer (exists separately from preview)
+      this.exitTimers.push({
+        id: timerId,
+        stepsRemaining: stepsUntilActivation,
+        originalData: originalData,
+        previewId: previewId
+      });
+      
+      console.log('Created independent exit timer:', timerId, 'with', stepsUntilActivation, 'steps');
       
       // Create visual for preview
       const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
@@ -905,7 +912,8 @@ export class CarMechanics {
         preview: obstacle,
         visual: visual,
         stepsUntilActivation: stepsUntilActivation,
-        originalData: originalData
+        originalData: originalData,
+        previewId: previewId
       });
       
       // Don't add to obstacles array yet - it's not collidable
@@ -1028,6 +1036,10 @@ export class CarMechanics {
     // Generate bell-curved delay between 5-20 steps
     const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
     
+    // Create unique IDs for preview and timer
+    const previewId = `preview_${Date.now()}_${Math.random()}`;
+    const timerId = `timer_${Date.now()}_${Math.random()}`;
+    
     // Store original data for later conversion
     const originalData = {
       baseW: exitWidthPx,
@@ -1036,6 +1048,16 @@ export class CarMechanics {
       laneOffset: (exitX - gameWidth / 2) / this.laneSpacingBottom,
       baseX: exitX
     };
+    
+    // Create independent timer (exists separately from preview)
+    this.exitTimers.push({
+      id: timerId,
+      stepsRemaining: stepsUntilActivation,
+      originalData: originalData,
+      previewId: previewId
+    });
+    
+    console.log('Created independent exit timer:', timerId, 'with', stepsUntilActivation, 'steps');
     
     // Create visual for preview
     const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
@@ -1046,7 +1068,8 @@ export class CarMechanics {
       preview: obstacle,
       visual: visual,
       stepsUntilActivation: stepsUntilActivation,
-      originalData: originalData
+      originalData: originalData,
+      previewId: previewId
     });
     
     // Don't add to obstacles array yet - it's not collidable
@@ -1252,30 +1275,86 @@ export class CarMechanics {
       visual.displayHeight = baseH * heightScale;
     });
     
-    // Check for previews ready to spawn new obstacles
-    const readyPreviews = this.exitPreviews.filter(previewData => previewData.stepsUntilActivation <= 0);
-    
-    console.log('Processing exit previews - total:', this.exitPreviews.length, 'ready to spawn:', readyPreviews.length);
-    
-    readyPreviews.forEach(previewData => {
-      console.log('Spawning exit from preview');
-      this.spawnExitFromPreview(previewData);
-      // Mark preview as spawned so it gets cleaned up
-      previewData.preview.setData('spawned', true);
-    });
-    
-    // Decrement remaining steps for all previews
-    this.exitPreviews.forEach(previewData => {
-      previewData.stepsUntilActivation--;
-      console.log('Preview timer:', previewData.stepsUntilActivation, 'steps remaining');
-      if (previewData.stepsUntilActivation <= 0) {
-        console.log('Preview timer reached 0, will spawn exit next step');
+    // Process independent exit timers (not tied to previews)
+    this.exitTimers.forEach(timer => {
+      timer.stepsRemaining--;
+      console.log('Independent timer', timer.id, ':', timer.stepsRemaining, 'steps remaining');
+      
+      if (timer.stepsRemaining <= 0) {
+        console.log('Independent timer', timer.id, 'expired - spawning exit');
+        this.spawnExitFromTimer(timer);
+        
+        // Remove timer after spawning
+        const index = this.exitTimers.indexOf(timer);
+        if (index > -1) {
+          this.exitTimers.splice(index, 1);
+        }
       }
     });
   }
 
   /**
-   * Spawn new collidable exit obstacle from preview data
+   * Spawn new collidable exit obstacle from independent timer
+   */
+  private spawnExitFromTimer(timer: any) {
+    const { originalData } = timer;
+    
+    // Create a completely new collidable exit obstacle
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
+    
+    console.log('Spawning new exit from timer at origin position:', originalData.baseX, horizonY + 2);
+    console.log('Exit dimensions:', originalData.baseW, 'x', originalData.baseH);
+    console.log('Exit color:', this.config.exitColor);
+    
+    // Create new exit obstacle at origin (top of screen) like other obstacles
+    const newExit = this.scene.add.rectangle(
+      originalData.baseX, // Use original X position from when preview was created
+      horizonY + 2,      // Start at horizon like other obstacles
+      originalData.baseW,
+      originalData.baseH,
+      this.config.exitColor,
+      1.0 // Fully opaque for collidable obstacle
+    );
+    
+    console.log('Created exit rectangle:', newExit);
+    console.log('Exit visible:', newExit.visible);
+    console.log('Exit alpha:', newExit.alpha);
+    
+    // Set up the new obstacle with all necessary data
+    newExit.setData('isExit', true);
+    newExit.setData('exitWidthPx', originalData.baseW);
+    newExit.setData('baseX', originalData.baseX);
+    newExit.setData('laneOffset', originalData.laneOffset);
+    newExit.setData('baseW', originalData.baseW);
+    newExit.setData('baseH', originalData.baseH);
+    newExit.setData('laneIndex', originalData.laneIndex);
+    
+    // Create visual for the new obstacle
+    const visual = this.scene.add.rectangle(newExit.x, newExit.y, newExit.width, newExit.height, this.config.exitColor, 1.0);
+    visual.setDepth(this.config.roadDepth + 0.5);
+    newExit.setData('visual', visual);
+    
+    console.log('Created exit visual:', visual);
+    console.log('Visual visible:', visual.visible);
+    console.log('Visual alpha:', visual.alpha);
+    console.log('Visual depth:', visual.depth);
+    
+    // Add to driving container
+    this.drivingContainer.add(newExit);
+    this.drivingContainer.add(visual);
+    
+    // Add to obstacles array so it becomes collidable
+    this.obstacles.push(newExit);
+    
+    console.log('Exit added to obstacles array. Total obstacles:', this.obstacles.length);
+    console.log('Exit position after creation:', newExit.x, newExit.y);
+    console.log('Exit visual position:', visual.x, visual.y);
+  }
+
+  /**
+   * Spawn new collidable exit obstacle from preview data (legacy method)
    */
   private spawnExitFromPreview(previewData: any) {
     const { preview, originalData } = previewData;
