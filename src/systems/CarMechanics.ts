@@ -747,7 +747,7 @@ export class CarMechanics {
       if (previewData.preview.y > this.scene.cameras.main.height) {
         // Only clean up if it hasn't spawned an exit yet
         if (!previewData.preview.getData('spawned')) {
-          console.log('Cleaning up preview that exited screen without spawning');
+          console.log('Cleaning up preview that exited screen without spawning. Timer was:', previewData.stepsUntilActivation);
           previewData.preview.destroy();
           previewData.visual.destroy();
           const index = this.exitPreviews.indexOf(previewData);
@@ -1086,6 +1086,9 @@ export class CarMechanics {
     visual.displayHeight = this.config.exitHeight * heightScale;
     
     console.log('Test exit preview created with', stepsUntilActivation, 'steps until activation');
+    console.log('Preview starting position:', obstacle.x, obstacle.y);
+    console.log('Screen height:', this.scene.cameras.main.height);
+    console.log('Pothole speed:', this.config.potholeSpeed);
   }
 
   /**
