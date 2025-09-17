@@ -789,15 +789,18 @@ export class CarMechanics {
       const exitWidthPx = Math.floor(roadWidthPx * 0.30);
       const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
       
-      // Create preview obstacle (not collidable yet)
-      obstacle = this.scene.add.rectangle(
-        exitX,
-        horizonY + 2,
-        exitWidthPx,
-        this.config.exitHeight,
-        this.config.exitColor,
-        0.5 // Semi-transparent to indicate it's a preview
-      );
+    // Create preview obstacle (not collidable yet)
+    obstacle = this.scene.add.rectangle(
+      exitX,
+      horizonY + 2,
+      exitWidthPx,
+      this.config.exitHeight,
+      this.config.exitColor,
+      0.5 // Semi-transparent to indicate it's a preview
+    );
+    
+    // Hide the obstacle rectangle - only the visual should be visible
+    obstacle.setVisible(false);
       
       // Generate bell-curved delay between 5-20 steps
       const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
@@ -954,6 +957,9 @@ export class CarMechanics {
       this.config.exitColor,
       0.5 // Semi-transparent to indicate it's a preview
     );
+    
+    // Hide the obstacle rectangle - only the visual should be visible
+    obstacle.setVisible(false);
     
     // Generate bell-curved delay between 5-20 steps
     const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
@@ -1245,6 +1251,9 @@ export class CarMechanics {
       this.config.exitColor,
       1.0 // Fully opaque for collidable obstacle
     );
+    
+    // Hide the obstacle rectangle - only the visual should be visible
+    newExit.setVisible(false);
     
     console.log('Created exit rectangle:', newExit);
     console.log('Exit visible:', newExit.visible);
