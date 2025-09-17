@@ -829,6 +829,14 @@ export class GameScene extends Phaser.Scene {
       this.gameUI.update(SCENE_TUNABLES.performance.uiUpdateDeltaMs); // Typical delta time
     }
     
+    // Update virtual pets so they can sync visuals to Matter bodies (sway)
+    for (let i = 0; i < this.virtualPets.length; i++) {
+      const pet = this.virtualPets[i];
+      if (pet && (pet as any).update) {
+        try { (pet as any).update(); } catch {}
+      }
+    }
+    
     // HUD camera remains unrotated; no per-frame virtual pet counter-rotation needed
     this.applyMagneticAttraction();
     // Smoothly apply lateral gravity based on steering
