@@ -884,9 +884,6 @@ export class MenuManager {
     const pointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
       if (!isDragging) return;
       
-      // Don't allow slider movement if car has started
-      if (carStarted) return;
-      
       const currentTime = Date.now();
       const deltaTime = currentTime - lastUpdateTime;
       
@@ -901,7 +898,7 @@ export class MenuManager {
         const verticalDominance = Math.abs(deltaY) > Math.abs(deltaX) * 2; // Must be primarily vertical
         
         if (deltaY > swipeThreshold && verticalDominance && Math.abs(deltaY) > 150) {
-          // Swipe down detected - remove keys (much harder to trigger)
+          // Swipe down detected - remove keys (works even after car has started)
           console.log('Swipe down detected - removing keys');
           this.closeDialog();
           const gameScene = this.scene.scene.get('GameScene');
@@ -910,6 +907,9 @@ export class MenuManager {
           }
           return;
         }
+        
+        // Don't allow slider movement if car has started (but still allow swipe down)
+        if (carStarted) return;
         
         // Apply sensitivity multiplier for easier movement
         velocity = newVelocity * sensitivity;

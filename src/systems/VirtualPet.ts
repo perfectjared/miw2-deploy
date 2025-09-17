@@ -303,8 +303,8 @@ export class VirtualPet {
 
 		// Randomize parameters for unique pet movement
 		const randomFactor = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
-		const dampingVariation = 0.3 + Math.random() * 0.4; // 0.3 to 0.7 (increased from 0.1-0.3)
-		const stiffnessVariation = 0.01 + Math.random() * 0.02; // 0.01 to 0.03 (increased from 0.001-0.004)
+		const dampingVariation = 0.5 + Math.random() * 0.4; // 0.5 to 0.9 (even higher damping)
+		const stiffnessVariation = 0.02 + Math.random() * 0.03; // 0.02 to 0.05 (even higher stiffness)
 		const frictionVariation = 0.03 + Math.random() * 0.06; // 0.03 to 0.09
 
 		// Anchor is a static body at the initial pet position
@@ -318,14 +318,16 @@ export class VirtualPet {
 			friction: 0,
 			restitution: 0.2,
 			isSensor: true,
-			collisionFilter: { group: -2, category: 0, mask: 0 }
+			collisionFilter: { group: -2, category: 0, mask: 0 },
+			mass: 10, // Much heavier mass to resist movement
+			inertia: 1000 // High inertia to resist rotation
 		});
 		// Allow some vertical movement for bump effects, but keep it minimal
 		(this.petBody as any).ignoreGravity = false;
 		(this.petBody as any).gravityScale = 0.1; // Very light gravity
 
 		// Soft constraint to make it sway with randomized parameters
-		const constraintLength = Math.max(1, Math.floor(petRadius * 0.2 * randomFactor)); // Reduced from 0.4 to 0.2
+		const constraintLength = Math.max(1, Math.floor(petRadius * 0.1 * randomFactor)); // Even shorter constraint (was 0.2)
 		this.swayConstraint = m.add.constraint(this.anchorBody as any, this.petBody as any, constraintLength, stiffnessVariation, {
 			damping: dampingVariation,
 			stiffness: stiffnessVariation

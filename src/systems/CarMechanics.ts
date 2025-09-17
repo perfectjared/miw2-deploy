@@ -97,7 +97,7 @@ export class CarMechanics {
   private baseSpeed: number = 0; // Base speed from crank input
   private speedProgressionStartStep: number = 0; // When speed progression started (step-based)
   private speedProgressionDurationSteps: number = 1800; // 1800 steps to reach max progression (30 seconds at 60fps)
-  private maxSpeedMultiplier: number = 2.0; // Maximum 2x speed multiplier
+  private maxSpeedMultiplier: number = 1.0; // Maximum 1x speed multiplier (100%)
   // private shouldAutoRestartDriving: boolean = false; // Unused
   // private shouldAutoResumeAfterCollision: boolean = false; // Unused
   
@@ -540,6 +540,16 @@ export class CarMechanics {
   }
 
   /**
+   * Handle step events (called from GameScene)
+   */
+  public onStepEvent(currentStep: number) {
+    if (!this.drivingMode || this.drivingPaused) return;
+    
+    // Update speed progression on step events only
+    this.updateCarSpeedWithProgression(currentStep);
+  }
+
+  /**
    * Update car speed with logarithmic progression (step-based)
    */
   private updateCarSpeedWithProgression(currentStep: number) {
@@ -549,20 +559,21 @@ export class CarMechanics {
       return;
     }
     
-    if (this.speedProgressionStartStep === 0) {
-      // No progression started yet, use base speed
-      this.carSpeed = this.baseSpeed;
+    if (this.speedProgressionStartStep <= 0) {
+      // No progression started yet or needs restart, start at 1% speed
+      this.carSpeed = this.baseSpeed * 0.01; // Start at 1% of base speed
+      this.speedProgressionStartStep = currentStep; // Start progression from current step
       return;
     }
     
     // Calculate how many steps have elapsed
     const elapsedSteps = currentStep - this.speedProgressionStartStep;
     
-    // Target is 200% speed (2.0x multiplier)
-    const targetMultiplier = 2.0;
+    // Target is 100% speed (1.0x multiplier)
+    const targetMultiplier = 1.0;
     const currentMultiplier = this.carSpeed / this.baseSpeed;
     
-    // Calculate distance to target (how much more we need to reach 200%)
+    // Calculate distance to target (how much more we need to reach 100%)
     const distanceToTarget = targetMultiplier - currentMultiplier;
     
     // If we're very close to target, snap to it
@@ -571,12 +582,12 @@ export class CarMechanics {
       return;
     }
     
-    // Logarithmic approach: start with 2% per step, decreasing as we approach target
+    // Logarithmic approach: start with much bigger steps, decreasing as we approach target
     // Use logarithmic curve: log(distance + 1) / log(2) gives us decreasing increments
     const logFactor = Math.log(distanceToTarget + 1) / Math.log(2);
     
-    // Base increment is 2% of the remaining distance, scaled by logarithmic factor
-    const baseIncrementPercent = 0.02; // 2% per step
+    // Base increment starts much higher for faster initial progression
+    const baseIncrementPercent = 0.01; // 1% per step (10x faster than before)
     const incrementPercent = baseIncrementPercent * logFactor;
     
     // Calculate the actual speed increment
@@ -588,8 +599,8 @@ export class CarMechanics {
     // Cap at target speed
     this.carSpeed = Math.min(this.carSpeed, this.baseSpeed * targetMultiplier);
     
-    // Debug logging every 300 steps (5 seconds at 60fps)
-    if (elapsedSteps > 0 && elapsedSteps % 300 === 0) {
+    // Debug logging every 60 steps (1 second at 60fps) - more frequent since progression is faster
+    if (elapsedSteps > 0 && elapsedSteps % 60 === 0) {
       const currentPercent = Math.round((this.carSpeed / this.baseSpeed) * 100);
       const incrementThisStep = Math.round(incrementPercent * 100 * 100) / 100; // Show as percentage
       console.log(`🚀 Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
@@ -601,8 +612,18 @@ export class CarMechanics {
    */
   private resetSpeedProgression() {
     console.log('🔄 Resetting speed progression due to pothole hit');
-    this.speedProgressionStartStep = 0;
-    this.carSpeed = this.baseSpeed; // Reset to base speed
+    this.carSpeed = this.baseSpeed * 0.01; // Reset to 1% speed
+    // Restart progression by setting start step to current step
+    // This will be updated when the next step event comes in
+    this.speedProgressionStartStep = -1; // Mark as needing restart
+  }
+
+  /**
+   * Get current speed multiplier (0.01 to 1.0)
+   */
+  public getSpeedMultiplier(): number {
+    if (this.baseSpeed === 0) return 0;
+    return this.carSpeed / this.baseSpeed;
   }
 
   /**
@@ -765,8 +786,7 @@ export class CarMechanics {
   private updateForwardMovement(currentStep: number = 0) {
     if (!this.drivingMode || this.drivingPaused) return;
     
-    // Update speed progression automatically
-    this.updateCarSpeedWithProgression(currentStep);
+    // Speed progression is now handled in step events, not every frame
     
     // Update speed display based on current speed
     const speedPercentage = Math.round((this.carSpeed / this.config.carMaxSpeed) * 100);

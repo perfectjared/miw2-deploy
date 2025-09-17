@@ -44,6 +44,8 @@ export class Trash implements PhysicsObject {
       40,  // radius (2/3 of previous: was 60, now 40)
       0xff0000 // color (red)
     );
+    // Set initial depth above steering wheel and keys
+    this.gameObject.setDepth(10002);
   }
 
   private setupPhysics() {
@@ -51,7 +53,7 @@ export class Trash implements PhysicsObject {
       shape: 'circle',
       restitution: 0.3,
       friction: 0.1,
-      density: 0.001
+      density: 0.005 // Increased from 0.001 to make items heavier
     });
   }
 
@@ -193,6 +195,8 @@ export class Item implements PhysicsObject {
       18,   // radius
       0x00ff00 // color (green)
     );
+    // Set initial depth above steering wheel and keys
+    this.gameObject.setDepth(10002);
   }
 
   private setupPhysics() {
@@ -200,7 +204,7 @@ export class Item implements PhysicsObject {
       shape: 'circle',
       restitution: 0.3,
       friction: 0.1,
-      density: 0.001
+      density: 0.005 // Increased from 0.001 to make items heavier
     });
   }
 
@@ -372,6 +376,8 @@ export class Keys implements PhysicsObject {
       15,  // radius
       0x0000ff // color (blue)
     );
+    // Set initial depth above steering wheel and keys
+    this.gameObject.setDepth(10002);
   }
 
   private setupPhysics() {
@@ -379,7 +385,7 @@ export class Keys implements PhysicsObject {
       shape: 'circle',
       restitution: 0.3,
       friction: 0.1,
-      density: 0.001
+      density: 0.005 // Increased from 0.001 to make items heavier
     });
   }
 

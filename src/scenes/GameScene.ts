@@ -1485,6 +1485,51 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Apply small bump effect to all matter physics objects (every step)
+   */
+  private applySmallBumpEffectToAllMatterObjects() {
+    const matterWorld = this.matter.world;
+    if (!matterWorld) return;
+    
+    // Get all bodies in the matter world
+    const allBodies = matterWorld.getAllBodies();
+    
+    // Apply very small upward bump force to each body
+    allBodies.forEach((body: any, index: number) => {
+      // Skip static bodies (like anchors) but NOT sensors
+      if (body.isStatic) {
+        return;
+      }
+      
+      // Check if this is a virtual pet body (they have constraints that resist movement)
+      const isVirtualPet = body.label && body.label.includes('Circle Body') && 
+                           body.collisionFilter && body.collisionFilter.group === -2;
+      
+      // Apply very small force for subtle step-by-step movement
+      const bumpForce = isVirtualPet ? 
+        { x: 0, y: -0.01 } : // Very small force for virtual pets
+        { x: 0, y: -0.005 }; // Tiny force for other objects
+      
+      (this.matter as any).body.applyForce(body, body.position, bumpForce);
+      
+      // Add tiny random horizontal variation for subtle movement
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.01 : 0.005);
+      const randomForce = { x: randomX, y: bumpForce.y };
+      (this.matter as any).body.applyForce(body, body.position, randomForce);
+      
+      // Apply strong vertical damping specifically to virtual pets to minimize movement
+      if (isVirtualPet) {
+        const currentVelocity = (this.matter as any).body.getVelocity(body);
+        const dampedVelocity = {
+          x: currentVelocity.x,
+          y: currentVelocity.y * 0.05 // Very strong vertical damping (95% reduction)
+        };
+        (this.matter as any).body.setVelocity(body, dampedVelocity);
+      }
+    });
+  }
+
+  /**
    * Apply bump effect to all matter physics objects
    */
   private applyBumpEffectToAllMatterObjects() {
@@ -1522,7 +1567,7 @@ export class GameScene extends Phaser.Scene {
         const currentVelocity = (this.matter as any).body.getVelocity(body);
         const dampedVelocity = {
           x: currentVelocity.x,
-          y: currentVelocity.y * 0.4 // Moderate vertical damping (60% reduction)
+          y: currentVelocity.y * 0.15 // Very strong vertical damping (85% reduction)
         };
         (this.matter as any).body.setVelocity(body, dampedVelocity);
       }
@@ -1538,7 +1583,15 @@ export class GameScene extends Phaser.Scene {
     console.log('GameScene: Received step event:', step);
     this.gameState.updateState({ step });
     
-    // Apply bump effect to all matter physics objects every fourth step
+    // Update car mechanics speed progression on step events
+    if (this.carMechanics && this.carMechanics.onStepEvent) {
+      this.carMechanics.onStepEvent(step);
+    }
+    
+    // Apply small bump effect to all matter physics objects every step
+    this.applySmallBumpEffectToAllMatterObjects();
+    
+    // Apply larger bump effect to all matter physics objects every fourth step
     if (step % 4 === 0) {
       this.applyBumpEffectToAllMatterObjects();
     }
@@ -1565,11 +1618,19 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Increment progress by 1 per step while driving (independent of countdown)
+    // Increment progress by speed multiplier per step while driving (scales with speed)
     if (state.gameStarted && this.carStarted && this.carMechanics.isDriving()) {
       const cur = this.gameState.getState().progress || 0;
-      const next = cur + 1;
+      const speedMultiplier = this.carMechanics.getSpeedMultiplier();
+      const progressIncrement = Math.max(0.1, speedMultiplier); // Minimum 0.1 progress per step
+      const next = cur + progressIncrement;
       this.gameState.updateState({ progress: next });
+      
+      // Debug logging every 10 steps to show speed-progress relationship
+      if (state.step && state.step % 10 === 0) {
+        const speedPercent = Math.round(speedMultiplier * 100);
+        console.log(`🚗 Speed: ${speedPercent}% → Progress: +${progressIncrement.toFixed(2)} (${cur.toFixed(1)}% → ${next.toFixed(1)}%)`);
+      }
       
       // Update car mechanics with progress for exit planning
       this.carMechanics.updateProgress(next);
