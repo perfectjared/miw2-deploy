@@ -828,7 +828,7 @@ export class CarMechanics {
       
       console.log('Created independent exit timer:', timerId, 'with', stepsUntilActivation, 'steps');
       
-      // Create visual for preview
+      // Create visual for preview - will be positioned properly by step-based updates
       const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
       visual.setDepth(this.config.roadDepth + 0.5);
       
@@ -987,7 +987,7 @@ export class CarMechanics {
     
     console.log('Created independent exit timer:', timerId, 'with', stepsUntilActivation, 'steps');
     
-    // Create visual for preview
+    // Create visual for preview - will be positioned properly by step-based updates
     const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
     visual.setDepth(this.config.roadDepth + 0.5);
     
@@ -1268,7 +1268,7 @@ export class CarMechanics {
     newExit.setData('baseH', originalData.baseH);
     newExit.setData('laneIndex', originalData.laneIndex);
     
-    // Create visual for the new obstacle
+    // Create visual for the new obstacle - will be positioned properly by step-based updates
     const visual = this.scene.add.rectangle(newExit.x, newExit.y, newExit.width, newExit.height, this.config.exitColor, 1.0);
     visual.setDepth(this.config.roadDepth + 0.5);
     newExit.setData('visual', visual);
@@ -1328,7 +1328,7 @@ export class CarMechanics {
     newExit.setData('baseH', originalData.baseH);
     newExit.setData('laneIndex', originalData.laneIndex);
     
-    // Create visual for the new obstacle
+    // Create visual for the new obstacle - will be positioned properly by step-based updates
     const visual = this.scene.add.rectangle(newExit.x, newExit.y, newExit.width, newExit.height, this.config.exitColor, 1.0);
     visual.setDepth(this.config.roadDepth + 0.5);
     newExit.setData('visual', visual);
