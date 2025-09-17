@@ -1653,12 +1653,13 @@ export class GameScene extends Phaser.Scene {
       const exitTop = exitBounds.top;
       const exitBelowCar = exitTop > carBottom;
       
-      // Check if car is in the rightmost 10-15% of the screen to trigger warning
-      const carRightEdge = carBounds.right;
-      const screenWidth = this.cameras.main.width;
-      const rightmostThreshold = screenWidth * 0.85; // Car needs to be in rightmost 15% of screen
+      // Check if car is in the rightmost part of its movement range (lanes)
+      // Car lane indices: [-1.7, -0.55, 0.55, 1.7] - rightmost is 1.7
+      const carMechanics = this.carMechanics as any;
+      const carLanePosition = carMechanics?.drivingCar?.getData('laneOffset') || 0;
+      const rightmostLaneThreshold = 1.0; // Trigger warning when car is at lane position 1.0 or higher
       
-      const carInRightmostArea = carRightEdge >= rightmostThreshold;
+      const carInRightmostArea = carLanePosition >= rightmostLaneThreshold;
       
       // Also check if car is horizontally aligned with the exit
       const carLeftEdge = carBounds.left;
@@ -1666,7 +1667,7 @@ export class GameScene extends Phaser.Scene {
       const exitRightEdge = exitBounds.right;
       
       // Car is aligned if there's any horizontal overlap with the exit
-      const horizontallyAligned = carLeftEdge < exitRightEdge && carRightEdge > exitLeftEdge;
+      const horizontallyAligned = carLeftEdge < exitRightEdge && carBounds.right > exitLeftEdge;
       
       // console.log('Car right edge:', carRightEdge, 'Exit left edge:', exitLeftEdge, 'In path:', carInCollisionPath);
       
@@ -1677,7 +1678,7 @@ export class GameScene extends Phaser.Scene {
     // Only log when we actually find exits and are in collision path
     if (exits.length > 0 && inPath) {
       console.log('🚨 EXIT COLLISION PATH DETECTED! Exits:', exits.length);
-      console.log('   Car right edge:', carBounds.right, 'Rightmost threshold:', this.cameras.main.width * 0.85);
+      console.log('   Car lane position:', (this.carMechanics as any)?.drivingCar?.getData('laneOffset') || 0, 'Rightmost threshold: 1.0');
       console.log('   Car bottom:', carBounds.bottom, 'Exit top:', exits[0].getData('visual').getBounds().top);
     }
     // console.log('In exit collision path:', inPath);
