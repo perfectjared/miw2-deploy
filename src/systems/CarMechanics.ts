@@ -111,21 +111,30 @@ export class CarMechanics {
   private getLensStrength(): number { return this.config.lensStrength ?? 60; }
   
   // Exit Preview System - simplified
-  private exitPreviews: Array<{
-    preview: Phaser.GameObjects.Rectangle;
+  // Simple planned exit tracking - no more complex preview system
+  private activeExits: Array<{
+    obstacle: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Rectangle;
-    stepsUntilActivation: number;
-    originalData: any;
-    previewId: string;
+    exitNumber: number;
   }> = [];
-
-  // Independent Exit Timer System
-  private exitTimers: Array<{
-    id: string;
-    stepsRemaining: number;
-    originalData: any;
-    previewId: string;
+  
+  // Exit Planning System - clean numbered planned exits
+  private plannedExits: Array<{
+    number: number; // Exit number (1, 2, 3, etc.)
+    previewThreshold: number; // When to spawn preview (0-100)
+    exitThreshold: number; // When to spawn actual exit (0-100)
+    laneIndex: number;
+    exitBaseX: number; // Exit position (slightly left)
+    previewBaseX: number; // Preview position (slightly right)
+    width: number;
+    height: number;
+    previewSpawned: boolean;
+    exitSpawned: boolean;
   }> = [];
+  
+  private currentSequenceProgress: number = 0;
+  private lastPotholeSpawnStep: number = 0;
+  private minPotholeSpawnDelay: number = 3; // Minimum steps between pothole spawns
 
   // Debug Radar
   private radarContainer?: Phaser.GameObjects.Container;
@@ -186,8 +195,7 @@ export class CarMechanics {
 
     // Add 'E' key handler for testing exit spawning
     this.scene.input.keyboard?.on('keydown-E', () => {
-      console.log('E key pressed - spawning test exit preview');
-      this.spawnTestExitPreview();
+      console.log('E key pressed - test exit spawning disabled');
     });
   }
 
@@ -206,6 +214,9 @@ export class CarMechanics {
     
     // Keep visual car fixed; do not set X here
     
+    // Plan exits for this driving sequence
+    this.planExitsForSequence();
+    
     this.startForwardMovementTimer();
     this.startNeutralReturnTimer();
     this.startObstacleSpawning();
@@ -216,6 +227,236 @@ export class CarMechanics {
    */
   public isDriving(): boolean {
     return this.drivingMode;
+  }
+
+  /**
+   * Plan exits for the current driving sequence
+   */
+  private planExitsForSequence() {
+    // Clear previous planned exits
+    this.plannedExits = [];
+    this.currentSequenceProgress = 0;
+    
+    // Plan 2-3 exits per sequence
+    const numExits = Phaser.Math.Between(2, 3);
+    console.log(`Planning ${numExits} numbered exits for this driving sequence`);
+    
+    const gameWidth = this.scene.cameras.main.width;
+    const roadWidthPx = gameWidth;
+    const exitWidthPx = Math.floor(roadWidthPx * 0.30);
+    const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
+    
+    // Position adjustments: exits slightly left, previews slightly right
+    const exitOffsetLeft = 40; // Move exits 40px left
+    const previewOffsetRight = 15; // Move previews 15px right
+    
+    // Generate exit thresholds with proper spacing
+    const exitThresholds: number[] = [];
+    for (let i = 0; i < numExits; i++) {
+      let exitThreshold: number;
+      let attempts = 0;
+      
+      do {
+        // Spread exits across the sequence (30-85% range)
+        exitThreshold = Phaser.Math.Between(30, 85);
+        attempts++;
+      } while (attempts < 10 && exitThresholds.some(t => Math.abs(t - exitThreshold) < 15));
+      
+      exitThresholds.push(exitThreshold);
+    }
+    
+    // Sort thresholds to ensure proper order
+    exitThresholds.sort((a, b) => a - b);
+    
+    // Create planned exits with proper preview spacing
+    exitThresholds.forEach((exitThreshold, index) => {
+      const exitNumber = index + 1; // Number exits 1, 2, 3, etc.
+      
+      // Preview spawns 10-30% before the exit, but not less than 1%, and not within 5 steps of another preview/exit
+      let previewThreshold: number;
+      let attempts = 0;
+      
+      do {
+        const previewOffset = Phaser.Math.Between(10, 30);
+        previewThreshold = Math.max(1, exitThreshold - previewOffset);
+        attempts++;
+      } while (attempts < 10 && (
+        // Check against other exits
+        exitThresholds.some(t => Math.abs(t - previewThreshold) < 5) ||
+        // Check against other previews
+        this.plannedExits.some(e => Math.abs(e.previewThreshold - previewThreshold) < 5)
+      ));
+      
+      this.plannedExits.push({
+        number: exitNumber,
+        previewThreshold: previewThreshold,
+        exitThreshold: exitThreshold,
+        laneIndex: this.laneIndices[this.laneIndices.length - 1], // Rightmost lane
+        exitBaseX: exitX - exitOffsetLeft, // Exit position (slightly left)
+        previewBaseX: exitX + previewOffsetRight, // Preview position (slightly right)
+        width: exitWidthPx,
+        height: this.config.exitHeight,
+        previewSpawned: false,
+        exitSpawned: false
+      });
+    });
+    
+    console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}%`));
+  }
+
+  /**
+   * Update progress and spawn planned exits when thresholds are reached
+   */
+  public updateProgress(progress: number) {
+    this.currentSequenceProgress = progress;
+    
+    // Check if any planned exits should be spawned
+    this.plannedExits.forEach(plannedExit => {
+      // Spawn preview when preview threshold is reached
+      if (!plannedExit.previewSpawned && progress >= plannedExit.previewThreshold) {
+        this.spawnPlannedExitPreview(plannedExit);
+        plannedExit.previewSpawned = true;
+      }
+      
+      // Spawn actual exit when exit threshold is reached
+      if (!plannedExit.exitSpawned && progress >= plannedExit.exitThreshold) {
+        this.spawnPlannedExit(plannedExit);
+        plannedExit.exitSpawned = true;
+      }
+    });
+  }
+
+  /**
+   * Spawn a planned exit preview when its preview threshold is reached
+   */
+  private spawnPlannedExitPreview(plannedExit: any) {
+    console.log(`Spawning preview for Exit ${plannedExit.number} at ${plannedExit.previewThreshold}%`);
+    
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
+    
+    // Create preview obstacle (non-collidable but follows road movement)
+    const obstacle = this.scene.add.rectangle(
+      plannedExit.previewBaseX,
+      horizonY + 2,
+      plannedExit.width,
+      plannedExit.height,
+      this.config.exitColor,
+      0.2 // Very transparent for preview
+    );
+    
+    obstacle.setVisible(false); // Hide logic rectangle
+    obstacle.setData('isExitPreview', true);
+    obstacle.setData('exitNumber', plannedExit.number);
+    
+    // Create visual
+    const visual = this.scene.add.rectangle(
+      obstacle.x, obstacle.y, 
+      obstacle.width, obstacle.height, 
+      this.config.exitColor, 0.2
+    );
+    visual.setDepth(this.config.roadDepth + 0.5);
+    
+    // Add to driving container
+    this.drivingContainer.add(obstacle);
+    this.drivingContainer.add(visual);
+    
+    // Store data for road movement
+    obstacle.setData('baseX', plannedExit.previewBaseX);
+    obstacle.setData('laneOffset', (plannedExit.previewBaseX - gameWidth / 2) / this.laneSpacingBottom);
+    obstacle.setData('baseW', plannedExit.width);
+    obstacle.setData('baseH', plannedExit.height);
+    obstacle.setData('visual', visual);
+    obstacle.setData('laneIndex', plannedExit.laneIndex);
+    
+    // Add to obstacles array so it gets moved by the road system
+    this.obstacles.push(obstacle);
+    
+    // Store for cleanup when exit spawns
+    plannedExit.previewObstacle = obstacle;
+    plannedExit.previewVisual = visual;
+  }
+
+  /**
+   * Spawn a planned exit when its exit threshold is reached
+   */
+  private spawnPlannedExit(plannedExit: any) {
+    console.log(`Spawning Exit ${plannedExit.number} at ${plannedExit.exitThreshold}%`);
+    
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
+    
+    // Remove preview if it exists
+    if (plannedExit.previewObstacle) {
+      // Remove from obstacles array
+      const obstacleIndex = this.obstacles.indexOf(plannedExit.previewObstacle);
+      if (obstacleIndex > -1) {
+        this.obstacles.splice(obstacleIndex, 1);
+      }
+      // Destroy both obstacle and visual
+      plannedExit.previewObstacle.destroy();
+      plannedExit.previewVisual.destroy();
+      plannedExit.previewObstacle = null;
+      plannedExit.previewVisual = null;
+    }
+    
+    // Create collidable exit
+    const obstacle = this.scene.add.rectangle(
+      plannedExit.exitBaseX,
+      horizonY + 2,
+      plannedExit.width,
+      plannedExit.height,
+      this.config.exitColor,
+      0.8 // Opaque for actual exit
+    );
+    
+    obstacle.setVisible(false); // Hide logic rectangle
+    obstacle.setData('isExit', true);
+    obstacle.setData('exitNumber', plannedExit.number);
+    
+    // Create visual at the same position as the obstacle
+    const visual = this.scene.add.rectangle(
+      plannedExit.exitBaseX, // Use the same position as obstacle
+      horizonY + 2, 
+      plannedExit.width, 
+      plannedExit.height, 
+      this.config.exitColor, 0.6
+    );
+    visual.setDepth(this.config.roadDepth + 0.5);
+    
+    // Add to driving container
+    this.drivingContainer.add(obstacle);
+    this.drivingContainer.add(visual);
+    
+    // Store data
+    obstacle.setData('baseX', plannedExit.exitBaseX);
+    obstacle.setData('laneOffset', (plannedExit.exitBaseX - gameWidth / 2) / this.laneSpacingBottom);
+    obstacle.setData('baseW', plannedExit.width);
+    obstacle.setData('baseH', plannedExit.height);
+    obstacle.setData('visual', visual);
+    obstacle.setData('laneIndex', plannedExit.laneIndex);
+    
+    // Add to obstacles array for collision detection
+    this.obstacles.push(obstacle);
+    
+    // Track active exit
+    this.activeExits.push({
+      obstacle: obstacle,
+      visual: visual,
+      exitNumber: plannedExit.number
+    });
+  }
+
+  /**
+   * Get planned exits for UI display (shows exit thresholds, not preview thresholds)
+   */
+  public getPlannedExits() {
+    return this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
+      progressThreshold: exit.exitThreshold,
+      spawned: exit.exitSpawned
+    }));
   }
 
   /**
@@ -709,6 +950,11 @@ export class CarMechanics {
     // Screen-space collision with fixed car representation
     const carBounds = this.drivingCar.getBounds();
     this.obstacles.forEach(obstacle => {
+      // Skip exit previews - they shouldn't trigger collisions
+      if (obstacle.getData('isExitPreview')) {
+        return;
+      }
+      
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (visual && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, visual.getBounds())) {
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
@@ -717,43 +963,6 @@ export class CarMechanics {
       }
     });
     
-    // Continuous horizontal movement for exit previews (every frame)
-    this.exitPreviews.forEach(previewData => {
-      const { preview, visual } = previewData;
-      
-      // Continuous horizontal positioning (every frame)
-      const tVis = Phaser.Math.Clamp((preview.y - horizonY) / (gameHeight - horizonY), 0, 1);
-      
-      const laneIndex = this.laneIndices[this.laneIndices.length - 1]; // Exit lane
-      const worldOffset = -this.worldLateralOffset;
-      const laneTermVis = laneIndex * (this.laneSpacingBottom * tVis);
-      const xProjectedVis = centerX + bez(tVis) + laneTermVis + worldOffset;
-      
-      // Update only horizontal position continuously
-      visual.x = xProjectedVis;
-      
-      // Update perspective scaling continuously
-      const baseW = preview.getData('baseW') ?? preview.width;
-      const baseH = preview.getData('baseH') ?? preview.height;
-      const widthScale = 0.2 + 0.8 * tVis;
-      const heightScale = 0.4 + 0.6 * tVis;
-      visual.displayWidth = baseW * widthScale;
-      visual.displayHeight = baseH * heightScale;
-    });
-
-    // Remove exit previews that are off screen (but don't interfere with timers)
-    this.exitPreviews.forEach(previewData => {
-      if (previewData.preview.y > this.scene.cameras.main.height) {
-        // Clean up preview visuals but don't interfere with independent timers
-        console.log('Cleaning up preview that exited screen. Timer continues independently.');
-        previewData.preview.destroy();
-        previewData.visual.destroy();
-        const index = this.exitPreviews.indexOf(previewData);
-        if (index > -1) {
-          this.exitPreviews.splice(index, 1);
-        }
-      }
-    });
 
     // Record last steering value used for visual horizontal updates
     this.lastSteeringValueForVisual = this.currentSteeringValue;
@@ -797,7 +1006,7 @@ export class CarMechanics {
   }
 
   /**
-   * Spawn obstacle
+   * Spawn obstacle (only potholes now - exits are preplanned)
    */
   private spawnObstacle() {
     if (!this.drivingMode || this.drivingPaused) {
@@ -805,146 +1014,64 @@ export class CarMechanics {
       return;
     }
     
-    console.log('SpawnObstacle called');
+    // Check pothole spawn timing - prevent spawning too soon after last pothole
+    const currentStep = this.scene.time.now / 1000; // Convert to steps
+    if (currentStep - this.lastPotholeSpawnStep < this.minPotholeSpawnDelay) {
+      console.log('Pothole spawn blocked - too soon after last spawn');
+      this.startObstacleSpawning(); // Reschedule
+      return;
+    }
+    
+    console.log('SpawnObstacle called - spawning pothole only');
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     const horizonY = gameHeight * 0.3;
     
-    // Determine obstacle type
+    // Only spawn potholes now - exits are preplanned
     const isPothole = Math.random() < this.config.potholeProbability;
     console.log('Spawning obstacle - isPothole:', isPothole, 'potholeProbability:', this.config.potholeProbability);
     
-    let obstacle: Phaser.GameObjects.Rectangle;
-    
-    if (isPothole) {
-      // Create pothole with randomized lane and a small initial Y offset so lane separation is visible
-      const widthPx = gameWidth * this.config.potholeWidth;
-      const heightPx = gameHeight * this.config.potholeHeight;
-      obstacle = this.scene.add.rectangle(0, 0, widthPx, heightPx, this.config.potholeColor);
-      obstacle.setData('isPothole', true);
-
-      // Choose a random lane index
-      const laneIdx = Math.floor(Math.random() * this.laneIndices.length);
-      const laneIndexChosen = this.laneIndices[laneIdx];
-
-      // Place slightly below horizon so projected lane offset is noticeable
-      const initialY = horizonY + Phaser.Math.Between(12, 90);
-      const t0 = Phaser.Math.Clamp((initialY - horizonY) / (gameHeight - horizonY), 0, 1);
-
-      const bendStrength = this.config.roadBendStrength ?? 140;
-      const end = this.currentCurve * bendStrength;
-      const control = end * 0.6;
-      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
-      const lensBase = this.getLensStrength();
-      const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
-      const lensOffset = (laneIndexChosen >= 0 ? 1 : -1) * lensBase * (t0 * t0) * lensFactorBase;
-      const centerX = gameWidth / 2;
-      const xProjected = centerX + bez(t0) + laneIndexChosen * (this.laneSpacingBottom * t0) + lensOffset;
-
-      // Apply small horizontal jitter within projected lane
-      const jitter = Phaser.Math.Between(-6, 6);
-      obstacle.setPosition(xProjected + jitter, initialY);
-      obstacle.setData('laneIndex', laneIndexChosen);
-    } else {
-      // Create exit preview (non-collidable) occupying right 30% of road width
-      console.log('Creating exit preview');
-      const roadWidthPx = gameWidth; // using full width road representation
-      const exitWidthPx = Math.floor(roadWidthPx * 0.30);
-      const exitX = gameWidth - Math.floor(exitWidthPx / 2) - 1;
-      
-    // Create preview obstacle (not collidable yet)
-    obstacle = this.scene.add.rectangle(
-      exitX,
-      horizonY + 2,
-      exitWidthPx,
-      this.config.exitHeight,
-      this.config.exitColor,
-      0.5 // Semi-transparent to indicate it's a preview
-    );
-    
-    // Hide the obstacle rectangle - only the visual should be visible
-    obstacle.setVisible(false);
-      
-      // Generate bell-curved delay between 5-20 steps
-      const stepsUntilActivation = this.generateBellCurvedDelay(5, 20);
-      
-      // Create unique IDs for preview and timer
-      const previewId = `preview_${Date.now()}_${Math.random()}`;
-      const timerId = `timer_${Date.now()}_${Math.random()}`;
-      
-      // Store original data for later conversion
-      const originalData = {
-        baseW: exitWidthPx,
-        baseH: this.config.exitHeight,
-        laneIndex: this.laneIndices[this.laneIndices.length - 1],
-        laneOffset: (exitX - gameWidth / 2) / this.laneSpacingBottom,
-        baseX: exitX
-      };
-      
-      // Create independent timer (exists separately from preview)
-      this.exitTimers.push({
-        id: timerId,
-        stepsRemaining: stepsUntilActivation,
-        originalData: originalData,
-        previewId: previewId
-      });
-      
-      console.log('Created independent exit timer:', timerId, 'with', stepsUntilActivation, 'steps');
-      
-      // Create visual for preview - will be positioned properly by step-based updates
-      const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, this.config.exitColor, 0.3);
-      visual.setDepth(this.config.roadDepth + 0.5);
-      
-      // Add to exit previews array instead of obstacles
-      this.exitPreviews.push({
-        preview: obstacle,
-        visual: visual,
-        stepsUntilActivation: stepsUntilActivation,
-        originalData: originalData,
-        previewId: previewId
-      });
-      
-      // Don't add to obstacles array yet - it's not collidable
-      obstacle.setData('isExitPreview', true);
-      obstacle.setData('exitWidthPx', exitWidthPx);
-      obstacle.setData('stepsUntilActivation', stepsUntilActivation);
-      
-      // Add to driving container
-      this.drivingContainer.add(obstacle);
-      this.drivingContainer.add(visual);
-      
-      // Store data for later use
-      obstacle.setData('baseX', exitX);
-      obstacle.setData('laneOffset', (exitX - gameWidth / 2) / this.laneSpacingBottom);
-      obstacle.setData('baseW', exitWidthPx);
-      obstacle.setData('baseH', this.config.exitHeight);
-      obstacle.setData('visual', visual);
-      obstacle.setData('laneIndex', this.laneIndices[this.laneIndices.length - 1]);
-      
-      // Initialize visual position
-      const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
-      const snappedY = horizonY + Math.max(0, Math.floor(((obstacle.y - horizonY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
-      const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
-      const bendStrength = this.config.roadBendStrength ?? 140;
-      const end = this.currentCurve * bendStrength;
-      const control = end * 0.6;
-      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
-      const lensBase = this.getLensStrength();
-      const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
-      const laneIndexForVis: number = this.laneIndices[this.laneIndices.length - 1];
-      const lensOffset = (laneIndexForVis >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
-      const xProjectedVis = gameWidth / 2 + bez(tVis) + laneIndexForVis * (this.laneSpacingBottom * tVis) + lensOffset;
-      visual.setPosition(xProjectedVis, snappedY);
-      const widthScale = 0.2 + 0.8 * tVis;
-      const heightScale = 0.4 + 0.6 * tVis;
-      visual.displayWidth = exitWidthPx * widthScale;
-      visual.displayHeight = this.config.exitHeight * heightScale;
-      
-      // Don't add to obstacles array - it's a preview
-      // Schedule next obstacle and return early
+    // Only spawn potholes - skip if not a pothole
+    if (!isPothole) {
+      console.log('Not spawning pothole, scheduling next obstacle');
       this.startObstacleSpawning();
       return;
     }
+    
+    let obstacle: Phaser.GameObjects.Rectangle;
+    
+    // Create pothole
+    // Create pothole with randomized lane and a small initial Y offset so lane separation is visible
+    const widthPx = gameWidth * this.config.potholeWidth;
+    const heightPx = gameHeight * this.config.potholeHeight;
+    obstacle = this.scene.add.rectangle(0, 0, widthPx, heightPx, this.config.potholeColor);
+    obstacle.setData('isPothole', true);
+
+    // Choose a random lane index
+    const laneIdx = Math.floor(Math.random() * this.laneIndices.length);
+    const laneIndexChosen = this.laneIndices[laneIdx];
+
+    // Place slightly below horizon so projected lane offset is noticeable
+    const initialY = horizonY + Phaser.Math.Between(12, 90);
+    const t0 = Phaser.Math.Clamp((initialY - horizonY) / (gameHeight - horizonY), 0, 1);
+
+    const bendStrength = this.config.roadBendStrength ?? 140;
+    const end = this.currentCurve * bendStrength;
+    const control = end * 0.6;
+    const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+    const lensBase = this.getLensStrength();
+    const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+    const lensOffset = (laneIndexChosen >= 0 ? 1 : -1) * lensBase * (t0 * t0) * lensFactorBase;
+    const centerX = gameWidth / 2;
+    const xProjected = centerX + bez(t0) + laneIndexChosen * (this.laneSpacingBottom * t0) + lensOffset;
+
+    // Apply small horizontal jitter within projected lane
+    const jitter = Phaser.Math.Between(-6, 6);
+    obstacle.setPosition(xProjected + jitter, initialY);
+    obstacle.setData('laneIndex', laneIndexChosen);
+    
+    // Update last pothole spawn time
+    this.lastPotholeSpawnStep = this.scene.time.now / 1000;
     
     // Handle regular obstacles (potholes) - same as before
     obstacle.setDepth(this.config.roadDepth + 0.5);
@@ -958,9 +1085,9 @@ export class CarMechanics {
     // Store baseX so we can offset later relative to road/world movement
     obstacle.setData('baseX', obstacle.x);
     // Store a normalized lane offset so we can project along curved lanes
-    const centerX = gameWidth / 2;
+    const centerXVis = gameWidth / 2;
     const laneSpacingBottom = 130;
-    obstacle.setData('laneOffset', (obstacle.x - centerX) / laneSpacingBottom);
+    obstacle.setData('laneOffset', (obstacle.x - centerXVis) / laneSpacingBottom);
     obstacle.setData('baseW', obstacle.width);
     obstacle.setData('baseH', obstacle.height);
     obstacle.setData('visual', visual);
@@ -975,15 +1102,15 @@ export class CarMechanics {
     const phaseOffset = (this.horizontalLinePhase % this.horizontalSpacing);
     const snappedY = horizonY + Math.max(0, Math.floor(((obstacle.y - horizonY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
     const tVis = Phaser.Math.Clamp((snappedY - horizonY) / (gameHeight - horizonY), 0, 1);
-    const bendStrength = this.config.roadBendStrength ?? 140;
-    const end = this.currentCurve * bendStrength;
-    const control = end * 0.6;
-    const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
-    const lensBase = this.getLensStrength();
-    const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+    const bendStrengthVis = this.config.roadBendStrength ?? 140;
+    const endVis = this.currentCurve * bendStrengthVis;
+    const controlVis = endVis * 0.6;
+    const bezVis = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * controlVis) + (tt * tt * endVis);
+    const lensBaseVis = this.getLensStrength();
+    const lensFactorBaseVis = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
     const laneIndexForVis: number = Number(obstacle.getData('laneIndex')) || 0;
-    const lensOffset = (laneIndexForVis >= 0 ? 1 : -1) * lensBase * (tVis * tVis) * lensFactorBase;
-    const xProjectedVis = centerX + bez(tVis) + laneIndexForVis * (this.laneSpacingBottom * tVis) + lensOffset;
+    const lensOffsetVis = (laneIndexForVis >= 0 ? 1 : -1) * lensBaseVis * (tVis * tVis) * lensFactorBaseVis;
+    const xProjectedVis = centerXVis + bezVis(tVis) + laneIndexForVis * (this.laneSpacingBottom * tVis) + lensOffsetVis;
     visual.setPosition(xProjectedVis, snappedY);
     const baseW = obstacle.getData('baseW') ?? obstacle.width;
     const baseH = obstacle.getData('baseH') ?? obstacle.height;
@@ -991,6 +1118,30 @@ export class CarMechanics {
     const heightScale = 0.4 + 0.6 * tVis;
     visual.displayWidth = baseW * widthScale;
     visual.displayHeight = baseH * heightScale;
+    
+    // Check if pothole is too close to any existing exits
+    const minDistanceFromExit = 100; // Minimum distance in pixels
+    const tooCloseToExit = this.obstacles.some(existingObstacle => {
+      if (!existingObstacle.getData('isExit')) {
+        return false; // Skip non-exits
+      }
+      const distance = Phaser.Math.Distance.Between(
+        obstacle.x, obstacle.y,
+        existingObstacle.x, existingObstacle.y
+      );
+      return distance < minDistanceFromExit;
+    });
+    
+    if (tooCloseToExit) {
+      console.log('Pothole too close to exit, deleting itself');
+      // Clean up the obstacle and visual
+      obstacle.destroy();
+      visual.destroy();
+      // Schedule next obstacle without adding this one
+      this.startObstacleSpawning();
+      return;
+    }
+    
     this.obstacles.push(obstacle);
     
     // Schedule next obstacle
@@ -1041,12 +1192,12 @@ export class CarMechanics {
     };
     
     // Create independent timer (exists separately from preview)
-    this.exitTimers.push({
-      id: timerId,
-      stepsRemaining: stepsUntilActivation,
-      originalData: originalData,
-      previewId: previewId
-    });
+    // this.exitTimers.push({
+    //   id: timerId,
+    //   stepsRemaining: stepsUntilActivation,
+    //   originalData: originalData,
+    //   previewId: previewId
+    // });
     
     console.log('Created independent exit timer:', timerId, 'with', stepsUntilActivation, 'steps');
     
@@ -1055,13 +1206,13 @@ export class CarMechanics {
     visual.setDepth(this.config.roadDepth + 0.5);
     
     // Add to exit previews array instead of obstacles
-    this.exitPreviews.push({
-      preview: obstacle,
-      visual: visual,
-      stepsUntilActivation: stepsUntilActivation,
-      originalData: originalData,
-      previewId: previewId
-    });
+    // this.exitPreviews.push({
+    //   preview: obstacle,
+    //   visual: visual,
+    //   stepsUntilActivation: stepsUntilActivation,
+    //   originalData: originalData,
+    //   previewId: previewId
+    // });
     
     // Don't add to obstacles array yet - it's not collidable
     obstacle.setData('isExitPreview', true);
@@ -1201,7 +1352,6 @@ export class CarMechanics {
     });
     
     // Process exit previews
-    this.processExitPreviews(step, gameHeight, gameWidth, horizonY, roadY, phaseOffset, bez, centerX);
   }
 
   /**
@@ -1221,106 +1371,7 @@ export class CarMechanics {
     return Math.floor(minSteps + clamped * (maxSteps - minSteps));
   }
 
-  /**
-   * Process exit previews - update visuals and spawn new obstacles when ready
-   */
-  private processExitPreviews(step: number, gameHeight: number, gameWidth: number, horizonY: number, roadY: number, phaseOffset: number, bez: Function, centerX: number) {
-    console.log('Processing exit previews - step:', step, 'total previews:', this.exitPreviews.length);
-    
-    // Update preview visuals
-    this.exitPreviews.forEach(previewData => {
-      const { preview, visual } = previewData;
-      
-      // Step-based movement: advance logical position (compensated for step frequency)
-      preview.y += this.config.potholeSpeed * 60; // Multiply by 60 to match original 60fps speed
-      
-      // Step-based Y positioning: snap to horizontal line grid
-      const snappedY = roadY + Math.max(0, Math.floor(((preview.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
-      
-      // Update only vertical position step-based (horizontal handled continuously in updateObstacles)
-      visual.y = snappedY;
-    });
-    
-    // Process independent exit timers (not tied to previews)
-    this.exitTimers.forEach(timer => {
-      timer.stepsRemaining--;
-      console.log('Independent timer', timer.id, ':', timer.stepsRemaining, 'steps remaining');
-      
-      if (timer.stepsRemaining <= 0) {
-        console.log('Independent timer', timer.id, 'expired - spawning exit');
-        this.spawnExitFromTimer(timer);
-        
-        // Remove timer after spawning
-        const index = this.exitTimers.indexOf(timer);
-        if (index > -1) {
-          this.exitTimers.splice(index, 1);
-        }
-      }
-    });
-  }
 
-  /**
-   * Spawn new collidable exit obstacle from independent timer
-   */
-  private spawnExitFromTimer(timer: any) {
-    const { originalData } = timer;
-    
-    // Create a completely new collidable exit obstacle
-    const gameWidth = this.scene.cameras.main.width;
-    const gameHeight = this.scene.cameras.main.height;
-    const horizonY = gameHeight * 0.3;
-    
-    console.log('Spawning new exit from timer at origin position:', originalData.baseX, horizonY + 2);
-    console.log('Exit dimensions:', originalData.baseW, 'x', originalData.baseH);
-    console.log('Exit color:', this.config.exitColor);
-    
-    // Create new exit obstacle at origin (top of screen) like other obstacles
-    const newExit = this.scene.add.rectangle(
-      originalData.baseX, // Use original X position from when preview was created
-      horizonY + 2,      // Start at horizon like other obstacles
-      originalData.baseW,
-      originalData.baseH,
-      this.config.exitColor,
-      1.0 // Fully opaque for collidable obstacle
-    );
-    
-    // Hide the obstacle rectangle - only the visual should be visible
-    newExit.setVisible(false);
-    
-    console.log('Created exit rectangle:', newExit);
-    console.log('Exit visible:', newExit.visible);
-    console.log('Exit alpha:', newExit.alpha);
-    
-    // Set up the new obstacle with all necessary data
-    newExit.setData('isExit', true);
-    newExit.setData('exitWidthPx', originalData.baseW);
-    newExit.setData('baseX', originalData.baseX);
-    newExit.setData('laneOffset', originalData.laneOffset);
-    newExit.setData('baseW', originalData.baseW);
-    newExit.setData('baseH', originalData.baseH);
-    newExit.setData('laneIndex', originalData.laneIndex);
-    
-    // Create visual for the new obstacle - will be positioned properly by step-based updates
-    const visual = this.scene.add.rectangle(newExit.x, newExit.y, newExit.width, newExit.height, this.config.exitColor, 1.0);
-    visual.setDepth(this.config.roadDepth + 0.5);
-    newExit.setData('visual', visual);
-    
-    console.log('Created exit visual:', visual);
-    console.log('Visual visible:', visual.visible);
-    console.log('Visual alpha:', visual.alpha);
-    console.log('Visual depth:', visual.depth);
-    
-    // Add to driving container
-    this.drivingContainer.add(newExit);
-    this.drivingContainer.add(visual);
-    
-    // Add to obstacles array so it becomes collidable
-    this.obstacles.push(newExit);
-    
-    console.log('Exit added to obstacles array. Total obstacles:', this.obstacles.length);
-    console.log('Exit position after creation:', newExit.x, newExit.y);
-    console.log('Exit visual position:', visual.x, visual.y);
-  }
 
   /**
    * Spawn new collidable exit obstacle from preview data (legacy method)
@@ -1377,7 +1428,7 @@ export class CarMechanics {
     // Add to obstacles array so it becomes collidable
     this.obstacles.push(newExit);
     
-    console.log('Exit added to obstacles array. Total obstacles:', this.obstacles.length);
+    // console.log('Exit added to obstacles array. Total obstacles:', this.obstacles.length);
     console.log('Exit position after creation:', newExit.x, newExit.y);
     console.log('Exit visual position:', visual.x, visual.y);
   }

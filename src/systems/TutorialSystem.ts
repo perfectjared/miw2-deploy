@@ -45,6 +45,7 @@ export interface TutorialState {
   hasOpenMenu: boolean;
   currentMenuType: string | null;
   steeringUsed: boolean;
+  inExitCollisionPath: boolean; // Player is positioned to collide with an exit
 }
 
 export class TutorialSystem {
@@ -124,11 +125,15 @@ export class TutorialSystem {
    */
   public updateTutorialOverlay(state: TutorialState) {
     // Determine which tutorial state to show
-    let tutorialState: 'none' | 'keys-and-ignition' | 'crank' | 'steering' = 'none';
+    let tutorialState: 'none' | 'keys-and-ignition' | 'crank' | 'steering' | 'exit-warning' = 'none';
     
     if (state.hasOpenMenu) {
       // Menu is open - no tutorial overlay (menu has its own overlay)
       tutorialState = 'none';
+    } else if (state.inExitCollisionPath) {
+      // Player is in collision path with an exit - show warning
+      console.log('🚨 TutorialSystem: Exit collision path detected, showing exit-warning');
+      tutorialState = 'exit-warning';
     } else if (!state.keysInIgnition) {
       // Keys not in ignition should always be highlighted unless a menu is open
       tutorialState = 'keys-and-ignition';
@@ -163,7 +168,23 @@ export class TutorialSystem {
           this.blinkText.setDepth(1);
           this.blinkText.setVisible(true);
         }
-        this.updateTutorialMask(tutorialState as 'keys-and-ignition' | 'crank' | 'steering');
+        this.updateTutorialMask(tutorialState as 'keys-and-ignition' | 'crank' | 'steering' | 'exit-warning');
+        
+        // Set appropriate text based on tutorial state
+        switch (tutorialState) {
+          case 'keys-and-ignition':
+            this.setBlinkText('Put keys in ignition');
+            break;
+          case 'crank':
+            this.setBlinkText('Turn the crank');
+            break;
+          case 'steering':
+            this.setBlinkText('Use steering wheel');
+            break;
+          case 'exit-warning':
+            this.setBlinkText('Exit ahead!');
+            break;
+        }
       } else if (this.blinkText) {
         this.blinkText.setVisible(false);
       }
@@ -171,7 +192,7 @@ export class TutorialSystem {
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'crankPercentage:', state.crankPercentage, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType);
+      // console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'crankPercentage:', state.crankPercentage, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType, 'inExitCollisionPath:', state.inExitCollisionPath);
       this.lastTutorialState = tutorialState;
     }
   }
@@ -219,7 +240,7 @@ export class TutorialSystem {
   /**
    * Update tutorial mask based on current state
    */
-  private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'crank' | 'steering') {
+  private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'crank' | 'steering' | 'exit-warning') {
     if (!this.tutorialOverlay || !this.tutorialMaskGraphics) {
       console.log('Cannot update mask - overlay or mask graphics not found');
       return;
@@ -237,6 +258,9 @@ export class TutorialSystem {
         break;
       case 'steering':
         this.createSteeringMask();
+        break;
+      case 'exit-warning':
+        this.createExitWarningMask();
         break;
     }
   }
@@ -377,6 +401,16 @@ export class TutorialSystem {
    */
   public getCurrentTutorialState(): string {
     return this.lastTutorialState;
+  }
+
+  /**
+   * Create mask for exit warning tutorial
+   */
+  private createExitWarningMask() {
+    // For exit warnings, we don't need cutouts - just show the warning text
+    // The mask will be transparent (no cutouts needed)
+    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
+    this.tutorialMaskGraphics.fillRect(0, 0, this.scene.cameras.main.width, this.scene.cameras.main.height);
   }
 
   /**

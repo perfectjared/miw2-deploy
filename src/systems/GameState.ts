@@ -44,6 +44,11 @@ export interface GameStateData {
   progress: number;
   position: number;
   
+  // Region System
+  currentRegion: string;
+  showsInCurrentRegion: number;
+  regionHistory: string[];
+  
   // Car State
   carStarted: boolean;
   keysInIgnition: boolean;
@@ -73,6 +78,7 @@ export interface GameStateConfig {
   initialPlotC: number;
   initialKnobValue: number;
   initialPosition: number;
+  initialRegion: string;
   
   // Validation
   minMoney: number;
@@ -397,6 +403,11 @@ export class GameState {
       progress: 0,
       position: this.config.initialPosition,
       
+      // Region System
+      currentRegion: this.config.initialRegion,
+      showsInCurrentRegion: 0,
+      regionHistory: [this.config.initialRegion],
+      
       // Car State
       carStarted: false,
       keysInIgnition: false,
@@ -491,6 +502,58 @@ export class GameState {
            `Step: ${this.state.step} | ` +
            `Money: $${this.state.money} | ` +
            `Health: ${this.state.health} | ` +
-           `Position: ${this.state.currentPosition}`;
+           `Position: ${this.state.currentPosition} | ` +
+           `Region: ${this.state.currentRegion} | ` +
+           `Shows: ${this.state.showsInCurrentRegion}`;
+  }
+
+  /**
+   * Get current region
+   */
+  public getCurrentRegion(): string {
+    return this.state.currentRegion;
+  }
+
+  /**
+   * Get shows completed in current region
+   */
+  public getShowsInCurrentRegion(): number {
+    return this.state.showsInCurrentRegion;
+  }
+
+  /**
+   * Increment shows in current region
+   */
+  public incrementShowsInCurrentRegion(): void {
+    this.updateState({
+      showsInCurrentRegion: this.state.showsInCurrentRegion + 1
+    });
+  }
+
+  /**
+   * Change to a new region
+   */
+  public changeRegion(newRegion: string): void {
+    const oldRegion = this.state.currentRegion;
+    this.updateState({
+      currentRegion: newRegion,
+      showsInCurrentRegion: 0,
+      regionHistory: [...this.state.regionHistory, newRegion]
+    });
+    console.log(`Region changed from ${oldRegion} to ${newRegion}`);
+  }
+
+  /**
+   * Get region history
+   */
+  public getRegionHistory(): string[] {
+    return [...this.state.regionHistory];
+  }
+
+  /**
+   * Check if player should choose next region (after 3 shows)
+   */
+  public shouldChooseNextRegion(): boolean {
+    return this.state.showsInCurrentRegion >= 3;
   }
 }

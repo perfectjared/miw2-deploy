@@ -42,6 +42,7 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showStartMenu', this.showStartMenu, this);
     this.events.on('showTurnKeyMenu', this.showTurnKeyMenu, this);
     this.events.on('showDestinationMenu', this.showDestinationMenu, this);
+    this.events.on('showRegionChoiceMenu', this.showRegionChoiceMenu, this);
     this.events.on('showCYOA', this.showCYOA, this);
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
     this.events.on('showMoralDecision', this.showMoralDecision, this);
@@ -109,6 +110,10 @@ export class MenuScene extends Phaser.Scene {
 
   private showDestinationMenu(includeFinalShowStep?: boolean) {
     this.menuManager.showDestinationMenu(!!includeFinalShowStep);
+  }
+
+  private showRegionChoiceMenu(config: { currentRegion: string; connectedRegions: string[] }) {
+    this.menuManager.showRegionChoiceMenu(config);
   }
 
   private showCYOA(cfg?: { imageKey?: string; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {

@@ -25,7 +25,7 @@ import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
 import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
-import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG } from '../config/GameConfig';
+import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG, REGION_CONFIG } from '../config/GameConfig';
 
 // Tunable scene constants (for quick tweaking)
 const SCENE_TUNABLES = {
@@ -204,6 +204,15 @@ export class GameScene extends Phaser.Scene {
         const menuScene = this.scene.get('MenuScene');
         if (menuScene) {
           menuScene.events.emit('showPetStoryUI', 'Pet says: "Hello there!"');
+        }
+      });
+
+      // Debug: Add Shift+P to set progress to 99%
+      const keyShiftP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
+      keyShiftP?.on('down', () => {
+        if (this.input.keyboard?.checkDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT))) {
+          console.log('Debug: Setting progress to 99%');
+          this.gameState.updateState({ progress: 99 });
         }
       });
 
@@ -511,7 +520,15 @@ export class GameScene extends Phaser.Scene {
     
     // Tutorial System Configuration - using centralized config
     const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
+    console.log('Creating TutorialSystem with config:', tutorialConfig);
     this.tutorialSystem = new TutorialSystem(this, tutorialConfig);
+    console.log('TutorialSystem created:', this.tutorialSystem);
+    
+    // Test tutorial system after a delay
+    this.time.delayedCall(5000, () => {
+      console.log('Testing tutorial system after 5 seconds...');
+      // console.log('isPlayerInExitCollisionPath result:', this.isPlayerInExitCollisionPath());
+    });
     
     // Game UI Configuration - using centralized config
     const uiConfig: GameUIConfig = {
@@ -670,6 +687,9 @@ export class GameScene extends Phaser.Scene {
     this.gameState.setEventCallbacks({
       onStateChange: (state) => {
         this.gameUI.updateUI(state);
+        // Update threshold indicators based on planned exits
+        const plannedExits = this.carMechanics.getPlannedExits();
+        this.gameUI.updateThresholdIndicators(plannedExits);
         // Auto-snap crank to 0 when keys are out of ignition
         if (!state.keysInIgnition && state.speedCrankPercentage !== 0) {
           this.carMechanics.handleSpeedCrank(0);
@@ -750,10 +770,11 @@ export class GameScene extends Phaser.Scene {
       crankPercentage: this.gameUI.getSpeedCrankPercentage(),
       hasOpenMenu: !!hasOpenMenu,
       currentMenuType: currentMenuType,
-      steeringUsed: this.steeringUsed
+      steeringUsed: this.steeringUsed,
+      inExitCollisionPath: this.isPlayerInExitCollisionPath()
     };
     
-   //console.log('updateTutorialSystem called:', tutorialState);
+   // console.log('updateTutorialSystem called:', tutorialState);
     // Track tutorial state transitions for crank/steering
     const prevCrankShown = this.hasShownCrankTutorial;
     const prevSteeringShown = this.hasShownSteeringTutorial;
@@ -771,15 +792,31 @@ export class GameScene extends Phaser.Scene {
     } else if (prevSteeringShown && currentTutorial !== 'steering') {
       this.hasClearedSteeringTutorial = true;
     }
+
+    // Treat tutorial overlays as blocking menus for interruption gating,
+    // but do not override when a real menu dialog is open.
+    try {
+      const menuScene = this.scene.get('MenuScene');
+      const realMenuOpen = !!(menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog);
+      const tutorialOpen = !!currentTutorial && currentTutorial !== 'none';
+      if (!realMenuOpen) {
+        this.gameState.updateState({ hasOpenMenu: tutorialOpen });
+      }
+    } catch {}
   }
 
   /**
    * Schedule a tutorial update with simple debouncing to avoid floods/loops
    */
   private scheduleTutorialUpdate(delayMs: number = 0) {
-    if (this.tutorialUpdateScheduled) return;
+    // console.log('scheduleTutorialUpdate called with delay:', delayMs);
+    if (this.tutorialUpdateScheduled) {
+      // console.log('Tutorial update already scheduled, skipping');
+      return;
+    }
     this.tutorialUpdateScheduled = true;
     this.time.delayedCall(delayMs, () => {
+      // console.log('Tutorial update delayed call executing');
       this.tutorialUpdateScheduled = false;
       this.updateTutorialSystem();
     });
@@ -1035,21 +1072,8 @@ export class GameScene extends Phaser.Scene {
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
       
-      // Re-enable physics body for the key when constraint is removed
-      if (this.frontseatKeys.gameObject.body) {
-        (this.frontseatKeys.gameObject.body as any).isStatic = false;
-        console.log('Key physics re-enabled (dynamic)');
-      }
-      
-      // Restore original collision filter for the key
-      if (this.frontseatKeys.gameObject.body) {
-        const keyBody = this.frontseatKeys.gameObject.body as any;
-        if (keyBody.originalCollisionFilter) {
-          keyBody.collisionFilter = keyBody.originalCollisionFilter;
-          delete keyBody.originalCollisionFilter; // Clean up
-          console.log('Key collision filtering restored - normal collisions enabled');
-        }
-      }
+      // Fully restore key physics to normal interactive state
+      this.restoreKeyPhysics();
       
       // Reset Keys scroll factor to horizontal only
       this.frontseatKeys.gameObject.setScrollFactor(1, 0);
@@ -1179,7 +1203,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * Remove keys from ignition
    */
-  private removeKeysFromIgnition() {
+  public removeKeysFromIgnition() {
     if (this.keysConstraint) {
       this.matter.world.removeConstraint(this.keysConstraint);
       this.keysConstraint = null;
@@ -1187,22 +1211,9 @@ export class GameScene extends Phaser.Scene {
       // Reset keys in ignition state
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
-      
-      // Re-enable physics body for the key when constraint is removed
-      if (this.frontseatKeys.gameObject.body) {
-        (this.frontseatKeys.gameObject.body as any).isStatic = false;
-        console.log('Key physics re-enabled (manual removal - dynamic)');
-      }
-      
-      // Restore original collision filter for the key
-      if (this.frontseatKeys.gameObject.body) {
-        const keyBody = this.frontseatKeys.gameObject.body as any;
-        if (keyBody.originalCollisionFilter) {
-          keyBody.collisionFilter = keyBody.originalCollisionFilter;
-          delete keyBody.originalCollisionFilter; // Clean up
-          console.log('Key collision filtering restored (manual removal) - normal collisions enabled');
-        }
-      }
+
+      // Fully restore key physics to normal interactive state
+      this.restoreKeyPhysics();
       
       // Reset target color
       this.magneticTarget.clear();
@@ -1218,6 +1229,57 @@ export class GameScene extends Phaser.Scene {
       // Update tutorial overlay after a small delay to ensure menu is closed (debounced)
       this.scheduleTutorialUpdate(100);
     }
+  }
+
+  /**
+   * Restore key physics after leaving ignition: re-enable dynamics, reset velocities,
+   * restore collision filters/sensor, clamp position into the screen, and ensure gravity.
+   */
+  private restoreKeyPhysics() {
+    const keyGO: any = this.frontseatKeys?.gameObject;
+    if (!keyGO || !keyGO.body) return;
+    const keyBody: any = keyGO.body;
+
+    // Make dynamic and ensure sensor flag reset
+    keyBody.isStatic = false;
+    if (typeof keyBody._originalIsSensor === 'boolean') {
+      keyBody.isSensor = keyBody._originalIsSensor;
+      delete keyBody._originalIsSensor;
+    } else {
+      keyBody.isSensor = false;
+    }
+
+    // Restore original collision filter if stored
+    if (keyBody._originalCollisionFilter) {
+      keyBody.collisionFilter = keyBody._originalCollisionFilter;
+      delete keyBody._originalCollisionFilter;
+    } else {
+      // Default permissive filter
+      keyBody.collisionFilter = { group: 0, category: 0x0001, mask: 0xFFFF };
+    }
+
+    // Zero out any residual velocity and angular velocity
+    try {
+      this.matter.body.setVelocity(keyBody, { x: 0, y: 0 });
+      this.matter.body.setAngularVelocity(keyBody, 0);
+    } catch {}
+
+    // Clamp position into the visible screen to avoid falling off-screen
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const radius = 15;
+    const clampedX = Phaser.Math.Clamp(keyGO.x, radius, w - radius);
+    const clampedY = Phaser.Math.Clamp(keyGO.y, radius, h * 0.9 - radius); // above raised floor
+    try {
+      this.matter.body.setPosition(keyBody, { x: clampedX, y: clampedY });
+    } catch {
+      keyGO.setPosition(clampedX, clampedY);
+    }
+
+    // Ensure it uses world gravity again
+    keyGO.setIgnoreGravity?.(false);
+    // Ensure scroll factor is horizontal only (like before insertion)
+    keyGO.setScrollFactor(1, 0);
   }
 
   /**
@@ -1294,6 +1356,21 @@ export class GameScene extends Phaser.Scene {
     console.log('GameScene: Exit taken');
   }
 
+  /** Handle region selection */
+  public selectRegion(regionId: string): void {
+    console.log(`GameScene: Region selected: ${regionId}`);
+    this.gameState.changeRegion(regionId);
+    
+    // Resume gameplay
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+    }
+    this.events.emit('gameResumed');
+    this.carMechanics.resumeDriving();
+    this.stopMenuOpen = false;
+  }
+
   /**
    * Toggle driving mode
    */
@@ -1368,9 +1445,37 @@ export class GameScene extends Phaser.Scene {
       const cur = this.gameState.getState().progress || 0;
       const next = cur + 1;
       this.gameState.updateState({ progress: next });
+      
+      // Update car mechanics with progress for exit planning
+      this.carMechanics.updateProgress(next);
+      
       if (next >= 100 && !this.stopMenuOpen) {
         this.stopMenuOpen = true;
         const newStops = (this.gameState.getState().stops || 0) + 1;
+        
+        // Increment shows in current region
+        this.gameState.incrementShowsInCurrentRegion();
+        
+        // Check if player should choose next region (after 3 shows)
+        if (this.gameState.shouldChooseNextRegion()) {
+          // Show region choice menu instead of destination menu
+          const menuScene = this.scene.get('MenuScene');
+          if (menuScene) {
+            menuScene.events.emit('showRegionChoiceMenu', {
+              currentRegion: this.gameState.getCurrentRegion(),
+              connectedRegions: REGION_CONFIG.connections[this.gameState.getCurrentRegion() as keyof typeof REGION_CONFIG.connections]
+            });
+            this.scene.bringToTop('MenuScene');
+          }
+        } else {
+          // Show regular destination menu
+          const menuScene = this.scene.get('MenuScene');
+          if (menuScene) {
+            menuScene.events.emit('showDestinationMenu', true);
+            this.scene.bringToTop('MenuScene');
+          }
+        }
+        
         // Reset progress and countdown
         this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 8 });
         this.countdownStepCounter = 0; // Reset countdown step counter
@@ -1379,17 +1484,12 @@ export class GameScene extends Phaser.Scene {
           (appScene as any).isPaused = true;
           this.events.emit('gamePaused');
         }
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showDestinationMenu', true);
-          this.scene.bringToTop('MenuScene');
-        }
       }
     }
 
     // Schedule story overlay only after car started AND crank >= 40 AND steering occurred
     const stateNow = this.gameState.getState();
-    if (!this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40 && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
+    if (!stateNow.hasOpenMenu && !this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40 && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
       this.storyOverlayScheduledStep = step + 5;
       // Reveal look buttons when gating conditions are satisfied (same trigger as countdown)
       const ui: any = this.gameUI as any;
@@ -1401,6 +1501,12 @@ export class GameScene extends Phaser.Scene {
 
     // Show Chapter 1 story overlay once scheduled and step reached
     if (!this.chapter1Shown && this.storyOverlayScheduledStep !== null && step >= this.storyOverlayScheduledStep) {
+      // Skip/cancel if a higher-level menu is currently open
+      const stateCheck = this.gameState.getState();
+      if (stateCheck.hasOpenMenu) {
+        this.storyOverlayScheduledStep = null;
+        return;
+      }
       const menuScene = this.scene.get('MenuScene');
       if (menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.showStoryOverlay) {
         (menuScene as any).menuManager.showStoryOverlay('Chapter 1', 'Welcome! This story overlay will fade after 10 steps.');
@@ -1467,9 +1573,9 @@ export class GameScene extends Phaser.Scene {
     // Apply lateral gravity from steering ONLY when crank >= 40%
     const crankPct = this.gameState.getState().speedCrankPercentage ?? 0;
     if (crankPct >= 40) {
-      // Map dial value (-100..100) to lateral gravity (-gx..gx)
+      // Map dial value (-100..100) to lateral gravity (invert so right steer => left gravity)
       const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
-      this.gravityXTarget = (Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
+      this.gravityXTarget = -(Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
     } else {
       // Below threshold: no lateral gravity influence from steering
       this.gravityXTarget = 0;
@@ -1492,8 +1598,85 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Clean up resources
+   * Check if player is positioned to collide with any exit on screen
    */
+  public isPlayerInExitCollisionPath(): boolean {
+    // console.log('isPlayerInExitCollisionPath called');
+    if (!this.carMechanics) {
+      // console.log('No carMechanics');
+      return false;
+    }
+    
+    // Get all obstacles that are exits
+    const obstacles = (this.carMechanics as any).obstacles || [];
+    // console.log('Total obstacles:', obstacles.length);
+    
+    const exits = obstacles.filter((obstacle: any) => {
+      const isExit = obstacle.getData('isExit');
+      const isPreview = obstacle.getData('isExitPreview');
+      // console.log('Obstacle - isExit:', isExit, 'isPreview:', isPreview);
+      return isExit && !isPreview;
+    });
+    
+    // console.log('Found exits:', exits.length);
+    
+    if (exits.length === 0) {
+      // console.log('No exits found');
+      return false;
+    }
+    
+    // Check if any exit is close enough to the car's position
+    const carBounds = (this.carMechanics as any).drivingCar?.getBounds();
+    if (!carBounds) {
+      // console.log('No car bounds');
+      return false;
+    }
+    
+    // console.log('Car bounds:', carBounds);
+    
+    // Check if car is approaching any exit from the right
+    const inPath = exits.some((exit: any) => {
+      const visual = exit.getData('visual');
+      if (!visual) {
+        // console.log('Exit has no visual');
+        return false;
+      }
+      
+      const exitBounds = visual.getBounds();
+      // console.log('Exit bounds:', exitBounds);
+      
+      // Check if exit is on screen vertically (below horizon)
+      const exitOnScreenVertically = exitBounds.bottom > this.cameras.main.height * 0.3; // Assuming horizon at 30%
+      
+      // Check if exit has moved below the car (car is above the exit)
+      const carBottom = carBounds.bottom;
+      const exitTop = exitBounds.top;
+      const exitBelowCar = exitTop > carBottom;
+      
+      // Check if car is far enough to the right to be in collision path
+      // Car is "in path" if its right edge is close to or past the exit's left edge
+      const carRightEdge = carBounds.right;
+      const exitLeftEdge = exitBounds.left;
+      const collisionThreshold = 50; // pixels - how close car needs to be to trigger warning
+      
+      const carInCollisionPath = carRightEdge >= (exitLeftEdge - collisionThreshold);
+      
+      // console.log('Car right edge:', carRightEdge, 'Exit left edge:', exitLeftEdge, 'In path:', carInCollisionPath);
+      
+      // Exit warning should only show if exit is on screen, car is in collision path, AND exit hasn't moved below car
+      return exitOnScreenVertically && carInCollisionPath && !exitBelowCar;
+    });
+    
+    // Only log when we actually find exits and are in collision path
+    if (exits.length > 0 && inPath) {
+      console.log('🚨 EXIT COLLISION PATH DETECTED! Exits:', exits.length);
+      console.log('   Car right edge:', carBounds.right, 'Exit left edge:', exits[0].getData('visual').getBounds().left);
+      console.log('   Car bottom:', carBounds.bottom, 'Exit top:', exits[0].getData('visual').getBounds().top);
+    }
+    // console.log('In exit collision path:', inPath);
+    return inPath;
+  }
+
   destroy() {
     // Clean up all systems
     this.carMechanics.destroy();

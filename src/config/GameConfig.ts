@@ -248,6 +248,9 @@ export const UI_CONFIG = {
   gameLayerBackgroundColor: UI_LAYOUT.gameLayerBackgroundColor,
   gameLayerDepth: UI_LAYOUT.gameLayerDepth,
   
+  // Text Player Configuration
+  textDisplayDelayMs: 100, // Brief pause before showing all text at once (easily adjustable)
+  
   // Countdown Timer
   countdownPositionX: UI_LAYOUT.countdownX,
   countdownPositionY: UI_LAYOUT.countdownY,
@@ -416,6 +419,7 @@ export const GAME_STATE_CONFIG = {
   initialPlotC: 0,
   initialKnobValue: 0,
   initialPosition: 0,
+  initialRegion: 'midwest',
   
   // Validation Ranges
   minMoney: 0,
@@ -477,6 +481,75 @@ export const PHYSICS_CONFIG = {
   magneticSnapThreshold: 15,
   magneticConstraintStiffness: 1,
   magneticConstraintDamping: 0.1
+} as const;
+
+// ============================================================================
+// REGION SYSTEM CONFIGURATION
+// ============================================================================
+
+export const REGION_CONFIG = {
+  // Region definitions
+  regions: {
+    west: {
+      name: 'West',
+      displayName: 'West',
+      color: 0xff6b35, // Orange
+      description: 'The vast western frontier'
+    },
+    southwest: {
+      name: 'Southwest',
+      displayName: 'Southwest',
+      color: 0xffd23f, // Yellow
+      description: 'Desert landscapes and canyons'
+    },
+    south: {
+      name: 'South',
+      displayName: 'South',
+      color: 0x06ffa5, // Green
+      description: 'Southern hospitality and warmth'
+    },
+    midwest: {
+      name: 'Midwest',
+      displayName: 'Midwest',
+      color: 0x3b82f6, // Blue
+      description: 'Heartland of America'
+    },
+    northeast: {
+      name: 'Northeast',
+      displayName: 'Northeast',
+      color: 0x8b5cf6, // Purple
+      description: 'Historic cities and coastlines'
+    }
+  },
+  
+  // Region connectivity map
+  connections: {
+    west: ['southwest', 'south', 'midwest'],
+    southwest: ['west', 'south'],
+    south: ['midwest', 'west', 'southwest'],
+    midwest: ['west', 'south', 'northeast'],
+    northeast: ['midwest', 'south']
+  },
+  
+  // Game progression settings
+  showsPerRegion: 3,
+  startingRegion: 'midwest',
+  
+  // UI settings for region selection
+  regionChoiceUI: {
+    leftRegionOffset: -150,  // Pixels from center for left region
+    rightRegionOffset: 150,  // Pixels from center for right region
+    regionChoiceY: 0.6,      // Percentage of screen height
+    regionChoiceDepth: 50000,
+    regionChoiceFontSize: '24px',
+    regionChoiceColor: '#ffffff',
+    regionChoiceBackgroundColor: 0x000000,
+    regionChoiceBackgroundAlpha: 0.8,
+    regionChoicePadding: 20,
+    regionChoiceCornerRadius: 10,
+    regionChoiceStrokeColor: 0xffffff,
+    regionChoiceStrokeWidth: 2
+  }
 } as const;
 
 // ============================================================================

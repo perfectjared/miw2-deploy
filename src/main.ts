@@ -104,11 +104,14 @@ if (import.meta && (import.meta as any).hot) {
 (() => {
   const originalLog = console.log.bind(console);
   if (typeof window !== 'undefined') {
-    window.__ENABLE_LOGS = false;
+    window.__ENABLE_LOGS = true; // Enable logs for debugging
   }
   console.log = (...args: any[]) => {
     if ((window as any)?.__ENABLE_LOGS) {
       originalLog(...args);
     }
   };
+  
+  // Test that console.log is working
+  // console.log('Console.log is now enabled!');
 })();

@@ -166,6 +166,7 @@ export class GameUI {
   private progressText!: Phaser.GameObjects.Text;
   private progressBarBG!: Phaser.GameObjects.Rectangle;
   private progressBarFill!: Phaser.GameObjects.Rectangle;
+  private progressThresholdIndicators: Phaser.GameObjects.Graphics[] = [];
   private managerValuesText!: Phaser.GameObjects.Text;
   private frontseatButton!: Phaser.GameObjects.Graphics;
   private backseatButton!: Phaser.GameObjects.Graphics;
@@ -235,6 +236,43 @@ export class GameUI {
     this.updateProgress(state.progress);
     this.updateManagerValues(state); // This now includes stops
     this.updateSpeedCrank(state.speedCrankPercentage);
+  }
+
+  /**
+   * Update threshold indicators based on planned exits
+   */
+  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>) {
+    // Clear existing indicators
+    this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
+    this.progressThresholdIndicators = [];
+    
+    const barWidth = (this as any).progressBarWidth;
+    const barX = (this as any).progressBarX;
+    const barY = (this as any).progressBarY;
+    
+    if (!barWidth || !barX || !barY) return;
+    
+    // Create triangle indicators for unspawned exits
+    plannedExits.forEach(exit => {
+      if (!exit.spawned) {
+        const triangleX = barX + (exit.progressThreshold / 100) * barWidth;
+        const triangleY = barY - 8; // Above the progress bar
+        
+        const triangle = this.scene.add.graphics();
+        triangle.fillStyle(0xff6b35, 0.8); // Orange color
+        triangle.beginPath();
+        triangle.moveTo(triangleX, triangleY);
+        triangle.lineTo(triangleX - 4, triangleY + 8);
+        triangle.lineTo(triangleX + 4, triangleY + 8);
+        triangle.closePath();
+        triangle.fillPath();
+        
+        triangle.setScrollFactor(0);
+        triangle.setDepth(10002);
+        
+        this.progressThresholdIndicators.push(triangle);
+      }
+    });
   }
 
   /**
@@ -313,6 +351,11 @@ export class GameUI {
     this.progressBarFill = this.scene.add.rectangle(barX, barY, 0, barHeight, 0x00ff00, 0.9).setOrigin(0, 0.5);
     this.progressBarBG.setScrollFactor(0); this.progressBarBG.setDepth(10000);
     this.progressBarFill.setScrollFactor(0); this.progressBarFill.setDepth(10001);
+    
+    // Store progress bar dimensions for threshold indicators
+    (this as any).progressBarWidth = barWidth;
+    (this as any).progressBarX = barX;
+    (this as any).progressBarY = barY;
   }
 
   /**

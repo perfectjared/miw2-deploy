@@ -27,7 +27,7 @@
 
 import Phaser from 'phaser';
 import { SaveManager } from './SaveManager';
-import { MENU_CONFIG } from '../config/GameConfig';
+import { MENU_CONFIG, UI_CONFIG } from '../config/GameConfig';
 
 export interface MenuButton {
   text: string;
@@ -47,6 +47,9 @@ export class MenuManager {
   // ============================================================================
   // MENU PARAMETERS - Using centralized configuration
   // ============================================================================
+  
+  // Text display callbacks for cleanup
+  private textDisplayCallbacks: Phaser.Time.TimerEvent[] = [];
   
   // Slider Parameters
   private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
@@ -98,6 +101,7 @@ export class MenuManager {
     PAUSE: 80,        // High priority - pause menu
     GAME_OVER: 70,    // High priority - game over menu
     OBSTACLE: 60,     // Medium priority - obstacle collision menu
+    REGION_CHOICE: 55, // Medium priority - region choice menu
     SAVE: 50,         // Medium priority - save menu
     DESTINATION: 50,  // Medium priority - destination menu
     EXIT: 50,         // Medium priority - exit choice menu
@@ -191,34 +195,27 @@ export class MenuManager {
 
     const titleText = this.scene.add.text(0, -70, title, { fontSize: '22px', color: '#ffffff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5);
     
-    // Use TextPlayer for story content
-    const contentTextPlayer = this.scene.rexUI.add.textPlayer({
-      x: 0,
-      y: 0,
-      width: 260,
-      height: 80,
-      text: content,
-      style: {
-        fontSize: '16px',
-        color: '#ffffff',
-        wordWrap: { width: 260 },
-        align: 'center'
-      },
-      typingSpeed: 60 // Slightly faster for story overlays
-    });
-    contentTextPlayer.setOrigin(0.5);
-    this.currentDialog.add([titleText, contentTextPlayer]);
+    // Create instant text display with brief pause
+    const contentText = this.scene.add.text(0, 0, '', {
+      fontSize: '16px',
+      color: '#ffffff',
+      wordWrap: { width: 260 },
+      align: 'center'
+    }).setOrigin(0.5);
     
-    // Start typing immediately - try different method names
-    if (typeof contentTextPlayer.play === 'function') {
-      contentTextPlayer.play();
-    } else if (typeof contentTextPlayer.start === 'function') {
-      contentTextPlayer.start();
-    } else if (typeof contentTextPlayer.startTyping === 'function') {
-      contentTextPlayer.startTyping();
-    } else {
-      console.log('TextPlayer methods available:', Object.getOwnPropertyNames(contentTextPlayer));
-    }
+    this.currentDialog.add([titleText, contentText]);
+    
+    // Show all text at once after brief pause
+    const textCallback = this.scene.time.delayedCall(UI_CONFIG.textDisplayDelayMs, () => {
+      // Safety check: ensure text object still exists and is valid
+      if (contentText && contentText.scene && !contentText.scene.scene.isActive('GameScene')) {
+        return; // Scene is no longer active
+      }
+      if (contentText && contentText.setText) {
+        contentText.setText(content);
+      }
+    });
+    this.textDisplayCallbacks.push(textCallback);
 
     // Mark as ephemeral and set step countdown
     (this.currentDialog as any).isStory = true;
@@ -1554,35 +1551,28 @@ export class MenuManager {
     
     console.log('MenuManager: Dialog background and title added. Dialog children count:', this.currentDialog.list.length);
     
-    // Content - use TextPlayer for typing effect
+    // Content - instant display with brief pause
     if (menuConfig.content) {
-      const contentTextPlayer = this.scene.rexUI.add.textPlayer({
-        x: 0,
-        y: -20,
-        width: 250,
-        height: 100,
-        text: menuConfig.content,
-        style: {
-          fontSize: '16px',
-          color: '#ffffff',
-          wordWrap: { width: 250 },
-          align: 'center'
-        },
-        typingSpeed: 50 // Characters per second
-      });
-      contentTextPlayer.setOrigin(0.5);
-      this.currentDialog.add(contentTextPlayer);
+      const contentText = this.scene.add.text(0, -20, '', {
+        fontSize: '16px',
+        color: '#ffffff',
+        wordWrap: { width: 250 },
+        align: 'center'
+      }).setOrigin(0.5);
       
-      // Start typing immediately - try different method names
-      if (typeof contentTextPlayer.play === 'function') {
-        contentTextPlayer.play();
-      } else if (typeof contentTextPlayer.start === 'function') {
-        contentTextPlayer.start();
-      } else if (typeof contentTextPlayer.startTyping === 'function') {
-        contentTextPlayer.startTyping();
-      } else {
-        console.log('TextPlayer methods available:', Object.getOwnPropertyNames(contentTextPlayer));
-      }
+      this.currentDialog.add(contentText);
+      
+      // Show all text at once after brief pause
+      const textCallback = this.scene.time.delayedCall(UI_CONFIG.textDisplayDelayMs, () => {
+        // Safety check: ensure text object still exists and is valid
+        if (contentText && contentText.scene && !contentText.scene.scene.isActive('GameScene')) {
+          return; // Scene is no longer active
+        }
+        if (contentText && contentText.setText) {
+          contentText.setText(menuConfig.content || '');
+        }
+      });
+      this.textDisplayCallbacks.push(textCallback);
     }
     
     // Buttons
@@ -1741,6 +1731,14 @@ export class MenuManager {
         (this.currentDialog as any).momentumTimer.destroy();
       }
       
+      // Clean up text display callbacks
+      this.textDisplayCallbacks.forEach(callback => {
+        if (callback && callback.destroy) {
+          callback.destroy();
+        }
+      });
+      this.textDisplayCallbacks = [];
+      
       this.currentDialog.destroy();
       this.currentDialog = null;
       
@@ -1761,10 +1759,13 @@ export class MenuManager {
         try { (this.currentDialog as any).__restoreInput(); } catch {}
       }
       
-      // Resume game when destination menu is closed
-      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP' || this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP') {
-        console.log('MenuManager: Resuming game after destination menu closed');
-        this.resumeGameAfterDestinationMenu();
+      // Resume game when certain menus are closed
+      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP') {
+        console.log('MenuManager: Resuming game after show/destination menu closed');
+        this.resumeGameAfterDestinationMenu(true); // reset car and remove keys after shows only
+      } else if (this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP') {
+        console.log('MenuManager: Resuming game after exit/shop menu closed');
+        this.resumeGameAfterDestinationMenu(false); // do NOT reset car/keys after exits
       }
       
       // Clear the displayed menu type
@@ -1797,6 +1798,138 @@ export class MenuManager {
     }
   }
 
+  /**
+   * Show region choice menu (OutRun-style left/right selection)
+   */
+  public showRegionChoiceMenu(config: { currentRegion: string; connectedRegions: string[] }) {
+    if (!this.canShowMenu('REGION_CHOICE')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('REGION_CHOICE');
+    
+    const { currentRegion, connectedRegions } = config;
+    
+    // Import REGION_CONFIG to get region display names
+    const REGION_CONFIG = (this.scene as any).scene?.get('GameScene')?.registry?.get('REGION_CONFIG') || {};
+    
+    // Create OutRun-style region choice UI
+    const centerX = this.scene.cameras.main.width / 2;
+    const centerY = this.scene.cameras.main.height * 0.6;
+    
+    // Create background overlay
+    const overlay = this.scene.add.rectangle(centerX, centerY, 400, 200, 0x000000, 0.8);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(50000);
+    this.currentDialog = this.scene.add.container(0, 0);
+    this.currentDialog.add(overlay);
+    
+    // Add title
+    const title = this.scene.add.text(centerX, centerY - 60, 'Choose Your Next Region', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    title.setScrollFactor(0);
+    this.currentDialog.add(title);
+    
+    // Add current region info
+    const currentRegionText = this.scene.add.text(centerX, centerY - 20, `Current: ${currentRegion}`, {
+      fontSize: '16px',
+      color: '#cccccc'
+    }).setOrigin(0.5);
+    currentRegionText.setScrollFactor(0);
+    this.currentDialog.add(currentRegionText);
+    
+    // Add instruction text
+    const instructionText = this.scene.add.text(centerX, centerY + 20, 'Steer left or right to choose', {
+      fontSize: '14px',
+      color: '#ffffff'
+    }).setOrigin(0.5);
+    instructionText.setScrollFactor(0);
+    this.currentDialog.add(instructionText);
+    
+    // Add region choice buttons (left and right)
+    const leftRegion = connectedRegions[0];
+    const rightRegion = connectedRegions[1];
+    
+    if (leftRegion) {
+      const leftButton = this.scene.add.rectangle(centerX - 120, centerY + 50, 100, 40, 0x333333, 0.9);
+      leftButton.setStrokeStyle(2, 0xffffff, 1);
+      leftButton.setScrollFactor(0);
+      leftButton.setInteractive();
+      this.currentDialog.add(leftButton);
+      
+      const leftText = this.scene.add.text(centerX - 120, centerY + 50, leftRegion, {
+        fontSize: '14px',
+        color: '#ffffff',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      leftText.setScrollFactor(0);
+      this.currentDialog.add(leftText);
+      
+      leftButton.on('pointerdown', () => {
+        this.selectRegion(leftRegion);
+      });
+    }
+    
+    if (rightRegion) {
+      const rightButton = this.scene.add.rectangle(centerX + 120, centerY + 50, 100, 40, 0x333333, 0.9);
+      rightButton.setStrokeStyle(2, 0xffffff, 1);
+      rightButton.setScrollFactor(0);
+      rightButton.setInteractive();
+      this.currentDialog.add(rightButton);
+      
+      const rightText = this.scene.add.text(centerX + 120, centerY + 50, rightRegion, {
+        fontSize: '14px',
+        color: '#ffffff',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      rightText.setScrollFactor(0);
+      this.currentDialog.add(rightText);
+      
+      rightButton.on('pointerdown', () => {
+        this.selectRegion(rightRegion);
+      });
+    }
+    
+    // Set up keyboard controls for region selection
+    const leftKey = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT, true, false);
+    const rightKey = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, true, false);
+    
+    if (leftKey && leftRegion) {
+      leftKey.on('down', () => {
+        this.selectRegion(leftRegion);
+      });
+    }
+    
+    if (rightKey && rightRegion) {
+      rightKey.on('down', () => {
+        this.selectRegion(rightRegion);
+      });
+    }
+    
+    // Store keys for cleanup
+    (this.currentDialog as any).leftKey = leftKey;
+    (this.currentDialog as any).rightKey = rightKey;
+    
+    console.log(`Region choice menu shown: ${leftRegion} (left) or ${rightRegion} (right)`);
+  }
+  
+  /**
+   * Handle region selection
+   */
+  private selectRegion(regionId: string) {
+    console.log(`MenuManager: Region selected: ${regionId}`);
+    
+    // Notify GameScene of region selection
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene && (gameScene as any).selectRegion) {
+      (gameScene as any).selectRegion(regionId);
+    }
+    
+    // Close the menu
+    this.closeDialog();
+  }
+
   private closeDialog() {
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
@@ -1827,7 +1960,7 @@ export class MenuManager {
   /**
    * Resume game after destination menu is closed
    */
-  private resumeGameAfterDestinationMenu() {
+  private resumeGameAfterDestinationMenu(resetAfterShow: boolean) {
     // Resume AppScene step counting
     const appScene = this.scene.scene.get('AppScene');
     if (appScene) {
@@ -1835,29 +1968,34 @@ export class MenuManager {
       console.log('MenuManager: Resumed AppScene step counting');
     }
     
-    // Reset car state - user must restart car after destination completion
+    // Optionally reset car state after shows only
     const gameScene = this.scene.scene.get('GameScene');
     if (gameScene) {
-      // Reset car started state
-      (gameScene as any).carStarted = false;
-      
-      // Reset speed crank percentage
-      if ((gameScene as any).gameState) {
-        (gameScene as any).gameState.updateState({ 
-          carStarted: false, 
-          speedCrankPercentage: 0 
-        });
+      if (resetAfterShow) {
+        // Reset car started state
+        (gameScene as any).carStarted = false;
+        if ((gameScene as any).gameState) {
+          (gameScene as any).gameState.updateState({ carStarted: false, speedCrankPercentage: 0 });
+        }
+        // Stop driving mode
+        if ((gameScene as any).carMechanics) {
+          (gameScene as any).carMechanics.stopDriving();
+          console.log('MenuManager: Stopped CarMechanics driving - car reset (show)');
+        }
+        // Remove keys from ignition constraint (same as manual removal)
+        if ((gameScene as any).removeKeysFromIgnition) {
+          console.log('MenuManager: Removing keys from ignition constraint (show)');
+          (gameScene as any).removeKeysFromIgnition();
+        }
+      } else {
+        // After exits/shops: just resume driving if it was active; do not reset keys/car
+        if ((gameScene as any).carStarted && (gameScene as any).carMechanics) {
+          (gameScene as any).carMechanics.resumeDriving();
+          console.log('MenuManager: Resumed CarMechanics driving (exit/shop)');
+        }
       }
-      
-      // Stop driving mode
-      if ((gameScene as any).carMechanics) {
-        (gameScene as any).carMechanics.stopDriving();
-        console.log('MenuManager: Stopped CarMechanics driving - car reset');
-      }
-      
       // Emit game resumed event
       gameScene.events.emit('gameResumed');
-      console.log('MenuManager: Emitted gameResumed event and reset car state');
     }
   }
 }
