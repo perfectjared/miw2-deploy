@@ -1653,24 +1653,31 @@ export class GameScene extends Phaser.Scene {
       const exitTop = exitBounds.top;
       const exitBelowCar = exitTop > carBottom;
       
-      // Check if car is far enough to the right to be in collision path
-      // Car is "in path" if its right edge is close to or past the exit's left edge
+      // Check if car is in the rightmost 10-15% of the screen to trigger warning
       const carRightEdge = carBounds.right;
-      const exitLeftEdge = exitBounds.left;
-      const collisionThreshold = this.cameras.main.width * 0.1; // 10% of screen width - how close car needs to be to trigger warning
+      const screenWidth = this.cameras.main.width;
+      const rightmostThreshold = screenWidth * 0.85; // Car needs to be in rightmost 15% of screen
       
-      const carInCollisionPath = carRightEdge >= (exitLeftEdge - collisionThreshold);
+      const carInRightmostArea = carRightEdge >= rightmostThreshold;
+      
+      // Also check if car is horizontally aligned with the exit
+      const carLeftEdge = carBounds.left;
+      const exitLeftEdge = exitBounds.left;
+      const exitRightEdge = exitBounds.right;
+      
+      // Car is aligned if there's any horizontal overlap with the exit
+      const horizontallyAligned = carLeftEdge < exitRightEdge && carRightEdge > exitLeftEdge;
       
       // console.log('Car right edge:', carRightEdge, 'Exit left edge:', exitLeftEdge, 'In path:', carInCollisionPath);
       
-      // Exit warning should only show if exit is on screen, car is in collision path, AND exit hasn't moved below car
-      return exitOnScreenVertically && carInCollisionPath && !exitBelowCar;
+      // Exit warning should only show if exit is on screen, car is in rightmost area, AND horizontally aligned
+      return exitOnScreenVertically && carInRightmostArea && horizontallyAligned;
     });
     
     // Only log when we actually find exits and are in collision path
     if (exits.length > 0 && inPath) {
       console.log('🚨 EXIT COLLISION PATH DETECTED! Exits:', exits.length);
-      console.log('   Car right edge:', carBounds.right, 'Exit left edge:', exits[0].getData('visual').getBounds().left);
+      console.log('   Car right edge:', carBounds.right, 'Rightmost threshold:', this.cameras.main.width * 0.85);
       console.log('   Car bottom:', carBounds.bottom, 'Exit top:', exits[0].getData('visual').getBounds().top);
     }
     // console.log('In exit collision path:', inPath);
