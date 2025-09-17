@@ -176,7 +176,7 @@ export class GameUI {
   private speedCrankHandle!: Phaser.GameObjects.Graphics;
   private speedCrankValueIndicator!: Phaser.GameObjects.Graphics;
   private speedCrankArea!: Phaser.GameObjects.Rectangle;
-  private speedCrankPercentageText!: Phaser.GameObjects.Text;
+  private speedPercentageText!: Phaser.GameObjects.Text;
   
     // Drag Dial
     private frontseatDragDial!: any; // RexUI drag dial
@@ -222,7 +222,8 @@ export class GameUI {
     this.createMoneyAndHealthText();
     // this.createManagerValuesText(); // Commented out debug text
     this.createNavigationButtons();
-    this.createSpeedCrank();
+    // Speed crank removed - using automatic speed progression
+    this.createSpeedDisplay();
     this.createFrontseatDragDial();
   }
 
@@ -235,7 +236,7 @@ export class GameUI {
     this.updateHealth(state.health);
     this.updateProgress(state.progress);
     this.updateManagerValues(state); // This now includes stops
-    this.updateSpeedCrank(state.speedCrankPercentage);
+    // Speed crank removed - using automatic speed progression
   }
 
   /**
@@ -560,17 +561,7 @@ export class GameUI {
     this.speedCrankHandle.setDepth(this.config.speedCrankDepthHandle);
     
     // Create percentage text
-    this.speedCrankPercentageText = this.scene.add.text(
-      crankX + this.config.speedCrankTextOffsetX,
-      crankY,
-      '0%',
-      {
-        fontSize: this.config.speedCrankTextFontSize,
-        color: this.config.speedCrankTextColor,
-        fontStyle: 'bold'
-      }
-    ).setOrigin(0, 0.5);
-    this.speedCrankPercentageText.setDepth(this.config.speedCrankDepthText);
+    // Speed crank text removed - using automatic speed progression
     
     // Create invisible interaction area for the entire crank
     this.speedCrankArea = this.scene.add.rectangle(
@@ -680,6 +671,41 @@ export class GameUI {
   }
 
   /**
+   * Create speed percentage display above steering wheel
+   */
+  private createSpeedDisplay() {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Position above the steering wheel (center-right area)
+    const speedDisplayX = gameWidth * 0.75;
+    const speedDisplayY = gameHeight * 0.4;
+    
+    // Create speed percentage text
+    this.speedPercentageText = this.scene.add.text(speedDisplayX, speedDisplayY, '0%', {
+      fontSize: '24px',
+      color: '#ffffff',
+      fontFamily: 'Arial',
+      stroke: '#000000',
+      strokeThickness: 2
+    });
+    
+    this.speedPercentageText.setOrigin(0.5, 0.5);
+    this.speedPercentageText.setScrollFactor(0);
+    this.speedPercentageText.setDepth(10002); // Highest depth to appear above all other elements
+    this.speedPercentageText.setVisible(true);
+  }
+
+  /**
+   * Update speed percentage display
+   */
+  public updateSpeedDisplay(speedPercentage: number) {
+    if (this.speedPercentageText) {
+      this.speedPercentageText.setText(`${Math.round(speedPercentage)}%`);
+    }
+  }
+
+  /**
    * Create frontseat drag dial
    */
   private createFrontseatDragDial() {
@@ -702,7 +728,7 @@ export class GameUI {
     // Remove extraneous square; indicator line will represent value
     
     knob.setPosition(dialX, dialY);
-    knob.setDepth(997); // Below SVG but above background
+    knob.setDepth(10001); // Above most UI elements but below speed display
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
     // Create SVG overlay for visual appeal
@@ -710,7 +736,7 @@ export class GameUI {
     this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale);
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
     this.steeringWheelSVG.setAlpha(UI_TUNABLES.steering.svgAlpha); // Semi-transparent overlay
-    this.steeringWheelSVG.setDepth(UI_TUNABLES.steering.svgDepth); // Just above the circle
+    this.steeringWheelSVG.setDepth(10001); // Above most UI elements but below speed display
     
     // SVG will be positioned independently but follow the graphics circle
     
@@ -719,11 +745,11 @@ export class GameUI {
     
     // Visual feedback overlay: an indicator line and angle text
     this.steeringDialIndicator = this.scene.add.graphics();
-    this.steeringDialIndicator.setDepth(999);
+    this.steeringDialIndicator.setDepth(10001); // Above most UI elements but below speed display
     this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + UI_TUNABLES.steering.angleTextOffset, '0%', {
       fontSize: '14px',
       color: '#ffffff'
-    }).setOrigin(0.5).setDepth(999);
+    }).setOrigin(0.5).setDepth(10001); // Above most UI elements but below speed display
     
     // Add drag functionality (fixed version)
     let isDragging = false;
@@ -952,9 +978,7 @@ export class GameUI {
   public updateSpeedCrank(percentage: number) {
     this.currentSpeedCrankPercentage = percentage;
     
-    if (this.speedCrankPercentageText) {
-      this.speedCrankPercentageText.setText(`${Math.round(percentage)}%`);
-    }
+    // Speed crank removed - using automatic speed progression
     
     this.updateSpeedCrankHandle(percentage);
     this.updateSpeedCrankTriangle(percentage);
@@ -1069,7 +1093,7 @@ export class GameUI {
     if (this.speedCrankTrack) objs.push(this.speedCrankTrack);
     if (this.speedCrankHandle) objs.push(this.speedCrankHandle);
     if (this.speedCrankSVG) objs.push(this.speedCrankSVG);
-    if (this.speedCrankPercentageText) objs.push(this.speedCrankPercentageText);
+    // Speed crank text removed - using automatic speed progression
     if (this.speedCrankArea) objs.push(this.speedCrankArea);
     if (this.frontseatDragDial) objs.push(this.frontseatDragDial);
     if (this.steeringWheelSVG) objs.push(this.steeringWheelSVG);
@@ -1107,7 +1131,7 @@ export class GameUI {
       this.speedCrankHandle,
       this.speedCrankValueIndicator,
       this.speedCrankArea,
-      this.speedCrankPercentageText,
+      // Speed crank text removed - using automatic speed progression
       this.speedCrankSVG,
       this.speedCrankTriangle,
       this.frontseatDragDial

@@ -41,7 +41,6 @@ export interface TutorialConfig {
 export interface TutorialState {
   keysInIgnition: boolean;
   carStarted: boolean;
-  crankPercentage: number;
   hasOpenMenu: boolean;
   currentMenuType: string | null;
   steeringUsed: boolean;
@@ -125,7 +124,7 @@ export class TutorialSystem {
    */
   public updateTutorialOverlay(state: TutorialState) {
     // Determine which tutorial state to show
-    let tutorialState: 'none' | 'keys-and-ignition' | 'crank' | 'steering' | 'exit-warning' = 'none';
+    let tutorialState: 'none' | 'keys-and-ignition' | 'steering' | 'exit-warning' = 'none';
     
     if (state.hasOpenMenu) {
       // Menu is open - no tutorial overlay (menu has its own overlay)
@@ -137,18 +136,16 @@ export class TutorialSystem {
     } else if (!state.keysInIgnition) {
       // Keys not in ignition should always be highlighted unless a menu is open
       tutorialState = 'keys-and-ignition';
-    } else if (state.keysInIgnition && state.crankPercentage === 0) {
-      // Keys are in, crank is at 0% → always guide to crank
-      tutorialState = 'crank';
-    } else if (state.carStarted) {
-      // Car is started - check crank percentage and steering usage
+    } else if (state.keysInIgnition && state.carStarted) {
+      // Car started - show steering tutorial if not used yet
       if (state.steeringUsed) {
         tutorialState = 'none';
-      } else if (state.crankPercentage < 40) {
-        tutorialState = 'crank';
       } else {
         tutorialState = 'steering';
       }
+    } else if (state.carStarted) {
+      // Car started but not driving yet - show steering tutorial
+      tutorialState = 'steering';
     } else {
       // Keys are in ignition but car not started - ignition menu will handle overlay
       tutorialState = 'none';
@@ -168,16 +165,14 @@ export class TutorialSystem {
           this.blinkText.setDepth(1);
           this.blinkText.setVisible(true);
         }
-        this.updateTutorialMask(tutorialState as 'keys-and-ignition' | 'crank' | 'steering' | 'exit-warning');
+        this.updateTutorialMask(tutorialState as 'keys-and-ignition' | 'steering' | 'exit-warning');
         
         // Set appropriate text based on tutorial state
         switch (tutorialState) {
           case 'keys-and-ignition':
             this.setBlinkText('Put keys in ignition');
             break;
-          case 'crank':
-            this.setBlinkText('Turn the crank');
-            break;
+          // Speed crank removed - no crank tutorial
           case 'steering':
             this.setBlinkText('Use steering wheel');
             break;
@@ -192,7 +187,7 @@ export class TutorialSystem {
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      // console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'crankPercentage:', state.crankPercentage, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType, 'inExitCollisionPath:', state.inExitCollisionPath);
+      // console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType, 'inExitCollisionPath:', state.inExitCollisionPath);
       this.lastTutorialState = tutorialState;
     }
   }
@@ -240,7 +235,7 @@ export class TutorialSystem {
   /**
    * Update tutorial mask based on current state
    */
-  private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'crank' | 'steering' | 'exit-warning') {
+  private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'steering' | 'exit-warning') {
     if (!this.tutorialOverlay || !this.tutorialMaskGraphics) {
       console.log('Cannot update mask - overlay or mask graphics not found');
       return;
@@ -253,9 +248,7 @@ export class TutorialSystem {
       case 'keys-and-ignition':
         this.createKeysAndIgnitionMask();
         break;
-      case 'crank':
-        this.createCrankMask();
-        break;
+      // Speed crank removed - no crank mask
       case 'steering':
         this.createSteeringMask();
         break;
@@ -305,27 +298,7 @@ export class TutorialSystem {
     this.tutorialMaskGraphics.fillCircle(ignitionX, ignitionY, ignitionHoleRadius);
   }
 
-  /**
-   * Create mask for crank tutorial
-   */
-  private createCrankMask() {
-    // Create cutout around speed crank area
-    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
-    
-    // Get speed crank position from GameUI (if available)
-    if (this.gameUI) {
-      const crankPos = this.gameUI.getSpeedCrankPosition();
-      const crankRadius = Math.max(crankPos.width, crankPos.height) / 2 + 20; // Add padding
-      this.tutorialMaskGraphics.fillCircle(crankPos.x, crankPos.y, crankRadius);
-    } else {
-      // Fallback to calculated position
-      const gameWidth = this.scene.cameras.main.width;
-      const gameHeight = this.scene.cameras.main.height;
-      const crankX = gameWidth * 0.7;
-      const crankY = gameHeight * 0.6;
-      this.tutorialMaskGraphics.fillCircle(crankX, crankY, 50);
-    }
-  }
+  // Speed crank mask method removed - using automatic speed progression
 
   /**
    * Create mask for steering tutorial

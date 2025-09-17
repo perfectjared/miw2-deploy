@@ -92,6 +92,12 @@ export class CarMechanics {
   private carX: number = 0;
   private currentSteeringValue: number = 0;
   private turn: number = 0;
+  
+  // Speed Progression System
+  private baseSpeed: number = 0; // Base speed from crank input
+  private speedProgressionStartStep: number = 0; // When speed progression started (step-based)
+  private speedProgressionDurationSteps: number = 1800; // 1800 steps to reach max progression (30 seconds at 60fps)
+  private maxSpeedMultiplier: number = 2.0; // Maximum 2x speed multiplier
   // private shouldAutoRestartDriving: boolean = false; // Unused
   // private shouldAutoResumeAfterCollision: boolean = false; // Unused
   
@@ -202,7 +208,7 @@ export class CarMechanics {
   /**
    * Start driving mode
    */
-  public startDriving() {
+  public startDriving(currentStep: number = 0) {
     this.drivingMode = true;
     // this.shouldAutoRestartDriving = true; // Removed unused property
     //console.log('Starting driving...');
@@ -215,7 +221,11 @@ export class CarMechanics {
     // Keep visual car fixed; do not set X here
     
     // Plan exits for this driving sequence
+    console.log('🚗 Starting driving - planning exits...');
     this.planExitsForSequence();
+    
+    // Start automatic speed progression
+    this.startAutomaticSpeedProgression(currentStep);
     
     this.startForwardMovementTimer();
     this.startNeutralReturnTimer();
@@ -301,7 +311,8 @@ export class CarMechanics {
       });
     });
     
-    console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}%`));
+    console.log('🎯 Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}%`));
+    console.log('🎯 Total planned exits:', this.plannedExits.length);
   }
 
   /**
@@ -310,16 +321,26 @@ export class CarMechanics {
   public updateProgress(progress: number) {
     this.currentSequenceProgress = progress;
     
+    // Debug logging for exit spawning
+    if (progress % 10 === 0) { // Log every 10 progress points
+      console.log(`Progress: ${progress}%, Planned exits: ${this.plannedExits.length}`);
+      this.plannedExits.forEach(exit => {
+        console.log(`  Exit ${exit.number}: Preview ${exit.previewThreshold}% (spawned: ${exit.previewSpawned}), Exit ${exit.exitThreshold}% (spawned: ${exit.exitSpawned})`);
+      });
+    }
+    
     // Check if any planned exits should be spawned
     this.plannedExits.forEach(plannedExit => {
       // Spawn preview when preview threshold is reached
       if (!plannedExit.previewSpawned && progress >= plannedExit.previewThreshold) {
+        console.log(`🎯 Spawning preview for Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExitPreview(plannedExit);
         plannedExit.previewSpawned = true;
       }
       
       // Spawn actual exit when exit threshold is reached
       if (!plannedExit.exitSpawned && progress >= plannedExit.exitThreshold) {
+        console.log(`🚪 Spawning Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExit(plannedExit);
         plannedExit.exitSpawned = true;
       }
@@ -508,17 +529,80 @@ export class CarMechanics {
   // (removed additive steering gating)
 
   /**
-   * Handle speed crank input
+   * Start automatic speed progression when driving begins
    */
-  public handleSpeedCrank(percentage: number) {
-    //console.log('CarMechanics: Speed crank set to', percentage + '%');
+  private startAutomaticSpeedProgression(currentStep: number) {
+    if (this.speedProgressionStartStep === 0) {
+      this.speedProgressionStartStep = currentStep;
+      this.baseSpeed = this.config.carMaxSpeed; // Use max speed as base
+      console.log(`🚀 Starting automatic speed progression at step ${currentStep}`);
+    }
+  }
+
+  /**
+   * Update car speed with logarithmic progression (step-based)
+   */
+  private updateCarSpeedWithProgression(currentStep: number) {
+    if (this.baseSpeed === 0) {
+      this.carSpeed = 0;
+      this.speedProgressionStartStep = 0; // Reset progression timer
+      return;
+    }
     
-    // Update car speed based on crank percentage
-    // Convert percentage (0-100) to actual speed
-    const maxSpeed = this.config.carMaxSpeed;
-    this.carSpeed = (percentage / 100) * maxSpeed;
+    if (this.speedProgressionStartStep === 0) {
+      // No progression started yet, use base speed
+      this.carSpeed = this.baseSpeed;
+      return;
+    }
     
-    //console.log('CarMechanics: Car speed set to', this.carSpeed);
+    // Calculate how many steps have elapsed
+    const elapsedSteps = currentStep - this.speedProgressionStartStep;
+    
+    // Target is 200% speed (2.0x multiplier)
+    const targetMultiplier = 2.0;
+    const currentMultiplier = this.carSpeed / this.baseSpeed;
+    
+    // Calculate distance to target (how much more we need to reach 200%)
+    const distanceToTarget = targetMultiplier - currentMultiplier;
+    
+    // If we're very close to target, snap to it
+    if (distanceToTarget < 0.01) {
+      this.carSpeed = this.baseSpeed * targetMultiplier;
+      return;
+    }
+    
+    // Logarithmic approach: start with 2% per step, decreasing as we approach target
+    // Use logarithmic curve: log(distance + 1) / log(2) gives us decreasing increments
+    const logFactor = Math.log(distanceToTarget + 1) / Math.log(2);
+    
+    // Base increment is 2% of the remaining distance, scaled by logarithmic factor
+    const baseIncrementPercent = 0.02; // 2% per step
+    const incrementPercent = baseIncrementPercent * logFactor;
+    
+    // Calculate the actual speed increment
+    const speedIncrement = this.baseSpeed * incrementPercent;
+    
+    // Apply the increment
+    this.carSpeed += speedIncrement;
+    
+    // Cap at target speed
+    this.carSpeed = Math.min(this.carSpeed, this.baseSpeed * targetMultiplier);
+    
+    // Debug logging every 300 steps (5 seconds at 60fps)
+    if (elapsedSteps > 0 && elapsedSteps % 300 === 0) {
+      const currentPercent = Math.round((this.carSpeed / this.baseSpeed) * 100);
+      const incrementThisStep = Math.round(incrementPercent * 100 * 100) / 100; // Show as percentage
+      console.log(`🚀 Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
+    }
+  }
+
+  /**
+   * Reset speed progression to default (called when hitting pothole)
+   */
+  private resetSpeedProgression() {
+    console.log('🔄 Resetting speed progression due to pothole hit');
+    this.speedProgressionStartStep = 0;
+    this.carSpeed = this.baseSpeed; // Reset to base speed
   }
 
   /**
@@ -538,10 +622,10 @@ export class CarMechanics {
   /**
    * Update car mechanics (called from main update loop)
    */
-  public update() {
+  public update(currentStep: number = 0) {
     if (!this.drivingMode || this.drivingPaused) return;
     
-    this.updateForwardMovement();
+    this.updateForwardMovement(currentStep);
     this.updateCarPosition();
     this.updateRoadLines();
     this.updateObstacles();
@@ -678,9 +762,12 @@ export class CarMechanics {
   /**
    * Update forward movement
    */
-  private updateForwardMovement() {
+  private updateForwardMovement(currentStep: number = 0) {
     if (!this.drivingMode || this.drivingPaused) return;
-    // Car speed is driven by the speed crank; do not auto-accelerate here.
+    
+    // Update speed progression automatically
+    this.updateCarSpeedWithProgression(currentStep);
+    
     // Update speed display based on current speed
     const speedPercentage = Math.round((this.carSpeed / this.config.carMaxSpeed) * 100);
     // Emit speed update event for UI
@@ -895,9 +982,13 @@ export class CarMechanics {
    * Update obstacles
    */
   private updateObstacles() {
-    // Remove obstacles that are off screen
+    // Remove obstacles that are off screen (but not exits - they should persist for collision detection)
     this.obstacles.forEach(obstacle => {
-      if (obstacle.y > this.scene.cameras.main.height) {
+      const isExit = obstacle.getData('isExit');
+      const isExitPreview = obstacle.getData('isExitPreview');
+      
+      // Only remove non-exit obstacles when they go off screen
+      if (!isExit && !isExitPreview && obstacle.y > this.scene.cameras.main.height) {
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
         if (visualToDestroy) visualToDestroy.destroy();
         obstacle.destroy();
@@ -976,6 +1067,9 @@ export class CarMechanics {
     this.pauseDriving();
     this.scene.events.emit('carCollision');
     if (isPothole) {
+      // Reset speed progression when hitting a pothole
+      this.resetSpeedProgression();
+      
       // Let GameScene schedule the overlay cleanly (avoids double-show conflicts)
       this.scene.events.emit('potholeHit');
       // Auto-resume a bit later since pothole menu is ephemeral/non-blocking

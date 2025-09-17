@@ -90,7 +90,9 @@ export class GameScene extends Phaser.Scene {
   
   // Driving state
   private drivingMode: boolean = false;
+  // Direct steering system (no delay, no interpolation)
   private shouldAutoRestartDriving: boolean = false;
+  private exitDetectionLogCounter: number = 0;
   
   // UI state
   private currentPosition: string = 'frontseat';
@@ -565,7 +567,7 @@ export class GameScene extends Phaser.Scene {
     this.keySVG.setScale(0.08); // Scaled to match key physics object (radius 15)
     this.keySVG.setOrigin(0.5, 0.5);
     this.keySVG.setAlpha(0.8); // Semi-transparent overlay
-    this.keySVG.setDepth(1001); // Above the key circle
+    this.keySVG.setDepth(10001); // Above most UI elements but below speed display
     
     // Debug: Log key SVG creation
     console.log('🗝️ === KEY SVG CREATION DEBUG ===');
@@ -637,7 +639,7 @@ export class GameScene extends Phaser.Scene {
     this.magneticTarget.setScrollFactor(1, 1);
     
     // Set depth to be visible but not interfere with UI
-    this.magneticTarget.setDepth(999);
+    this.magneticTarget.setDepth(10001); // Above most UI elements but below speed display
     
     // Add to game content container so it moves with camera
     this.gameContentContainer.add(this.magneticTarget);
@@ -691,12 +693,7 @@ export class GameScene extends Phaser.Scene {
         const plannedExits = this.carMechanics.getPlannedExits();
         this.gameUI.updateThresholdIndicators(plannedExits);
         // Auto-snap crank to 0 when keys are out of ignition
-        if (!state.keysInIgnition && state.speedCrankPercentage !== 0) {
-          this.carMechanics.handleSpeedCrank(0);
-          this.gameUI.updateSpeedCrank(0);
-          // Reflect in state once to keep consistency
-          this.gameState.updateState({ speedCrankPercentage: 0 });
-        }
+        // Speed crank removed - no need to reset
         this.scheduleTutorialUpdate(0);
       },
       onSaveComplete: (success) => {
@@ -730,6 +727,12 @@ export class GameScene extends Phaser.Scene {
     this.events.on('potholeHit', () => {
       const currentStep = this.gameState.getState().step || 0;
       this.potholeHitStep = currentStep + 1; // Show on next step
+      
+      // Apply large bump effect and screen shake for pothole collision
+      this.applyLargeBumpEffectToAllMatterObjects();
+      this.applyScreenShake(15, 300); // Strong shake for pothole impact
+      
+      console.log('💥 Pothole collision detected - applied bump effect and screen shake!');
     });
 
     // Scene events
@@ -742,7 +745,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('ignitionMenuHidden', this.onIgnitionMenuHidden, this);
     this.events.on('speedUpdate', this.onSpeedUpdate, this);
     this.events.on('steeringInput', this.onSteeringInput, this);
-    this.events.on('speedCrankInput', this.onSpeedCrankInput, this);
+    // Speed crank removed - using automatic speed progression
     this.events.on('cameraAngleChanged', this.onCameraAngleChanged, this);
     
     // Handle window blur (game loses focus) - show pause menu
@@ -767,7 +770,7 @@ export class GameScene extends Phaser.Scene {
     const tutorialState = {
       keysInIgnition: this.keysInIgnition,
       carStarted: this.carStarted,
-      crankPercentage: this.gameUI.getSpeedCrankPercentage(),
+      // Speed crank removed - using automatic speed progression
       hasOpenMenu: !!hasOpenMenu,
       currentMenuType: currentMenuType,
       steeringUsed: this.steeringUsed,
@@ -826,13 +829,7 @@ export class GameScene extends Phaser.Scene {
    * Reset speed crank to 0% across state, UI, and mechanics
    */
   public resetCrankToZero() {
-    this.gameState.updateState({ speedCrankPercentage: 0 });
-    if (this.gameUI?.updateSpeedCrank) {
-      this.gameUI.updateSpeedCrank(0);
-    }
-    if (this.carMechanics?.handleSpeedCrank) {
-      this.carMechanics.handleSpeedCrank(0);
-    }
+    // Speed crank removed - using automatic speed progression
   }
 
   /**
@@ -859,7 +856,8 @@ export class GameScene extends Phaser.Scene {
    */
   update() {
     // Update all systems
-    this.carMechanics.update();
+    const currentStep = this.gameState.getState().step || 0;
+    this.carMechanics.update(currentStep);
     
     // Update game UI (steering wheel gradual return to center)
     if (this.gameUI) {
@@ -935,7 +933,7 @@ export class GameScene extends Phaser.Scene {
       this.tutorialSystem.updateTutorialOverlay({
         keysInIgnition: this.keysInIgnition,
         carStarted: this.carStarted,
-        crankPercentage: this.gameUI.getSpeedCrankPercentage(),
+        // Speed crank removed - using automatic speed progression
         hasOpenMenu: false,
         currentMenuType: null,
         steeringUsed: this.steeringUsed
@@ -1130,7 +1128,8 @@ export class GameScene extends Phaser.Scene {
     
     // Start driving mode when car is started
     if (!this.carMechanics.isDriving()) {
-      this.carMechanics.startDriving();
+      const currentStep = this.gameState.getState().step || 0;
+      this.carMechanics.startDriving(currentStep);
       console.log('Driving mode started with car ignition');
     }
     
@@ -1379,7 +1378,8 @@ export class GameScene extends Phaser.Scene {
       this.carMechanics.stopDriving();
       this.drivingMode = false;
     } else {
-      this.carMechanics.startDriving();
+      const currentStep = this.gameState.getState().step || 0;
+      this.carMechanics.startDriving(currentStep);
       this.drivingMode = true;
     }
   }
@@ -1413,11 +1413,136 @@ export class GameScene extends Phaser.Scene {
     }
     
   /**
+   * Apply screen shake effect to all cameras except UI/menu cameras
+   */
+  private applyScreenShake(intensity: number = 10, duration: number = 200) {
+    // Get all cameras in the scene
+    const cameras = this.cameras.cameras;
+    
+    cameras.forEach((camera: Phaser.Cameras.Scene2D.Camera) => {
+      // Skip UI and menu cameras (they should stay stable)
+      const cameraName = (camera as any).name || '';
+      if (cameraName.includes('UI') || cameraName.includes('Menu') || cameraName.includes('HUD')) {
+        return; // Skip UI/menu cameras
+      }
+      
+      // Apply screen shake to game cameras
+      camera.shake(intensity, duration);
+      console.log(`📳 Applied screen shake to camera: ${cameraName || 'unnamed'} (intensity: ${intensity}, duration: ${duration}ms)`);
+    });
+  }
+
+  /**
+   * Apply large bump effect to all matter physics objects (for pothole collisions)
+   */
+  private applyLargeBumpEffectToAllMatterObjects() {
+    const matterWorld = this.matter.world;
+    if (!matterWorld) return;
+    
+    // Get all bodies in the matter world
+    const allBodies = matterWorld.getAllBodies();
+    
+    console.log(`🔍 Found ${allBodies.length} total bodies in matter world`);
+    
+    // Apply large upward bump force to each body
+    allBodies.forEach((body: any, index: number) => {
+      // Skip static bodies (like anchors) but NOT sensors
+      if (body.isStatic) {
+        console.log(`⏭️ Skipping static body ${index}: ${body.label}`);
+        return;
+      }
+      
+      // Check if this is a virtual pet body (they have constraints that resist movement)
+      const isVirtualPet = body.label && body.label.includes('Circle Body') && 
+                           body.collisionFilter && body.collisionFilter.group === -2;
+      
+      // Apply much stronger force for pothole collision
+      const bumpForce = isVirtualPet ? 
+        { x: 0, y: -0.8 } : // Reduced vertical force for virtual pets
+        { x: 0, y: -0.5 }; // Strong force for other objects
+      
+      console.log(`💥 Applying bump to body ${index}: ${body.label} (isVirtualPet: ${isVirtualPet}, force: ${JSON.stringify(bumpForce)})`);
+      
+      (this.matter as any).body.applyForce(body, body.position, bumpForce);
+      
+      // Add larger random horizontal variation for more dramatic effect
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.5 : 0.2);
+      const randomForce = { x: randomX, y: bumpForce.y };
+      (this.matter as any).body.applyForce(body, body.position, randomForce);
+      
+      // Apply vertical damping specifically to virtual pets to reduce bounce
+      if (isVirtualPet) {
+        const currentVelocity = (this.matter as any).body.getVelocity(body);
+        const dampedVelocity = {
+          x: currentVelocity.x,
+          y: currentVelocity.y * 0.1 // Very strong vertical damping (90% reduction)
+        };
+        (this.matter as any).body.setVelocity(body, dampedVelocity);
+      }
+    });
+    
+    console.log(`💥 Applied LARGE bump effect to ${allBodies.length} matter physics objects (pothole collision)`);
+  }
+
+  /**
+   * Apply bump effect to all matter physics objects
+   */
+  private applyBumpEffectToAllMatterObjects() {
+    const matterWorld = this.matter.world;
+    if (!matterWorld) return;
+    
+    // Get all bodies in the matter world
+    const allBodies = matterWorld.getAllBodies();
+    
+    // Apply upward bump force to each body
+    allBodies.forEach((body: any, index: number) => {
+      // Skip static bodies (like anchors) but NOT sensors
+      if (body.isStatic) {
+        return;
+      }
+      
+      // Check if this is a virtual pet body (they have constraints that resist movement)
+      const isVirtualPet = body.label && body.label.includes('Circle Body') && 
+                           body.collisionFilter && body.collisionFilter.group === -2;
+      
+      // Apply stronger force to virtual pets since they're constrained
+      const bumpForce = isVirtualPet ? 
+        { x: 0, y: -0.2 } : // Reduced vertical force for virtual pets
+        { x: 0, y: -0.05 }; // Stronger force for other objects
+      
+      (this.matter as any).body.applyForce(body, body.position, bumpForce);
+      
+      // Add slight random horizontal variation for more natural feel
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.1 : 0.02);
+      const randomForce = { x: randomX, y: bumpForce.y };
+      (this.matter as any).body.applyForce(body, body.position, randomForce);
+      
+      // Apply vertical damping specifically to virtual pets to reduce bounce
+      if (isVirtualPet) {
+        const currentVelocity = (this.matter as any).body.getVelocity(body);
+        const dampedVelocity = {
+          x: currentVelocity.x,
+          y: currentVelocity.y * 0.4 // Moderate vertical damping (60% reduction)
+        };
+        (this.matter as any).body.setVelocity(body, dampedVelocity);
+      }
+    });
+    
+    console.log(`🚗 Applied bump effect to ${allBodies.length} matter physics objects`);
+  }
+
+  /**
    * Event handlers
    */
   private onStepEvent(step: number) {
     console.log('GameScene: Received step event:', step);
     this.gameState.updateState({ step });
+    
+    // Apply bump effect to all matter physics objects every fourth step
+    if (step % 4 === 0) {
+      this.applyBumpEffectToAllMatterObjects();
+    }
+    
     // Drive tutorial blink text every step
     if ((this.tutorialSystem as any).handleStep) {
       (this.tutorialSystem as any).handleStep(step);
@@ -1435,7 +1560,7 @@ export class GameScene extends Phaser.Scene {
         this.events.emit('countdownChanged', {
           time: newTime,
           keysInIgnition: state.keysInIgnition,
-          speedCrankPercentage: state.speedCrankPercentage
+          // Speed crank removed - using automatic speed progression
         });
       }
     }
@@ -1489,7 +1614,7 @@ export class GameScene extends Phaser.Scene {
 
     // Schedule story overlay only after car started AND crank >= 40 AND steering occurred
     const stateNow = this.gameState.getState();
-    if (!stateNow.hasOpenMenu && !this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && stateNow.speedCrankPercentage >= 40 && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
+    if (!stateNow.hasOpenMenu && !this.chapter1Shown && this.storyOverlayScheduledStep === null && this.firstSteeringLoggedStep !== null && this.carStarted && this.hasShownCrankTutorial && this.hasClearedCrankTutorial && this.hasShownSteeringTutorial && this.hasClearedSteeringTutorial) {
       this.storyOverlayScheduledStep = step + 5;
       // Reveal look buttons when gating conditions are satisfied (same trigger as countdown)
       const ui: any = this.gameUI as any;
@@ -1552,10 +1677,11 @@ export class GameScene extends Phaser.Scene {
     this.stopMenuOpen = false;
   }
 
-  private onSpeedUpdate(_speed: number) {
-    // Don't update speedCrankPercentage automatically - it should only be controlled by user input
-    // The car's automatic acceleration should not affect the speed crank UI
-    //console.log('Car speed updated to:', speed + '%', 'but speed crank remains at:', this.gameUI.getSpeedCrankPercentage() + '%');
+  private onSpeedUpdate(speed: number) {
+    // Update the speed display in the UI
+    if (this.gameUI && typeof this.gameUI.updateSpeedDisplay === 'function') {
+      this.gameUI.updateSpeedDisplay(speed);
+    }
   }
 
   private onSteeringInput(value: number) {
@@ -1570,58 +1696,56 @@ export class GameScene extends Phaser.Scene {
         this.firstSteeringLoggedStep = this.gameState.getState().step || 0;
       }
     }
-    // Apply lateral gravity from steering ONLY when crank >= 40%
-    const crankPct = this.gameState.getState().speedCrankPercentage ?? 0;
-    if (crankPct >= 40) {
-      // Map dial value (-100..100) to lateral gravity (invert so right steer => left gravity)
-      const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
-      this.gravityXTarget = -(Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
-    } else {
-      // Below threshold: no lateral gravity influence from steering
-      this.gravityXTarget = 0;
-    }
     
+    // Apply lateral gravity from steering (always active now)
+    const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
+    this.gravityXTarget = -(Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
+    
+    // Send steering directly to car mechanics for immediate response
     this.carMechanics.handleSteering(value);
   }
 
-  private onSpeedCrankInput(percentage: number) {
-    // Avoid spamming console on high-frequency pointer moves (causes DevTools slowdown)
-    // console.log('Speed crank input:', percentage);
-    this.gameState.updateState({ speedCrankPercentage: percentage });
-    
-    // Update car mechanics with new speed
-    this.carMechanics.handleSpeedCrank(percentage);
-    // If crank falls below threshold, immediately stop lateral gravity effects
-    if (percentage < 40) {
-      this.gravityXTarget = 0;
-    }
-  }
+  // Speed crank input handler removed - using automatic speed progression
 
   /**
    * Check if player is positioned to collide with any exit on screen
    */
   public isPlayerInExitCollisionPath(): boolean {
-    console.log('isPlayerInExitCollisionPath called');
+    // Only log every 30 calls to reduce spam
+    if (!this.exitDetectionLogCounter) this.exitDetectionLogCounter = 0;
+    this.exitDetectionLogCounter++;
+    
+    if (this.exitDetectionLogCounter % 30 === 0) {
+      console.log(`isPlayerInExitCollisionPath called (${this.exitDetectionLogCounter} times)`);
+    }
+    
     if (!this.carMechanics) {
-      console.log('No carMechanics');
+      if (this.exitDetectionLogCounter % 30 === 0) {
+        console.log('No carMechanics');
+      }
       return false;
     }
     
     // Get all obstacles that are exits
     const obstacles = (this.carMechanics as any).obstacles || [];
-    console.log('Total obstacles:', obstacles.length);
+    if (this.exitDetectionLogCounter % 30 === 0) {
+      console.log('Total obstacles:', obstacles.length);
+    }
     
     const exits = obstacles.filter((obstacle: any) => {
       const isExit = obstacle.getData('isExit');
       const isPreview = obstacle.getData('isExitPreview');
-      // console.log('Obstacle - isExit:', isExit, 'isPreview:', isPreview);
       return isExit && !isPreview;
     });
     
-    console.log('Found exits:', exits.length);
+    if (this.exitDetectionLogCounter % 30 === 0) {
+      console.log('Found exits:', exits.length);
+    }
     
     if (exits.length === 0) {
-      console.log('No exits found');
+      if (this.exitDetectionLogCounter % 30 === 0) {
+        console.log('No exits found');
+      }
       return false;
     }
     
@@ -1654,7 +1778,9 @@ export class GameScene extends Phaser.Scene {
       const exitBelowCar = exitTop > carBottom;
       
       // Check if car is in the rightmost area based on screen position
-      // Since laneOffset is always 0, use car's actual X position instead
+      // Use carBounds.x (visual car position) not carMechanics.getCarX() (internal car position)
+      // carBounds.x represents the actual visual position on screen (~251.9999)
+      // carMechanics.getCarX() represents internal car position (~150)
       const carX = carBounds.x;
       const screenWidth = this.cameras.main.width;
       const rightmostThreshold = screenWidth * 0.7; // Car needs to be in rightmost 30% of screen
@@ -1662,7 +1788,7 @@ export class GameScene extends Phaser.Scene {
       const carInRightmostArea = carX >= rightmostThreshold;
       
       // Debug logging for position detection
-      console.log('Position detection - Car X:', carX, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
+      console.log('Position detection - Car bounds X:', carBounds.x, 'Car bounds left:', carBounds.left, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
       
       // Also check if car is horizontally aligned with the exit
       const carLeftEdge = carBounds.left;
@@ -1681,7 +1807,8 @@ export class GameScene extends Phaser.Scene {
     // Only log when we actually find exits and are in collision path
     if (exits.length > 0 && inPath) {
       console.log('🚨 EXIT COLLISION PATH DETECTED! Exits:', exits.length);
-      console.log('   Car X position:', carBounds.x, 'Rightmost threshold:', this.cameras.main.width * 0.7);
+      console.log('   Car visual X position (carBounds.x):', carBounds.x, 'Rightmost threshold:', this.cameras.main.width * 0.7);
+      console.log('   Car internal X position (carMechanics.getCarX()):', this.carMechanics.getCarX());
       console.log('   Car bottom:', carBounds.bottom, 'Exit top:', exits[0].getData('visual').getBounds().top);
     }
     // console.log('In exit collision path:', inPath);
@@ -1705,6 +1832,6 @@ export class GameScene extends Phaser.Scene {
     this.events.off('ignitionMenuHidden', this.onIgnitionMenuHidden, this);
     this.events.off('speedUpdate', this.onSpeedUpdate, this);
     this.events.off('steeringInput', this.onSteeringInput, this);
-    this.events.off('speedCrankInput', this.onSpeedCrankInput, this);
+    // Speed crank event removed - using automatic speed progression
   }
 }
