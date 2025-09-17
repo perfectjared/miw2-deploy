@@ -1835,17 +1835,29 @@ export class MenuManager {
       console.log('MenuManager: Resumed AppScene step counting');
     }
     
-    // Resume CarMechanics driving
+    // Reset car state - user must restart car after destination completion
     const gameScene = this.scene.scene.get('GameScene');
-    if (gameScene && (gameScene as any).carMechanics) {
-      (gameScene as any).carMechanics.resumeDriving();
-      console.log('MenuManager: Resumed CarMechanics driving');
-    }
-    
-    // Emit game resumed event
     if (gameScene) {
+      // Reset car started state
+      (gameScene as any).carStarted = false;
+      
+      // Reset speed crank percentage
+      if ((gameScene as any).gameState) {
+        (gameScene as any).gameState.updateState({ 
+          carStarted: false, 
+          speedCrankPercentage: 0 
+        });
+      }
+      
+      // Stop driving mode
+      if ((gameScene as any).carMechanics) {
+        (gameScene as any).carMechanics.stopDriving();
+        console.log('MenuManager: Stopped CarMechanics driving - car reset');
+      }
+      
+      // Emit game resumed event
       gameScene.events.emit('gameResumed');
-      console.log('MenuManager: Emitted gameResumed event');
+      console.log('MenuManager: Emitted gameResumed event and reset car state');
     }
   }
 }
