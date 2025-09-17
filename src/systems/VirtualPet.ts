@@ -28,6 +28,14 @@ export class VirtualPet {
 	private isHovering: boolean = false;
 	private petBaseColor: number = PET_CONFIG.petColor;
 
+	// Matter.js integration
+	private petBody?: MatterJS.BodyType;
+	private anchorBody?: MatterJS.BodyType;
+	private swayConstraint?: MatterJS.ConstraintType;
+	private anchorX: number = 0;
+	private anchorY: number = 0;
+	private steeringListenerBound?: (value: number) => void;
+
 	constructor(scene: Phaser.Scene, config: VirtualPetConfig = {}) {
 		this.scene = scene;
 		this.config = config;
@@ -63,7 +71,9 @@ export class VirtualPet {
 		const petRadius = width > 0 ? Math.floor(height * 0.27) : 25;
 		this.petBaseColor = this.config.petColor ?? 0xffcc66;
 		const leftShift = width > 0 ? Math.floor((this.baseRect?.width as number) * 0.30) : 0;
-		this.pet = this.scene.add.ellipse(x - leftShift, y - Math.floor(height * 0.35), petRadius * 2, petRadius * 2, this.petBaseColor, 1);
+		const petStartX = x - leftShift;
+		const petStartY = y - Math.floor(height * 0.35);
+		this.pet = this.scene.add.ellipse(petStartX, petStartY, petRadius * 2, petRadius * 2, this.petBaseColor, 1);
 		this.pet.setStrokeStyle(2, 0x000000, 1);
 		this.pet.setScrollFactor(0);
 
@@ -160,6 +170,13 @@ export class VirtualPet {
 		this.debugGraphics.setScrollFactor(0);
 		this.container.add(this.debugGraphics);
 
+		// --- Matter.js sway setup ---
+		this.setupMatterSway(petStartX, petStartY, petRadius);
+
+		// Listen to steering input to drive sway
+		this.steeringListenerBound = (value: number) => this.applySteeringSway(value);
+		this.scene.events.on('steeringInput', this.steeringListenerBound, this);
+
 		// Start passive food decay
 		this.foodDecayTimer = this.scene.time.addEvent({
 			delay: 2000,
@@ -171,6 +188,16 @@ export class VirtualPet {
 	}
 
 	public destroy() {
+		// Cleanup Matter bodies/constraints and event listener
+		if (this.steeringListenerBound) {
+			this.scene.events.off('steeringInput', this.steeringListenerBound, this);
+			this.steeringListenerBound = undefined;
+		}
+		if ((this.scene as any).matter) {
+			if (this.swayConstraint) (this.scene as any).matter.world.removeConstraint(this.swayConstraint);
+			if (this.petBody) (this.scene as any).matter.world.remove(this.petBody);
+			if (this.anchorBody) (this.scene as any).matter.world.remove(this.anchorBody);
+		}
 		this.container?.destroy();
 	}
 
@@ -239,6 +266,14 @@ export class VirtualPet {
 		const camAngle = (this.scene.cameras.main as any).angle ?? 0;
 		(this.container as any).setAngle?.(-camAngle);
 
+		// Sync visuals to Matter body if present
+		if (this.petBody) {
+			const px = (this.petBody.position as any).x;
+			const py = (this.petBody.position as any).y;
+			this.pet.setPosition(px, py);
+			this.faceSVG.setPosition(px, py);
+		}
+
 		// Keep food meter tracking alongside the pet and adapt width on resize
 		const cam = this.scene.cameras.main;
 		if (this.foodBarBG && this.foodBarFill && this.pet) {
@@ -258,6 +293,47 @@ export class VirtualPet {
 			this.foodBarBG.setPosition(barX, barY);
 			this.foodBarFill.setPosition(barX - Math.floor(this.foodBarBG.width / 2), barY);
 			this.foodLabel.setPosition(barX - 46, barY - 9);
+		}
+	}
+
+	// ---- Matter helpers ----
+	private setupMatterSway(px: number, py: number, petRadius: number) {
+		const m = (this.scene as any).matter;
+		if (!m) return; // Matter disabled in this scene
+
+		// Anchor is a static body at the initial pet position
+		this.anchorX = px;
+		this.anchorY = py;
+		this.anchorBody = m.add.circle(px, py, Math.max(1, Math.floor(petRadius * 0.2)), { isStatic: true, isSensor: true, collisionFilter: { group: -2, category: 0, mask: 0 } });
+
+		// Pet physics body (small/light, no gravity)
+		this.petBody = m.add.circle(px, py, Math.max(6, Math.floor(petRadius * 0.5)), {
+			frictionAir: 0.06,
+			friction: 0,
+			restitution: 0.2,
+			isSensor: true,
+			collisionFilter: { group: -2, category: 0, mask: 0 }
+		});
+		(this.petBody as any).ignoreGravity = true;
+
+		// Soft constraint to make it sway
+		this.swayConstraint = m.add.constraint(this.anchorBody as any, this.petBody as any, Math.max(1, Math.floor(petRadius * 0.4)), 0.002, {
+			damping: 0.15,
+			stiffness: 0.002
+		});
+	}
+
+	private applySteeringSway(steeringValue: number) {
+		if (!this.petBody) return;
+		// Map steering (-100..100) to a small lateral force
+		const norm = Phaser.Math.Clamp(steeringValue / 100, -1, 1);
+		// Tunables for sway responsiveness
+		const maxForce = 0.0008; // keep very small for subtle sway
+		const forceX = maxForce * norm;
+		const forceY = 0;
+		const m = (this.scene as any).matter;
+		if (m && m.body && this.petBody) {
+			m.body.applyForce(this.petBody, this.petBody.position, { x: forceX, y: forceY });
 		}
 	}
 
