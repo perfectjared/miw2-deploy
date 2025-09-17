@@ -1381,7 +1381,7 @@ export class GameScene extends Phaser.Scene {
         }
         const menuScene = this.scene.get('MenuScene');
         if (menuScene) {
-          menuScene.events.emit('showObstacleMenu', 'exit');
+          menuScene.events.emit('showDestinationMenu', true);
           this.scene.bringToTop('MenuScene');
         }
       }
