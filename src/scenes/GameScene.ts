@@ -1601,7 +1601,7 @@ export class GameScene extends Phaser.Scene {
    * Check if player is positioned to collide with any exit on screen
    */
   public isPlayerInExitCollisionPath(): boolean {
-    // console.log('isPlayerInExitCollisionPath called');
+    console.log('isPlayerInExitCollisionPath called');
     if (!this.carMechanics) {
       // console.log('No carMechanics');
       return false;
@@ -1609,7 +1609,7 @@ export class GameScene extends Phaser.Scene {
     
     // Get all obstacles that are exits
     const obstacles = (this.carMechanics as any).obstacles || [];
-    // console.log('Total obstacles:', obstacles.length);
+    console.log('Total obstacles:', obstacles.length);
     
     const exits = obstacles.filter((obstacle: any) => {
       const isExit = obstacle.getData('isExit');
@@ -1618,7 +1618,7 @@ export class GameScene extends Phaser.Scene {
       return isExit && !isPreview;
     });
     
-    // console.log('Found exits:', exits.length);
+    console.log('Found exits:', exits.length);
     
     if (exits.length === 0) {
       // console.log('No exits found');
@@ -1664,6 +1664,9 @@ export class GameScene extends Phaser.Scene {
       const rightmostLaneThreshold = 1.7 - (laneRange * 0.3); // Top 30% of lane positions
       
       const carInRightmostLane = carLanePosition >= rightmostLaneThreshold;
+      
+      // Debug logging for lane detection
+      console.log('Lane detection - Car lane position:', carLanePosition, 'Threshold:', rightmostLaneThreshold, 'In rightmost lane:', carInRightmostLane);
       
       // Also check if car is horizontally aligned with the exit
       const carLeftEdge = carBounds.left;
