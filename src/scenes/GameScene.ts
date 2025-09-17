@@ -1603,7 +1603,7 @@ export class GameScene extends Phaser.Scene {
   public isPlayerInExitCollisionPath(): boolean {
     console.log('isPlayerInExitCollisionPath called');
     if (!this.carMechanics) {
-      // console.log('No carMechanics');
+      console.log('No carMechanics');
       return false;
     }
     
@@ -1621,18 +1621,18 @@ export class GameScene extends Phaser.Scene {
     console.log('Found exits:', exits.length);
     
     if (exits.length === 0) {
-      // console.log('No exits found');
+      console.log('No exits found');
       return false;
     }
     
     // Check if any exit is close enough to the car's position
     const carBounds = (this.carMechanics as any).drivingCar?.getBounds();
     if (!carBounds) {
-      // console.log('No car bounds');
+      console.log('No car bounds');
       return false;
     }
     
-    // console.log('Car bounds:', carBounds);
+    console.log('Car bounds:', carBounds);
     
     // Check if car is approaching any exit from the right
     const inPath = exits.some((exit: any) => {
