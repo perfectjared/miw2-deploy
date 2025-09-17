@@ -66,7 +66,7 @@ export const CAR_CONFIG = {
   exitSpeed: 1.0,
   
   // Debug/Radar Settings
-  radarEnabled: true,
+  radarEnabled: false, // Disabled for cleaner UI
   radarX: 0, // Will be set dynamically
   radarY: 10,
   radarWidth: 33,
