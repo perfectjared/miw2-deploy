@@ -654,43 +654,8 @@ export class CarMechanics {
    * Update obstacles
    */
   private updateObstacles() {
-    // Move existing obstacles
+    // Remove obstacles that are off screen
     this.obstacles.forEach(obstacle => {
-      // Advance logical position continuously
-      obstacle.y += this.config.potholeSpeed;
-      // Apply lateral offset so obstacles follow road/world movement
-      const gameWidth = this.scene.cameras.main.width;
-      const gameHeight = this.scene.cameras.main.height;
-      const horizonY = gameHeight * 0.3;
-      const t = Phaser.Math.Clamp((obstacle.y - horizonY) / (gameHeight - horizonY), 0, 1);
-      const bendStrength = this.config.roadBendStrength ?? 140;
-      const centerX = gameWidth / 2;
-      const end = this.currentCurve * bendStrength;
-      const control = end * 0.6;
-      const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
-      const laneSpacingBottom = this.laneSpacingBottom;
-      // Ensure obstacle has a laneIndex; if not, derive nearest lane from baseX once
-      let laneIndex: number | undefined = obstacle.getData('laneIndex');
-      if (typeof laneIndex !== 'number') {
-        const baseX = obstacle.getData('baseX') ?? obstacle.x;
-        const approx = (baseX - centerX) / laneSpacingBottom;
-        // Snap to nearest from allowed lane indices
-        laneIndex = this.laneIndices.reduce((prev, curr) => Math.abs(curr - approx) < Math.abs(prev - approx) ? curr : prev, this.laneIndices[0]);
-        obstacle.setData('laneIndex', laneIndex);
-      }
-      // Do not apply world lateral offset so obstacles don't move with steering
-      const worldOffset = 0;
-      let laneTerm = laneIndex * (laneSpacingBottom * t);
-      if (obstacle.getData('isExit')) {
-        // Project exit along the far-right lane, not by initial laneIndex
-        laneTerm = this.laneIndices[this.laneIndices.length - 1] * (laneSpacingBottom * t);
-      }
-      obstacle.x = centerX + bez(t) + laneTerm + worldOffset;
-
-      // Visual positioning is now handled step-based in onCountdownChanged()
-      // Only update logical position here, visual updates happen on step changes
-      
-      // Remove obstacles that are off screen
       if (obstacle.y > this.scene.cameras.main.height) {
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
         if (visualToDestroy) visualToDestroy.destroy();
@@ -700,51 +665,13 @@ export class CarMechanics {
           this.obstacles.splice(index, 1);
         }
       }
+    });
 
-      // Screen-space collision with fixed car representation
-      const carBounds = this.drivingCar.getBounds();
-      // Use visual size/width, but logical Y (visual Y steps only on countdown)
-      const visualTwin: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
-      let obsBounds: Phaser.Geom.Rectangle;
-      if (visualTwin) {
-        const halfW = visualTwin.displayWidth / 2;
-        const halfH = visualTwin.displayHeight / 2;
-        obsBounds = new Phaser.Geom.Rectangle(
-          visualTwin.x - halfW,
-          obstacle.y - halfH,
-          visualTwin.displayWidth,
-          visualTwin.displayHeight
-        );
-      } else {
-        obsBounds = obstacle.getBounds();
-      }
-      const nearLogged = obstacle.getData('nearLogged');
-      if (!nearLogged && Math.abs(obstacle.y - this.drivingCar.y) < 80) {
-        // One-time near log to verify approach (disabled to avoid console spam)
-        // console.log('Pothole near car: carX=', this.drivingCar.x, 'obsX=', obstacle.x, 'carY=', this.drivingCar.y, 'obsY=', obstacle.y);
-        obstacle.setData('nearLogged', true);
-      }
-      // Only allow collision once the obstacle's bottom reaches the car's top
-      // Use the visual rectangle's bounds entirely so collision matches what the player sees
-      // const isExit = !!obstacle.getData('isExit'); // Unused
-      const isPothole = !!obstacle.getData('isPothole');
-      const visualBounds = visualTwin ? visualTwin.getBounds() : obsBounds;
-      // Shrink bounds to make collisions less wide, especially for potholes
-      const tightBounds = Phaser.Geom.Rectangle.Clone(visualBounds);
-      const shrinkW = isPothole ? 12 : 4; // narrower pothole collision
-      const shrinkH = isPothole ? 6 : 2;
-      Phaser.Geom.Rectangle.Inflate(tightBounds, -shrinkW, -shrinkH);
-      if (this.drivingCar && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, tightBounds)) {
-        // Debug log disabled to avoid console flooding during collisions
-        // console.log('COLLISION: car vs obstacle', {
-        //   carX: this.drivingCar.x,
-        //   carY: this.drivingCar.y,
-        //   obsX: obstacle.x,
-        //   obsY: obstacle.y,
-        //   usingVisualBounds: !!visualTwin,
-        //   isPothole: !!obstacle.getData('isPothole')
-        // });
-        // Destroy obstacle on collision
+    // Screen-space collision with fixed car representation
+    const carBounds = this.drivingCar.getBounds();
+    this.obstacles.forEach(obstacle => {
+      const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+      if (visual && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, visual.getBounds())) {
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
         if (visualToDestroy) visualToDestroy.destroy();
         this.handleCollisionWithObstacle(obstacle);
@@ -763,11 +690,6 @@ export class CarMechanics {
           this.exitPreviews.splice(index, 1);
         }
       }
-    });
-    
-    // Move exit previews down the road
-    this.exitPreviews.forEach(previewData => {
-      previewData.preview.y += this.config.potholeSpeed;
     });
 
     // Record last steering value used for visual horizontal updates
@@ -1196,6 +1118,9 @@ export class CarMechanics {
     
     // Update regular obstacles
     this.obstacles.forEach(obstacle => {
+      // Step-based movement: advance logical position
+      obstacle.y += this.config.potholeSpeed;
+      
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (!visual) return;
       
@@ -1254,6 +1179,9 @@ export class CarMechanics {
     // Update preview visuals
     this.exitPreviews.forEach(previewData => {
       const { preview, visual } = previewData;
+      
+      // Step-based movement: advance logical position
+      preview.y += this.config.potholeSpeed;
       
       // Update preview visual position
       const snappedY = roadY + Math.max(0, Math.floor(((preview.y - roadY) + phaseOffset) / this.horizontalSpacing)) * this.horizontalSpacing;
