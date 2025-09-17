@@ -301,14 +301,20 @@ export class VirtualPet {
 		const m = (this.scene as any).matter;
 		if (!m) return; // Matter disabled in this scene
 
+		// Randomize parameters for unique pet movement
+		const randomFactor = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
+		const dampingVariation = 0.1 + Math.random() * 0.2; // 0.1 to 0.3
+		const stiffnessVariation = 0.001 + Math.random() * 0.003; // 0.001 to 0.004
+		const frictionVariation = 0.03 + Math.random() * 0.06; // 0.03 to 0.09
+
 		// Anchor is a static body at the initial pet position
 		this.anchorX = px;
 		this.anchorY = py;
 		this.anchorBody = m.add.circle(px, py, Math.max(1, Math.floor(petRadius * 0.2)), { isStatic: true, isSensor: true, collisionFilter: { group: -2, category: 0, mask: 0 } });
 
-		// Pet physics body (small/light, no gravity)
+		// Pet physics body (small/light, no gravity) with randomized properties
 		this.petBody = m.add.circle(px, py, Math.max(6, Math.floor(petRadius * 0.5)), {
-			frictionAir: 0.06,
+			frictionAir: frictionVariation,
 			friction: 0,
 			restitution: 0.2,
 			isSensor: true,
@@ -316,20 +322,22 @@ export class VirtualPet {
 		});
 		(this.petBody as any).ignoreGravity = true;
 
-		// Soft constraint to make it sway
-		this.swayConstraint = m.add.constraint(this.anchorBody as any, this.petBody as any, Math.max(1, Math.floor(petRadius * 0.4)), 0.002, {
-			damping: 0.15,
-			stiffness: 0.002
+		// Soft constraint to make it sway with randomized parameters
+		const constraintLength = Math.max(1, Math.floor(petRadius * 0.4 * randomFactor));
+		this.swayConstraint = m.add.constraint(this.anchorBody as any, this.petBody as any, constraintLength, stiffnessVariation, {
+			damping: dampingVariation,
+			stiffness: stiffnessVariation
 		});
 	}
 
 	private applySteeringSway(steeringValue: number) {
 		if (!this.petBody) return;
 		// Map steering (-100..100) to a small lateral force
+		// Reverse direction: left steering should push pets left (negative force)
 		const norm = Phaser.Math.Clamp(steeringValue / 100, -1, 1);
 		// Tunables for sway responsiveness
 		const maxForce = 0.0008; // keep very small for subtle sway
-		const forceX = maxForce * norm;
+		const forceX = -maxForce * norm; // Negative to reverse direction
 		const forceY = 0;
 		const m = (this.scene as any).matter;
 		if (m && m.body && this.petBody) {
