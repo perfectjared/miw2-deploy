@@ -220,7 +220,7 @@ export class GameUI {
     this.createCountdownTimer();
     this.createProgressText(); // Updated method name
     this.createMoneyAndHealthText();
-    this.createManagerValuesText();
+    // this.createManagerValuesText(); // Commented out debug text
     this.createNavigationButtons();
     this.createSpeedCrank();
     this.createFrontseatDragDial();
@@ -702,6 +702,7 @@ export class GameUI {
     // Remove extraneous square; indicator line will represent value
     
     knob.setPosition(dialX, dialY);
+    knob.setDepth(997); // Below SVG but above background
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
     // Create SVG overlay for visual appeal

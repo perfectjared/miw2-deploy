@@ -1657,7 +1657,7 @@ export class GameScene extends Phaser.Scene {
       // Car is "in path" if its right edge is close to or past the exit's left edge
       const carRightEdge = carBounds.right;
       const exitLeftEdge = exitBounds.left;
-      const collisionThreshold = 50; // pixels - how close car needs to be to trigger warning
+      const collisionThreshold = this.cameras.main.width * 0.1; // 10% of screen width - how close car needs to be to trigger warning
       
       const carInCollisionPath = carRightEdge >= (exitLeftEdge - collisionThreshold);
       
