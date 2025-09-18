@@ -925,6 +925,14 @@ export class GameScene extends Phaser.Scene {
       this.keySVG.setPosition(worldPos.x, worldPos.y);
       // Store physics rotation for later combination with camera angle
       (this.keySVG as any).physicsRotation = this.frontseatKeys.gameObject.rotation;
+      
+      // Update SVG depth to match physics object depth during drag
+      const isDragging = (this.frontseatKeys.gameObject as any).isDragging;
+      if (isDragging) {
+        this.keySVG.setDepth(11001); // Above the physics object (11000)
+      } else {
+        this.keySVG.setDepth(10001); // Back to normal depth
+      }
     }
     
     // Keyhole SVG is now positioned independently and doesn't need updates
@@ -938,6 +946,14 @@ export class GameScene extends Phaser.Scene {
       );
       this.hotdogSVG.setPosition(worldPos.x, worldPos.y);
       this.hotdogSVG.setRotation(this.frontseatTrash.gameObject.rotation);
+      
+      // Update SVG depth to match physics object depth during drag
+      const isDragging = (this.frontseatTrash.gameObject as any).isDragging;
+      if (isDragging) {
+        this.hotdogSVG.setDepth(11001); // Above the physics object (11000)
+      } else {
+        this.hotdogSVG.setDepth(1001); // Back to normal depth
+      }
     }
 
     // Small: open a short attraction window when keys were just released from drag
