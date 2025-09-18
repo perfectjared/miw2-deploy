@@ -783,7 +783,7 @@ export class GameScene extends Phaser.Scene {
       inExitCollisionPath: this.isPlayerInExitCollisionPath()
     };
     
-   // console.log('updateTutorialSystem called:', tutorialState);
+    console.log('🔥 TUTORIAL DEBUG: updateTutorialSystem called:', tutorialState);
     // Track tutorial state transitions for crank/steering
     const prevCrankShown = this.hasShownCrankTutorial;
     const prevSteeringShown = this.hasShownSteeringTutorial;
