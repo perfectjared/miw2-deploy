@@ -814,6 +814,11 @@ export class GameUI {
        lastPointerX = pointer.x;
        lastPointerY = pointer.y;
        
+       // Move SVG to front when dragging starts
+       if (this.steeringWheelSVG) {
+         this.steeringWheelSVG.setDepth(60000); // Very high depth during dragging
+       }
+       
        // Redraw knob with active color
        knob.clear();
        knob.fillStyle(0x666666);
@@ -881,6 +886,11 @@ export class GameUI {
       if (!isDragging) return;
       isDragging = false;
       this.isDragging = false;
+      
+      // Restore SVG depth when dragging ends
+      if (this.steeringWheelSVG) {
+        this.steeringWheelSVG.setDepth(50001); // Back to normal depth
+      }
       
       // Redraw knob with original color
       knob.clear();
