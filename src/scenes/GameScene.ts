@@ -1217,6 +1217,13 @@ export class GameScene extends Phaser.Scene {
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
 
+      // Turn the car off when keys are removed
+      if (this.carStarted) {
+        this.carStarted = false;
+        this.gameState.updateState({ carStarted: false });
+        try { this.carMechanics.stopDriving(); } catch {}
+      }
+      
       // Fully restore key physics to normal interactive state
       this.restoreKeyPhysics();
       
@@ -1590,7 +1597,7 @@ export class GameScene extends Phaser.Scene {
     this.gameState.updateState({ step });
     
     // Update car mechanics speed progression on step events
-    if (this.carMechanics && this.carMechanics.onStepEvent) {
+    if (this.carStarted && this.carMechanics && this.carMechanics.onStepEvent) {
       this.carMechanics.onStepEvent(step);
     }
     
