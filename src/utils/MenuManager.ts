@@ -873,17 +873,20 @@ export class MenuManager {
     
     // Create pointer down handler (works anywhere on screen)
     const pointerDownHandler = (pointer: Phaser.Input.Pointer) => {
+      console.log('🔥 IGNITION: Pointer down detected at', pointer.x, pointer.y);
       isDragging = true;
       lastPointerY = pointer.y;
       lastPointerX = pointer.x;
       lastUpdateTime = Date.now();
       velocity = 0; // Reset velocity when starting new drag
+      console.log('🔥 IGNITION: isDragging set to true, velocity reset to 0');
     };
     
     // Create pointer move handler
     const pointerMoveHandler = (pointer: Phaser.Input.Pointer) => {
       if (!isDragging) return;
       
+      console.log('🔥 IGNITION: Pointer move detected, isDragging:', isDragging);
       const currentTime = Date.now();
       const deltaTime = currentTime - lastUpdateTime;
       
@@ -923,6 +926,7 @@ export class MenuManager {
         velocity = 0;
         currentProgress = Phaser.Math.Clamp(currentProgress, 0, 1);
         
+        console.log('🔥 IGNITION: Progress updated to', currentProgress, 'velocity was', velocity);
         updateSlider();
       }
       
@@ -933,9 +937,11 @@ export class MenuManager {
     
     // Create pointer up handler
     const pointerUpHandler = () => {
+      console.log('🔥 IGNITION: Pointer up detected, isDragging was:', isDragging);
       isDragging = false;
       // Reset velocity to prevent momentum from continuing after drag ends
       velocity = 0;
+      console.log('🔥 IGNITION: isDragging set to false, velocity reset to 0');
     };
     
     // Update slider visual
@@ -963,6 +969,7 @@ export class MenuManager {
       if (!carStarted) {
         // Only apply gravity when not dragging - this prevents interference with user input
         if (!isDragging) {
+          console.log('🔥 IGNITION: Momentum update - applying gravity, isDragging:', isDragging, 'currentProgress:', currentProgress);
           // Apply gravity - slider constantly falls down
           velocity -= gravity;
           
