@@ -1595,7 +1595,9 @@ export class GameScene extends Phaser.Scene {
     }
     
     // Apply small bump effect to all matter physics objects every step
-    this.applySmallBumpEffectToAllMatterObjects();
+    if (this.carStarted) {
+      this.applySmallBumpEffectToAllMatterObjects();
+    }
     
     // Apply larger bump effect to all matter physics objects every fourth step
     if (step % 4 === 0 && this.carStarted) {
