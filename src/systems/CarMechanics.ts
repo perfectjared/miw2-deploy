@@ -1452,8 +1452,17 @@ export class CarMechanics {
     
     // Update regular obstacles
     this.obstacles.forEach(obstacle => {
-      // Step-based movement: advance logical position (compensated for step frequency)
-      obstacle.y += this.config.potholeSpeed * 60; // Multiply by 60 to match original 60fps speed
+      // Perspective-based movement: objects move slower when far away for more lead time, faster when close
+      const tVis = Phaser.Math.Clamp((obstacle.y - horizonY) / (gameHeight - horizonY), 0, 1);
+      
+      // Speed scaling: far objects (tVis near 0) move slower for more lead time, close objects (tVis near 1) move faster
+      // Use direct relationship: speed = baseSpeed * (0.5 + 0.5 * tVis)
+      // This means: tVis=0 (far) → speed=0.5x, tVis=1 (close) → speed=1x
+      const perspectiveSpeedMultiplier = 0.5 + 0.5 * tVis; // Range: 0.5 to 1.0
+      const perspectiveSpeed = this.config.potholeSpeed * 60 * perspectiveSpeedMultiplier;
+      
+      // Step-based movement: advance logical position with perspective scaling
+      obstacle.y += perspectiveSpeed;
       
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
       if (!visual) return;
