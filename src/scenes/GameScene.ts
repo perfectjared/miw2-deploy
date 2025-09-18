@@ -1077,13 +1077,7 @@ export class GameScene extends Phaser.Scene {
       this.gameState.updateState({ keysInIgnition: false });
       
       // Turn car off when key leaves magnetic range
-      if (this.carStarted) {
-        this.carStarted = false;
-        this.gameState.updateState({ carStarted: false });
-        try { this.carMechanics.stopDriving(); } catch {}
-        // Reset steering gravity target immediately
-        this.gravityXTarget = 0;
-      }
+      this.turnOffCar();
       
       // Fully restore key physics to normal interactive state
       this.restoreKeyPhysics();
@@ -1218,38 +1212,35 @@ export class GameScene extends Phaser.Scene {
    * Remove keys from ignition
    */
   public removeKeysFromIgnition() {
+    // Remove constraint if present
     if (this.keysConstraint) {
       this.matter.world.removeConstraint(this.keysConstraint);
       this.keysConstraint = null;
-      
-      // Reset keys in ignition state
-      this.keysInIgnition = false;
-      this.gameState.updateState({ keysInIgnition: false });
-
-      // Turn the car off when keys are removed
-      if (this.carStarted) {
-        this.carStarted = false;
-        this.gameState.updateState({ carStarted: false });
-        try { this.carMechanics.stopDriving(); } catch {}
-      }
-      
-      // Fully restore key physics to normal interactive state
-      this.restoreKeyPhysics();
-      
-      // Reset target color
-      this.magneticTarget.clear();
-      this.magneticTarget.lineStyle(3, 0xff0000, 1);
-      this.magneticTarget.strokeCircle(200, 520, 25);
-      
-      // Snap speed crank to 0% when keys are removed
-      this.resetCrankToZero();
-      
-      // Close the turn key menu first
-      this.closeCurrentMenu();
-      
-      // Update tutorial overlay after a small delay to ensure menu is closed (debounced)
-      this.scheduleTutorialUpdate(100);
     }
+
+    // Reset keys in ignition state
+    this.keysInIgnition = false;
+    this.gameState.updateState({ keysInIgnition: false });
+
+    // Turn car off regardless of whether a constraint existed
+    this.turnOffCar();
+
+    // Fully restore key physics to normal interactive state
+    this.restoreKeyPhysics();
+    
+    // Reset target color
+    this.magneticTarget.clear();
+    this.magneticTarget.lineStyle(3, 0xff0000, 1);
+    this.magneticTarget.strokeCircle(200, 520, 25);
+    
+    // Snap speed crank to 0% when keys are removed
+    this.resetCrankToZero();
+    
+    // Close the turn key menu first
+    this.closeCurrentMenu();
+    
+    // Update tutorial overlay after a small delay to ensure menu is closed (debounced)
+    this.scheduleTutorialUpdate(100);
   }
 
   /**
@@ -1924,5 +1915,16 @@ export class GameScene extends Phaser.Scene {
     this.events.off('speedUpdate', this.onSpeedUpdate, this);
     this.events.off('steeringInput', this.onSteeringInput, this);
     // Speed crank event removed - using automatic speed progression
+  }
+
+  /**
+   * Turn the car off: flip flags, stop driving, zero gravity target
+   */
+  private turnOffCar() {
+    if (!this.carStarted) return;
+    this.carStarted = false;
+    this.gameState.updateState({ carStarted: false });
+    try { this.carMechanics.stopDriving(); } catch {}
+    this.gravityXTarget = 0;
   }
 }
