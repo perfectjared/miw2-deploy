@@ -1338,6 +1338,13 @@ export class CarMechanics {
       this.scene.time.delayedCall(500, () => this.resumeDriving(), [], this);
     }
     if (isExit) {
+      // Clean up exit text before showing menu
+      const exitText: Phaser.GameObjects.Text | undefined = obstacle.getData('text');
+      if (exitText) {
+        exitText.destroy();
+        console.log('🗑️ Destroyed exit text after collision');
+      }
+      
       // Show blocking exit menu with dark overlay and require button press; do NOT auto-resume here
       // Also pause the global app step/countdown just like the pause menu
       const appScene = this.scene.scene.get('AppScene');
