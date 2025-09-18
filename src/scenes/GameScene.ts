@@ -1069,6 +1069,7 @@ export class GameScene extends Phaser.Scene {
       
     } else if (distance > magneticConfig.magneticRange && this.keysConstraint) {
       // Remove constraint if Keys is dragged too far away
+      console.log('🔥 CAR STOP: Keys left magnetic range, distance:', distance, 'magneticRange:', magneticConfig.magneticRange);
       this.matter.world.removeConstraint(this.keysConstraint);
       this.keysConstraint = null;
       
@@ -1166,7 +1167,7 @@ export class GameScene extends Phaser.Scene {
    * Handle remove keys event
    */
   private onRemoveKeys() {
-    console.log('Remove Keys clicked!');
+    console.log('🔥 CAR STOP: Remove Keys clicked!');
     this.removeKeysFromIgnition();
   }
 
@@ -1218,6 +1219,8 @@ export class GameScene extends Phaser.Scene {
    * Remove keys from ignition
    */
   public removeKeysFromIgnition() {
+    console.log('🔥 CAR STOP: removeKeysFromIgnition called, carStarted:', this.carStarted);
+    
     // Remove constraint if present
     if (this.keysConstraint) {
       this.matter.world.removeConstraint(this.keysConstraint);
@@ -1604,12 +1607,13 @@ export class GameScene extends Phaser.Scene {
    * Event handlers
    */
   private onStepEvent(step: number) {
-    console.log('GameScene: Received step event:', step);
+    console.log('🔥 CAR STOP: Step event:', step, 'carStarted:', this.carStarted);
     this.gameState.updateState({ step });
     
     // Authoritative car-on guard
     const stateAtStep = this.gameState.getState();
     const carOn = !!(stateAtStep.carStarted && this.carStarted);
+    console.log('🔥 CAR STOP: carOn guard:', carOn, 'stateAtStep.carStarted:', stateAtStep.carStarted, 'this.carStarted:', this.carStarted);
     
     // Update car mechanics speed progression on step events
     if (carOn && this.carMechanics && this.carMechanics.onStepEvent) {
@@ -1936,10 +1940,17 @@ export class GameScene extends Phaser.Scene {
    * Turn the car off: flip flags, stop driving, zero gravity target
    */
   private turnOffCar() {
+    console.log('🔥 CAR STOP: turnOffCar called, carStarted was:', this.carStarted);
     if (!this.carStarted) return;
     this.carStarted = false;
     this.gameState.updateState({ carStarted: false });
-    try { this.carMechanics.stopDriving(); } catch {}
+    try { 
+      console.log('🔥 CAR STOP: Calling carMechanics.stopDriving()');
+      this.carMechanics.stopDriving(); 
+    } catch (e) {
+      console.log('🔥 CAR STOP: Error calling stopDriving:', e);
+    }
     this.gravityXTarget = 0;
+    console.log('🔥 CAR STOP: Car turned off, carStarted now:', this.carStarted);
   }
 }
