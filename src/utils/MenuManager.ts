@@ -877,7 +877,7 @@ export class MenuManager {
       lastPointerY = pointer.y;
       lastPointerX = pointer.x;
       lastUpdateTime = Date.now();
-      velocity = 0;
+      velocity = 0; // Reset velocity when starting new drag
     };
     
     // Create pointer move handler
@@ -959,23 +959,26 @@ export class MenuManager {
     const momentumUpdate = () => {
       // Don't apply gravity or movement if car has started
       if (!carStarted) {
-        // Apply gravity - slider constantly falls down
-        velocity -= gravity;
-        
-        if (!isDragging && Math.abs(velocity) > 0.001) {
-          // Continue momentum when not dragging
-          currentProgress += velocity;
-          currentProgress = Phaser.Math.Clamp(currentProgress, 0, 1);
+        // Only apply gravity when not dragging - this prevents interference with user input
+        if (!isDragging) {
+          // Apply gravity - slider constantly falls down
+          velocity -= gravity;
           
-          // Apply momentum decay
-          velocity *= momentumDecay;
-          
-          updateSlider();
-        } else if (!isDragging) {
-          // Apply gravity even when not dragging
-          currentProgress += velocity;
-          currentProgress = Phaser.Math.Clamp(currentProgress, 0, 1);
-          updateSlider();
+          if (Math.abs(velocity) > 0.001) {
+            // Continue momentum when not dragging
+            currentProgress += velocity;
+            currentProgress = Phaser.Math.Clamp(currentProgress, 0, 1);
+            
+            // Apply momentum decay
+            velocity *= momentumDecay;
+            
+            updateSlider();
+          } else {
+            // Apply gravity even when velocity is small
+            currentProgress += velocity;
+            currentProgress = Phaser.Math.Clamp(currentProgress, 0, 1);
+            updateSlider();
+          }
         }
       } else {
         // Car has started - keep slider at the top
