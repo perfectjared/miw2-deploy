@@ -1773,6 +1773,12 @@ export class GameScene extends Phaser.Scene {
       }
     }
     
+    // If car is not started, ignore steering effects and reset gravity target
+    if (!this.carStarted) {
+      this.gravityXTarget = 0;
+      return;
+    }
+    
     // Apply lateral gravity from steering (always active now)
     const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
     this.gravityXTarget = -(Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;

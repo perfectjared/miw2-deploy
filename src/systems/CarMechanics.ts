@@ -492,15 +492,9 @@ export class CarMechanics {
    */
   public stopDriving() {
     this.drivingMode = false;
-    //console.log('Stopping driving...');
     this.carSpeed = 0;
-    
-    // Reset camera to center position
-    this.resetDrivingCamera();
-    
-    this.stopForwardMovementTimer();
-    this.stopNeutralReturnTimer();
-    this.stopObstacleSpawning();
+    // Mark progression to restart on next start
+    this.speedProgressionStartStep = -1;
   }
 
   /**
@@ -521,9 +515,10 @@ export class CarMechanics {
   /**
    * Handle steering input
    */
-  public handleSteering(steeringValue: number) {
-    this.currentSteeringValue = steeringValue;
-    // Debug log disabled to avoid console flooding during interaction
+  public handleSteering(value: number) {
+    // Ignore steering when not driving
+    if (!this.drivingMode) return;
+    this.currentSteeringValue = Phaser.Math.Clamp(value, -100, 100);
   }
 
   // (removed additive steering gating)
@@ -587,7 +582,7 @@ export class CarMechanics {
     const logFactor = Math.log(distanceToTarget + 1) / Math.log(2);
     
     // Base increment starts much higher for faster initial progression
-    const baseIncrementPercent = 0.01; // 1% per step (10x faster than before)
+    const baseIncrementPercent = 0.03; // 3% per step (much faster progression)
     const incrementPercent = baseIncrementPercent * logFactor;
     
     // Calculate the actual speed increment
@@ -599,8 +594,8 @@ export class CarMechanics {
     // Cap at target speed
     this.carSpeed = Math.min(this.carSpeed, this.baseSpeed * targetMultiplier);
     
-    // Debug logging every 60 steps (1 second at 60fps) - more frequent since progression is faster
-    if (elapsedSteps > 0 && elapsedSteps % 60 === 0) {
+    // Debug logging every 30 steps (0.5 seconds at 60fps) - more frequent since progression is faster
+    if (elapsedSteps > 0 && elapsedSteps % 30 === 0) {
       const currentPercent = Math.round((this.carSpeed / this.baseSpeed) * 100);
       const incrementThisStep = Math.round(incrementPercent * 100 * 100) / 100; // Show as percentage
       console.log(`🚀 Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
