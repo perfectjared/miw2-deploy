@@ -917,8 +917,10 @@ export class MenuManager {
         // Clamp velocity to reasonable limits
         velocity = Phaser.Math.Clamp(velocity, -maxVelocity, maxVelocity);
         
-        // Update progress based on velocity
+        // Update progress based on velocity - but reset momentum system during drag
         currentProgress += velocity;
+        // Reset velocity to prevent momentum interference
+        velocity = 0;
         currentProgress = Phaser.Math.Clamp(currentProgress, 0, 1);
         
         updateSlider();
