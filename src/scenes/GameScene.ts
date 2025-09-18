@@ -1131,6 +1131,12 @@ export class GameScene extends Phaser.Scene {
    * Handle turn key event
    */
   private onTurnKey() {
+    // Prevent multiple calls - if car is already started, ignore
+    if (this.carStarted) {
+      console.log('Turn Key ignored: car already started');
+      return;
+    }
+
     console.log('Turn Key clicked! Car is now started.');
     this.carStarted = true;
     this.gameState.updateState({ carStarted: true });
