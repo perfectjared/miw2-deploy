@@ -932,6 +932,8 @@ export class MenuManager {
     // Create pointer up handler
     const pointerUpHandler = () => {
       isDragging = false;
+      // Reset velocity to prevent momentum from continuing after drag ends
+      velocity = 0;
     };
     
     // Update slider visual
