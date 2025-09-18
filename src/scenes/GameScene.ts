@@ -569,6 +569,9 @@ export class GameScene extends Phaser.Scene {
     this.keySVG.setAlpha(0.8); // Semi-transparent overlay
     this.keySVG.setDepth(10001); // Above most UI elements but below speed display
     
+    // Apply white fill and black stroke styling
+    this.keySVG.setTint(0xffffff); // White fill
+    
     // Debug: Log key SVG creation
     console.log('🗝️ === KEY SVG CREATION DEBUG ===');
     console.log('🗝️ Key SVG position:', this.keySVG.x, this.keySVG.y);
@@ -585,6 +588,9 @@ export class GameScene extends Phaser.Scene {
     this.hotdogSVG.setOrigin(0.5, 0.5);
     this.hotdogSVG.setAlpha(0.8); // Semi-transparent overlay
     this.hotdogSVG.setDepth(1001); // Above the food item circle
+    
+    // Apply white fill and black stroke styling
+    this.hotdogSVG.setTint(0xffffff); // White fill
     
     // Set references for tutorial system
     this.tutorialSystem.setPhysicsObjects(this.frontseatKeys);

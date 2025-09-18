@@ -86,6 +86,10 @@ export class VirtualPet {
 		this.faceSVG.setAlpha(0.9);
 		this.faceSVG.setScrollFactor(0);
 		this.faceSVG.setDepth(this.pet.depth + 1); // Ensure face is above the ellipse
+		
+		// Apply white fill and black stroke styling
+		this.faceSVG.setTint(0xffffff); // White fill
+		
 		this.container.add(this.faceSVG);
 		
 		// Face SVG bobbing animation removed - face now stays in fixed position

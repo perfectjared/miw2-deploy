@@ -581,6 +581,9 @@ export class GameUI {
     this.speedCrankSVG.setOrigin(0.5, 0.5);
     this.speedCrankSVG.setAlpha(UI_TUNABLES.crank.svgAlpha); // Semi-transparent overlay
     this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1); // Just above the handle
+    
+    // Apply white fill and black stroke styling
+    this.speedCrankSVG.setTint(0xffffff); // White fill
 
     // Create triangle indicator above the meter
     this.speedCrankTriangle = this.scene.add.graphics();
@@ -692,7 +695,7 @@ export class GameUI {
     
     this.speedPercentageText.setOrigin(0.5, 0.5);
     this.speedPercentageText.setScrollFactor(0);
-    this.speedPercentageText.setDepth(10002); // Highest depth to appear above all other elements
+    this.speedPercentageText.setDepth(10004); // Highest depth to appear above all other elements
     this.speedPercentageText.setVisible(true);
   }
 
@@ -728,7 +731,7 @@ export class GameUI {
     // Remove extraneous square; indicator line will represent value
     
     knob.setPosition(dialX, dialY);
-    knob.setDepth(10001); // Above most UI elements but below speed display
+    knob.setDepth(10001); // Below physics objects so items appear in front
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
     // Create SVG overlay for visual appeal
@@ -736,7 +739,11 @@ export class GameUI {
     this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale);
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
     this.steeringWheelSVG.setAlpha(UI_TUNABLES.steering.svgAlpha); // Semi-transparent overlay
-    this.steeringWheelSVG.setDepth(10001); // Above most UI elements but below speed display
+    this.steeringWheelSVG.setDepth(10001); // Below physics objects so items appear in front
+    
+    // Apply white fill and black stroke styling
+    this.steeringWheelSVG.setTint(0xffffff); // White fill
+    // Note: Stroke styling would need to be handled via SVG modification or post-processing
     
     // SVG will be positioned independently but follow the graphics circle
     
@@ -745,11 +752,11 @@ export class GameUI {
     
     // Visual feedback overlay: an indicator line and angle text
     this.steeringDialIndicator = this.scene.add.graphics();
-    this.steeringDialIndicator.setDepth(10001); // Above most UI elements but below speed display
+    this.steeringDialIndicator.setDepth(10001); // Below physics objects so items appear in front
     this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + UI_TUNABLES.steering.angleTextOffset, '0%', {
       fontSize: '14px',
       color: '#ffffff'
-    }).setOrigin(0.5).setDepth(10001); // Above most UI elements but below speed display
+    }).setOrigin(0.5).setDepth(10001); // Below physics objects so items appear in front
     
     // Add drag functionality (fixed version)
     let isDragging = false;
