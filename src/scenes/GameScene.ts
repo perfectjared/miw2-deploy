@@ -967,6 +967,11 @@ export class GameScene extends Phaser.Scene {
           return;
     }
     
+    // Debug: Log magnetic attraction calls
+    if (this.keysConstraint) {
+      console.log('🔥 MAGNETIC DEBUG: applyMagneticAttraction called with keysConstraint present');
+    }
+    
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
         return;
       }
@@ -998,6 +1003,11 @@ export class GameScene extends Phaser.Scene {
     const dx = targetPos.x - keysPos.x;
     const dy = targetPos.y - keysPos.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Debug: Log distance calculation when keys are constrained
+    if (this.keysConstraint) {
+      console.log('🔥 MAGNETIC DEBUG: distance:', distance, 'magneticRange:', magneticConfig.magneticRange, 'keysConstraint present:', !!this.keysConstraint);
+    }
     
     const isDraggingKeys = !!(this.frontseatKeys.gameObject as any).isDragging;
     const attractionWindowActive = Date.now() <= this.keysAttractionUntil;
