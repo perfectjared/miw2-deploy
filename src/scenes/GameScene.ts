@@ -716,7 +716,7 @@ export class GameScene extends Phaser.Scene {
     // Input handler events
     this.inputHandlers.setEventCallbacks({
       onSteeringInput: (value) => {
-        this.carMechanics.handleSteering(value);
+        this.onSteeringInput(value);
       },
       onSwipeLeft: () => {
         this.switchToBackseat();
@@ -1075,6 +1075,15 @@ export class GameScene extends Phaser.Scene {
       // Reset keys in ignition state
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
+      
+      // Turn car off when key leaves magnetic range
+      if (this.carStarted) {
+        this.carStarted = false;
+        this.gameState.updateState({ carStarted: false });
+        try { this.carMechanics.stopDriving(); } catch {}
+        // Reset steering gravity target immediately
+        this.gravityXTarget = 0;
+      }
       
       // Fully restore key physics to normal interactive state
       this.restoreKeyPhysics();
