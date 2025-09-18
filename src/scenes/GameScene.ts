@@ -87,6 +87,7 @@ export class GameScene extends Phaser.Scene {
   private keysInIgnition: boolean = false;
   private carStarted: boolean = false;
   private steeringUsed: boolean = false;
+  private firstCarStart: boolean = true; // Track if this is the first time car starts
   
   // Driving state
   private drivingMode: boolean = false;
@@ -127,6 +128,16 @@ export class GameScene extends Phaser.Scene {
       console.log('GameScene: Initializing modular systems...');
       // Favor topmost hit-test only to reduce pointerover processing cost
       this.input.topOnly = true;
+      
+      // Debug key for spawning potholes
+      this.input.keyboard?.on('keydown-P', () => {
+        if (this.carMechanics && this.carMechanics.isDriving()) {
+          console.log('🐛 DEBUG: Spawning pothole manually');
+          this.carMechanics.spawnDebugPothole();
+        } else {
+          console.log('🐛 DEBUG: Cannot spawn pothole - car not driving');
+        }
+      });
       
       // Navigation UI will be initialized when needed
       
@@ -254,10 +265,14 @@ export class GameScene extends Phaser.Scene {
     const rearviewContainer = this.add.container(0, 0);
     rearviewContainer.setName('rearviewContainer');
     rearviewContainer.setScrollFactor(0);
-    rearviewContainer.setDepth(70000);
+    rearviewContainer.setDepth(40000); // Below steering dial
+    
+    // Start rearview mirror off-screen (above the visible area)
+    const cam = this.cameras.main;
+    const offScreenY = -cam.height; // Position above the screen
+    rearviewContainer.setPosition(0, offScreenY);
     
     // Create the shared rectangle background (rearview) using UI_LAYOUT
-    const cam = this.cameras.main;
     const rectWidth = Math.floor(cam.width * UI_LAYOUT.rearviewWidth);
     const rectHeight = Math.floor(cam.height * UI_LAYOUT.rearviewHeight);
     const rectX = Math.floor(cam.width * UI_LAYOUT.rearviewX);
@@ -285,15 +300,26 @@ export class GameScene extends Phaser.Scene {
       const xOffset = Math.floor((position.xPercent - 0.5) * rectWidth);
       const yOffset = Math.floor((position.yPercent - 0.5) * rectHeight);
       
+      // Position pets at their final screen coordinates (where they'll be when container is at y=0)
+      const petX = rectX + xOffset;
+      const petY = rectY + yOffset + 20; // Move pets down 20px to be lower visually
+      
       const pet = new VirtualPet(this, { 
         depth: 70001 + i, 
-        xPercent: position.xPercent, // Manual X percentage
-        yOffset: 8 + yOffset, // Manual Y offset from rectangle center
+        xPercent: petX / cam.width, // Convert to screen percentage for VirtualPet
+        yOffset: petY, // Use absolute Y position at final location
         petColor: PET_CONFIG.petColor, // Use centralized pet color
         width: 0, // Don't create individual rectangles
         height: 0
       });
       pet.initialize();
+      
+      // Initially make pets transparent since rearview container is off-screen
+      const petContainer = pet.getRoot?.();
+      if (petContainer) {
+        petContainer.setAlpha(0); // Start transparent instead of invisible
+      }
+      
       this.virtualPets.push(pet);
       
       // Add visible numeric label above each pet's circle
@@ -1144,6 +1170,37 @@ export class GameScene extends Phaser.Scene {
       console.log('🚗 TURN KEY: CarMechanics was already driving');
     }
     
+    // Animate rearview mirror sliding down on first car start
+    if (this.firstCarStart) {
+      this.firstCarStart = false;
+      const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
+      if (rearviewContainer) {
+        // Animate sliding down to correct position (y = 0)
+        this.tweens.add({
+          targets: rearviewContainer,
+          y: 0,
+          duration: 1800, // 1.8 seconds for slower, more elegant slide
+          ease: 'Cubic.easeOut', // Smoother ease-out curve
+          delay: 500, // Small delay after car starts
+          onComplete: () => {
+            // Fade in the virtual pets smoothly when rearview container reaches final position
+            this.virtualPets.forEach((pet, index) => {
+              const petContainer = pet.getRoot?.();
+              if (petContainer) {
+                this.tweens.add({
+                  targets: petContainer,
+                  alpha: 1,
+                  duration: 800, // 0.8 seconds fade-in
+                  ease: 'Cubic.easeOut',
+                  delay: index * 100 // Stagger each pet by 100ms for elegant appearance
+                });
+              }
+            });
+          }
+        });
+      }
+    }
+
     // Do not show story overlay here; it is gated and scheduled in onStepEvent
 
     this.scheduleTutorialUpdate(0);
@@ -1646,6 +1703,11 @@ export class GameScene extends Phaser.Scene {
     if (state.gameStarted && carOn && this.carMechanics.isDriving()) {
       const cur = this.gameState.getState().progress || 0;
       const speedMultiplier = this.carMechanics.getSpeedMultiplier();
+      const speedPercentage = speedMultiplier * 100; // Convert to percentage for gravity
+      
+      // Update gravity based on speed percentage
+      this.carMechanics.updateGravityBasedOnSpeed(speedPercentage);
+      
       const progressIncrement = Math.max(0.1, speedMultiplier); // Minimum 0.1 progress per step
       const next = cur + progressIncrement;
       this.gameState.updateState({ progress: next });
@@ -1788,9 +1850,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     
-    // Apply lateral gravity from steering (always active now)
-    const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
-    this.gravityXTarget = -(Phaser.Math.Clamp(value, -100, 100) / 100) * maxGx;
+    // DISABLED: Apply lateral gravity from steering (conflicts with position-based control)
+    // const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
+    // this.gravityXTarget = -(Phaser.Math.Clamp(value, -150, 150) / 150) * maxGx; // Updated to match new range
+    this.gravityXTarget = 0; // Keep gravity neutral for position-based steering
     
     // Send steering directly to car mechanics for immediate response
     this.carMechanics.handleSteering(value);
@@ -1868,26 +1931,27 @@ export class GameScene extends Phaser.Scene {
       const exitTop = exitBounds.top;
       const exitBelowCar = exitTop > carBottom;
       
-      // Check if car is in the rightmost area based on screen position
-      // Use carBounds.x (visual car position) not carMechanics.getCarX() (internal car position)
-      // carBounds.x represents the actual visual position on screen (~251.9999)
-      // carMechanics.getCarX() represents internal car position (~150)
-      const carX = carBounds.x;
+      // Check if car is in the rightmost area based on internal car position
+      // Use internal carX position for collision detection since visual car is always centered
+      const carX = (this.carMechanics as any).carX; // Internal car position
       const screenWidth = this.cameras.main.width;
       const rightmostThreshold = screenWidth * 0.7; // Car needs to be in rightmost 30% of screen
       
       const carInRightmostArea = carX >= rightmostThreshold;
       
       // Debug logging for position detection
-      console.log('Position detection - Car bounds X:', carBounds.x, 'Car bounds left:', carBounds.left, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
+      console.log('Position detection - Internal carX:', carX, 'Car bounds X (visual):', carBounds.x, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
       
       // Also check if car is horizontally aligned with the exit
-      const carLeftEdge = carBounds.left;
+      // Use internal car position for alignment since visual car is always centered
+      const carWidth = carBounds.width;
+      const carLeftEdge = carX - (carWidth / 2); // Calculate left edge from internal position
+      const carRightEdge = carX + (carWidth / 2); // Calculate right edge from internal position
       const exitLeftEdge = exitBounds.left;
       const exitRightEdge = exitBounds.right;
       
       // Car is aligned if there's any horizontal overlap with the exit
-      const horizontallyAligned = carLeftEdge < exitRightEdge && carBounds.right > exitLeftEdge;
+      const horizontallyAligned = carLeftEdge < exitRightEdge && carRightEdge > exitLeftEdge;
       
       // console.log('Car lane position:', carLanePosition, 'Threshold:', rightmostLaneThreshold, 'In rightmost lane:', carInRightmostLane);
       

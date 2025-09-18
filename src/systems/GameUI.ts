@@ -32,9 +32,9 @@ const UI_TUNABLES = {
     indicatorLength: 50,
     indicatorMaxAngleDeg: 60,
     angleTextOffset: 18,
-    // Steering sensitivity
-    horizontalSensitivity: 2.0,
-    verticalSensitivity: 1.5,
+    // Steering sensitivity - increased for better range
+    horizontalSensitivity: 3.5, // Increased from 2.0
+    verticalSensitivity: 2.5,   // Increased from 1.5
     returnToCenterSpeed: 0.02
   },
     // Speed crank
@@ -152,6 +152,9 @@ export interface GameUIState {
   plotBEnum: string;
   plotCEnum: string;
   speedCrankPercentage: number;
+  // Region data
+  currentRegion: string;
+  showsInCurrentRegion: number;
 }
 
 export class GameUI {
@@ -171,12 +174,20 @@ export class GameUI {
   private frontseatButton!: Phaser.GameObjects.Graphics;
   private backseatButton!: Phaser.GameObjects.Graphics;
   
+  // New UI Elements
+  private regionText!: Phaser.GameObjects.Text;
+  private stopsCounterText!: Phaser.GameObjects.Text;
+  
   // Speed Crank Elements
   private speedCrankTrack!: Phaser.GameObjects.Graphics;
   private speedCrankHandle!: Phaser.GameObjects.Graphics;
   private speedCrankValueIndicator!: Phaser.GameObjects.Graphics;
   private speedCrankArea!: Phaser.GameObjects.Rectangle;
   private speedPercentageText!: Phaser.GameObjects.Text;
+  
+  // Speed Meter Elements
+  private speedMeterBG!: Phaser.GameObjects.Graphics;
+  private speedMeterFill!: Phaser.GameObjects.Graphics;
   
     // Drag Dial
     private frontseatDragDial!: any; // RexUI drag dial
@@ -233,9 +244,11 @@ export class GameUI {
   public updateUI(state: GameUIState) {
     this.updateCountdown(state.gameTime);
     this.updateMoney(state.money);
-    this.updateHealth(state.health);
-    this.updateProgress(state.progress);
+    // Health update removed - no longer needed
+    this.updateProgress(state.progress); // Re-added to fix progress bar
     this.updateManagerValues(state); // This now includes stops
+    this.updateRegionInfo(state.currentRegion, state.showsInCurrentRegion);
+    this.updateStopsCounter(state.stops);
     // Speed crank removed - using automatic speed progression
   }
 
@@ -277,34 +290,21 @@ export class GameUI {
   }
 
   /**
-   * Create game layer text
+   * Create game layer text - removed
    */
   private createGameLayerText() {
-    this.gameLayerText = this.scene.add.text(
-      this.config.gameLayerPositionX,
-      this.config.gameLayerPositionY,
-      this.config.gameLayerText,
-      {
-        fontSize: this.config.gameLayerFontSize,
-        color: this.config.gameLayerColor,
-        fontStyle: 'bold',
-        backgroundColor: this.config.gameLayerBackgroundColor,
-        padding: { x: 4, y: 2 }
-      }
-    );
-    this.gameLayerText.setScrollFactor(0);
-    this.gameLayerText.setDepth(this.config.gameLayerDepth);
+    // Game layer text removed - no longer needed
   }
 
   /**
-   * Create countdown timer - positioned below rearview rectangle
+   * Create countdown timer - positioned below rearview rectangle (moved down)
    */
   private createCountdownTimer() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
     const countdownX = gameWidth * this.config.countdownPositionX;
-    const countdownY = gameHeight * this.config.countdownPositionY;
+    const countdownY = gameHeight * this.config.countdownPositionY + 40; // Moved down by 40px
      
     this.countdownText = this.scene.add.text(countdownX, countdownY, '0', {
       fontSize: this.config.countdownFontSize,
@@ -319,27 +319,13 @@ export class GameUI {
   }
 
   /**
-   * Create progress text - bottom left corner (with money)
+   * Create progress text and region header - moved down to make room for region info
    */
   private createProgressText() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    const progressX = gameWidth * this.config.progressPositionX;
-    const progressY = gameHeight * this.config.progressPositionY;
-    
-    this.progressText = this.scene.add.text(progressX, progressY, '0%', {
-      fontSize: this.config.progressFontSize,
-      color: this.config.progressColor,
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 4, y: 2 }
-    }).setOrigin(0, 1); // Left-bottom alignment
-    
-    this.progressText.setScrollFactor(0);
-    this.progressText.setDepth(10000);
-
-    // Simple progress meter just above countdown
+    // Simple progress meter just above countdown (moved down)
     const barWidth = 160;
     const barHeight = 6;
     const gameWidth2 = this.scene.cameras.main.width;
@@ -347,11 +333,41 @@ export class GameUI {
     const countdownX = gameWidth2 * this.config.countdownPositionX;
     const countdownY = gameHeight2 * this.config.countdownPositionY;
     const barX = countdownX - barWidth / 2;
-    const barY = countdownY - 16;
+    const barY = countdownY - 16 + 40; // Moved down by 40px
+
+    // Create region header above progress meter
+    const regionX = barX; // Align with progress bar
+    const regionY = barY - 20; // Above progress bar
+    this.regionText = this.scene.add.text(regionX, regionY, 'Midwest-1', {
+      fontSize: '14px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 4, y: 2 }
+    }).setOrigin(0, 0.5); // Left-center alignment
+    
+    this.regionText.setScrollFactor(0);
+    this.regionText.setDepth(10000);
+
+    // Create stops counter to the right of region text
+    const stopsX = regionX + 120; // To the right of region text
+    const stopsY = regionY; // Same Y as region text
+    this.stopsCounterText = this.scene.add.text(stopsX, stopsY, '0/3', {
+      fontSize: '14px', // Same size as region text
+      color: '#ffffff',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 4, y: 2 }
+    }).setOrigin(0, 0.5); // Left-center alignment
+    
+    this.stopsCounterText.setScrollFactor(0);
+    this.stopsCounterText.setDepth(10000);
     this.progressBarBG = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x000000, 0.4).setOrigin(0, 0.5);
     this.progressBarFill = this.scene.add.rectangle(barX, barY, 0, barHeight, 0x00ff00, 0.9).setOrigin(0, 0.5);
     this.progressBarBG.setScrollFactor(0); this.progressBarBG.setDepth(10000);
     this.progressBarFill.setScrollFactor(0); this.progressBarFill.setDepth(10001);
+    
+    // Stops counter moved to be next to region text above
     
     // Store progress bar dimensions for threshold indicators
     (this as any).progressBarWidth = barWidth;
@@ -381,20 +397,7 @@ export class GameUI {
     this.moneyText.setScrollFactor(0);
     this.moneyText.setDepth(10000);
     
-    // Health text
-    const healthX = gameWidth * this.config.healthPositionX;
-    const healthY = gameHeight * this.config.healthPositionY;
-    
-    this.healthText = this.scene.add.text(healthX, healthY, 'Health: 10/10', {
-      fontSize: this.config.moneyHealthFontSize,
-      color: this.config.healthColor,
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 4, y: 2 }
-    });
-    
-    this.healthText.setScrollFactor(0);
-    this.healthText.setDepth(10000);
+    // Health text removed - no longer needed
   }
 
   /**
@@ -674,19 +677,39 @@ export class GameUI {
   }
 
   /**
-   * Create speed percentage display above steering wheel
+   * Create radial speed meter directly above steering wheel
    */
   private createSpeedDisplay() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Position above the steering wheel (center-right area)
-    const speedDisplayX = gameWidth * 0.75;
-    const speedDisplayY = gameHeight * 0.4;
+    // Position directly above the steering wheel
+    const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent; // Same X as steering wheel
+    const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent; // Same Y as steering wheel
+    const speedDisplayX = dialX;
+    const speedDisplayY = dialY - 120; // Directly above steering wheel
     
-    // Create speed percentage text
+    // Create smaller radial speed meter
+    const meterRadius = 25; // Smaller radius
+    const meterThickness = 6; // Thinner
+    
+    // Background circle (empty)
+    this.speedMeterBG = this.scene.add.graphics();
+    this.speedMeterBG.lineStyle(meterThickness, 0x333333, 0.8);
+    this.speedMeterBG.strokeCircle(0, 0, meterRadius);
+    this.speedMeterBG.setPosition(speedDisplayX, speedDisplayY);
+    this.speedMeterBG.setScrollFactor(0);
+    this.speedMeterBG.setDepth(10004);
+    
+    // Progress arc (filled)
+    this.speedMeterFill = this.scene.add.graphics();
+    this.speedMeterFill.setPosition(speedDisplayX, speedDisplayY);
+    this.speedMeterFill.setScrollFactor(0);
+    this.speedMeterFill.setDepth(10005);
+    
+    // Speed percentage text in center (smaller)
     this.speedPercentageText = this.scene.add.text(speedDisplayX, speedDisplayY, '0%', {
-      fontSize: '24px',
+      fontSize: '12px', // Smaller font
       color: '#ffffff',
       fontFamily: 'Arial',
       stroke: '#000000',
@@ -695,16 +718,36 @@ export class GameUI {
     
     this.speedPercentageText.setOrigin(0.5, 0.5);
     this.speedPercentageText.setScrollFactor(0);
-    this.speedPercentageText.setDepth(10004); // Highest depth to appear above all other elements
+    this.speedPercentageText.setDepth(10006);
     this.speedPercentageText.setVisible(true);
   }
 
   /**
-   * Update speed percentage display
+   * Update speed percentage display with radial meter
    */
   public updateSpeedDisplay(speedPercentage: number) {
     if (this.speedPercentageText) {
       this.speedPercentageText.setText(`${Math.round(speedPercentage)}%`);
+    }
+    
+    if (this.speedMeterFill) {
+      // Clear previous arc
+      this.speedMeterFill.clear();
+      
+      // Draw progress arc
+      const meterRadius = 25; // Smaller radius to match createSpeedDisplay
+      const meterThickness = 6; // Thinner to match createSpeedDisplay
+      const startAngle = -Math.PI / 2; // Start at top (12 o'clock)
+      const endAngle = startAngle + (speedPercentage / 100) * 2 * Math.PI; // Progress around circle
+      
+      // Color based on speed (green to yellow to red)
+      let color = 0x00ff00; // Green
+      if (speedPercentage > 50) color = 0xffff00; // Yellow
+      if (speedPercentage > 80) color = 0xff0000; // Red
+      
+      this.speedMeterFill.lineStyle(meterThickness, color, 0.9);
+      this.speedMeterFill.arc(0, 0, meterRadius, startAngle, endAngle, false);
+      this.speedMeterFill.strokePath();
     }
   }
 
@@ -731,7 +774,7 @@ export class GameUI {
     // Remove extraneous square; indicator line will represent value
     
     knob.setPosition(dialX, dialY);
-    knob.setDepth(10001); // Below physics objects so items appear in front
+    knob.setDepth(50000); // Above rearview mirror and virtual pets
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
     // Create SVG overlay for visual appeal
@@ -739,7 +782,7 @@ export class GameUI {
     this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale);
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
     this.steeringWheelSVG.setAlpha(UI_TUNABLES.steering.svgAlpha); // Semi-transparent overlay
-    this.steeringWheelSVG.setDepth(10001); // Below physics objects so items appear in front
+    this.steeringWheelSVG.setDepth(50001); // Above the knob
     
     // Apply white fill and black stroke styling
     this.steeringWheelSVG.setTint(0xffffff); // White fill
@@ -752,11 +795,11 @@ export class GameUI {
     
     // Visual feedback overlay: an indicator line and angle text
     this.steeringDialIndicator = this.scene.add.graphics();
-    this.steeringDialIndicator.setDepth(10001); // Below physics objects so items appear in front
+    this.steeringDialIndicator.setDepth(50002); // Above SVG
     this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + UI_TUNABLES.steering.angleTextOffset, '0%', {
       fontSize: '14px',
       color: '#ffffff'
-    }).setOrigin(0.5).setDepth(10001); // Below physics objects so items appear in front
+    }).setOrigin(0.5).setDepth(50003); // Above indicator
     
     // Add drag functionality (fixed version)
     let isDragging = false;
@@ -809,17 +852,18 @@ export class GameUI {
          // Accumulate steering position based on combined motion
          this.currentSteeringPosition += totalSteeringDelta;
          
-         // Clamp the accumulated position to valid range
-         this.currentSteeringPosition = Phaser.Math.Clamp(this.currentSteeringPosition, -100, 100);
+        // Clamp the accumulated position to valid range - increased for better extremes
+        this.currentSteeringPosition = Phaser.Math.Clamp(this.currentSteeringPosition, -150, 150);
          
-         // Apply proportional sensitivity based on distance from center
-         const distanceFromCenter = Math.abs(this.currentSteeringPosition);
-         // More aggressive curve: starts at 0.5, reaches 1.0 at 50% distance, then increases further
-         const sensitivityMultiplier = 0.5 + (distanceFromCenter / 100) * 0.5 + Math.pow(distanceFromCenter / 100, 2) * 0.5;
-         const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
-         
-         this.scene.events.emit('steeringInput', adjustedSteeringValue);
-         this.updateSteeringIndicator(this.currentSteeringPosition); // Show raw position
+        // Apply proportional sensitivity based on distance from center
+        const distanceFromCenter = Math.abs(this.currentSteeringPosition);
+        // More aggressive curve: starts at 0.7, reaches 1.0 at 50% distance, then increases further
+        const sensitivityMultiplier = 0.7 + (distanceFromCenter / 150) * 0.3 + Math.pow(distanceFromCenter / 150, 2) * 0.3;
+        const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
+        
+        // Send the accumulated position directly to car mechanics
+        this.scene.events.emit('steeringInput', this.currentSteeringPosition);
+        this.updateSteeringIndicator(this.currentSteeringPosition); // Show raw position
          
          lastPointerX = pointer.x;
          lastPointerY = pointer.y;
@@ -888,7 +932,7 @@ export class GameUI {
    */
   private updateSteeringIndicator(steeringValue: number) {
     if (this.steeringDialIndicator) {
-      const angleDeg = Phaser.Math.Clamp((steeringValue / 100) * 60, -60, 60);
+      const angleDeg = Phaser.Math.Clamp((steeringValue / 150) * 60, -60, 60); // Updated to match new range
       const angleRad = Phaser.Math.DegToRad(angleDeg - 90); // Match original calculation
       const gameWidth = this.scene.cameras.main.width;
       const gameHeight = this.scene.cameras.main.height;
@@ -914,7 +958,7 @@ export class GameUI {
     
     // Update SVG rotation to match steering position
     if (this.steeringWheelSVG) {
-      const angleDeg = Phaser.Math.Clamp((steeringValue / 100) * UI_TUNABLES.steering.indicatorMaxAngleDeg, -UI_TUNABLES.steering.indicatorMaxAngleDeg, UI_TUNABLES.steering.indicatorMaxAngleDeg);
+      const angleDeg = Phaser.Math.Clamp((steeringValue / 150) * UI_TUNABLES.steering.indicatorMaxAngleDeg, -UI_TUNABLES.steering.indicatorMaxAngleDeg, UI_TUNABLES.steering.indicatorMaxAngleDeg); // Updated to match new range
       this.steeringWheelSVG.setRotation(Phaser.Math.DegToRad(angleDeg));
     }
   }
@@ -951,9 +995,7 @@ export class GameUI {
    * Update progress display
    */
   private updateProgress(progress: number) {
-    if (this.progressText) {
-      this.progressText.setText(`${Math.round(progress)}%`); // Removed "Progress:" label
-    }
+    // Progress text removed - only update progress bar
     if (this.progressBarFill && this.progressBarBG) {
       const pct = Phaser.Math.Clamp(progress, 0, 100) / 100;
       this.progressBarFill.width = this.progressBarBG.width * pct;
@@ -1121,6 +1163,25 @@ export class GameUI {
   }
 
   /**
+   * Update region information display
+   */
+  private updateRegionInfo(regionName: string, showsInRegion: number) {
+    if (this.regionText) {
+      const iterationNumber = showsInRegion + 1; // Shows are 0-based, display is 1-based
+      this.regionText.setText(`${regionName}-${iterationNumber}`);
+    }
+  }
+
+  /**
+   * Update stops counter display
+   */
+  private updateStopsCounter(stops: number) {
+    if (this.stopsCounterText) {
+      this.stopsCounterText.setText(`${stops}/3`);
+    }
+  }
+
+  /**
    * Clean up resources
    */
   public destroy() {
@@ -1129,8 +1190,10 @@ export class GameUI {
       this.gameLayerText,
       this.countdownText,
       this.moneyText,
-      this.healthText,
-      this.progressText,
+      // healthText removed - no longer needed
+      // progressText removed - no longer needed
+      this.regionText,
+      this.stopsCounterText,
       this.managerValuesText,
       this.frontseatButton,
       this.backseatButton,
@@ -1141,7 +1204,9 @@ export class GameUI {
       // Speed crank text removed - using automatic speed progression
       this.speedCrankSVG,
       this.speedCrankTriangle,
-      this.frontseatDragDial
+      this.frontseatDragDial,
+      this.speedMeterBG,
+      this.speedMeterFill
     ];
     
     elements.forEach(element => {

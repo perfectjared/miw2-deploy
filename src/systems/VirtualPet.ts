@@ -79,7 +79,7 @@ export class VirtualPet {
 
 		// Bobbing animation removed - pets now stay in fixed positions
 
-		// Create face SVG overlay
+		// Create face SVG overlay (will be added to container after pet ellipse)
 		this.faceSVG = this.scene.add.sprite(this.pet.x, this.pet.y, 'face-neutral');
 		this.faceSVG.setScale(0.075); // 1/4 of previous size: was 0.3, now 0.075
 		this.faceSVG.setOrigin(0.5, 0.5);
@@ -89,8 +89,6 @@ export class VirtualPet {
 		
 		// Apply white fill and black stroke styling
 		this.faceSVG.setTint(0xffffff); // White fill
-		
-		this.container.add(this.faceSVG);
 		
 		// Face SVG bobbing animation removed - face now stays in fixed position
 		
@@ -115,11 +113,14 @@ export class VirtualPet {
 		const elementsToAdd = this.baseRect ? [this.baseRect, this.pet] : [this.pet];
 		this.container.add(elementsToAdd);
 		
+		// Add face SVG after pet ellipse to ensure it renders on top
+		this.container.add(this.faceSVG);
+		
 		// Create a separate invisible interactive circle over the pet
 		const clickArea = this.scene.add.circle(x - leftShift, y - Math.floor(height * 0.35), petRadius, 0x000000, 0);
 		clickArea.setInteractive();
 		clickArea.setScrollFactor(0);
-		clickArea.setDepth(70001); // Higher than pet
+		clickArea.setDepth(40001); // Above rearview mirror but below steering dial
 		clickArea.on('pointerdown', () => {
 			console.log('Click area pointerdown detected!');
 		});
@@ -340,9 +341,9 @@ export class VirtualPet {
 
 	private applySteeringSway(steeringValue: number) {
 		if (!this.petBody) return;
-		// Map steering (-100..100) to a small lateral force
+		// Map steering (-150..150) to a small lateral force
 		// Reverse direction: left steering should push pets left (negative force)
-		const norm = Phaser.Math.Clamp(steeringValue / 100, -1, 1);
+		const norm = Phaser.Math.Clamp(steeringValue / 150, -1, 1); // Updated to match new range
 		// Tunables for sway responsiveness
 		const maxForce = 0.0008; // keep very small for subtle sway
 		const forceX = -maxForce * norm; // Negative to reverse direction

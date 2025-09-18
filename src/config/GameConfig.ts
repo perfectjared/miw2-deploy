@@ -21,13 +21,13 @@ export const CAR_CONFIG = {
   minCrankForSteering: 0.40,
   minSpeedForSteering: 0.01,
   steeringSensitivity: 1.0,
-  maxTurn: 1.0,
+  maxTurn: 1.5, // Increased from 1.0 to allow more steering power
   turnResetMultiplier: 0.1,
   centrifugal: 2.0,
   
-  // Steering Turn Gain (distance-based)gi
+  // Steering Turn Gain (distance-based)
   baseTurnGain: 0.3,         // Minimum turn gain at center
-  maxTurnGain: 1.5,          // Maximum turn gain at full steering (increased for easier extremes)
+  maxTurnGain: 2.0,          // Increased from 1.5 to 2.0 for easier extremes
   turnGainPower: 0.5,        // Power curve exponent (0.5 = square root - easier extremes)
   
   // Car Momentum & Stability
@@ -37,7 +37,7 @@ export const CAR_CONFIG = {
   
   // Visual Appearance
   roadColor: 0x333333,
-  boundaryPadding: 50,
+  boundaryPadding: 50, // Increased to allow more car movement range
   roadDepth: -1000,
   lineWidth: 4,
   lineHeight: 30,
@@ -72,8 +72,8 @@ export const CAR_CONFIG = {
   radarWidth: 33,
   radarHeight: 163,
   radarAlpha: 0.75,
-  roadBendStrength: 140,
-  lensStrength: 0.1,
+  roadBendStrength: 200, // Increased from 140 to make road curves more pronounced
+  lensStrength: 1.5, // Increased from 1.0 to create even stronger fisheye spread
   useLowRes: false,
   lowResScale: 0.5
 } as const;

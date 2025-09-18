@@ -111,8 +111,10 @@ export class CarMechanics {
   private roadLineGraphics!: Phaser.GameObjects.Graphics;
   private roadOffset: number = 0;
   private horizontalLinePhase: number = 0; // increments on countdown change
-  private laneIndices: number[] = [-1.7, -0.55, 0.55, 1.7];
-  private laneSpacingBottom: number = 130;
+  // Lane indices for even wider road visual
+  // Make road lines extend much further for dramatic fisheye effect
+  private laneIndices: number[] = [-2.0, -0.7, 0.7, 2.0]; // Further reduced obstacle spawning range
+  private laneSpacingBottom: number = 100; // Base spacing for very wide road appearance
   private horizontalSpacing: number = 28;
   private getLensStrength(): number { return this.config.lensStrength ?? 60; }
   
@@ -121,12 +123,14 @@ export class CarMechanics {
   private activeExits: Array<{
     obstacle: Phaser.GameObjects.Rectangle;
     visual: Phaser.GameObjects.Rectangle;
+    exitText: Phaser.GameObjects.Text;
     exitNumber: number;
   }> = [];
   
   // Exit Planning System - clean numbered planned exits
   private plannedExits: Array<{
     number: number; // Exit number (1, 2, 3, etc.)
+    exitName: string; // Display name (e.g., "EXIT 1", "EXIT 2-3", "EXIT 1-A")
     previewThreshold: number; // When to spawn preview (0-100)
     exitThreshold: number; // When to spawn actual exit (0-100)
     laneIndex: number;
@@ -206,6 +210,57 @@ export class CarMechanics {
   }
 
   /**
+   * Generate unique exit names for a driving sequence
+   */
+  private generateExitNames(count: number): string[] {
+    const names: string[] = [];
+    const usedNames = new Set<string>();
+    
+    for (let i = 0; i < count; i++) {
+      let name: string;
+      let attempts = 0;
+      
+      do {
+        const pattern = Phaser.Math.Between(1, 3); // 1, 2, or 3
+        
+        switch (pattern) {
+          case 1:
+            // Simple: "EXIT #"
+            name = `EXIT ${Phaser.Math.Between(1, 9)}`;
+            break;
+          case 2:
+            // Range: "EXIT #-#"
+            const start = Phaser.Math.Between(1, 8);
+            const end = Phaser.Math.Between(start + 1, 9);
+            name = `EXIT ${start}-${end}`;
+            break;
+          case 3:
+            // With letter: "EXIT #-#(letter)"
+            const start2 = Phaser.Math.Between(1, 7);
+            const end2 = Phaser.Math.Between(start2 + 1, 8);
+            const letter = String.fromCharCode(65 + Phaser.Math.Between(0, 25)); // A-Z
+            name = `EXIT ${start2}-${end2}(${letter})`;
+            break;
+          default:
+            name = `EXIT ${i + 1}`;
+        }
+        
+        attempts++;
+      } while (usedNames.has(name) && attempts < 50);
+      
+      // Fallback to simple numbering if we can't generate unique name
+      if (usedNames.has(name)) {
+        name = `EXIT ${i + 1}`;
+      }
+      
+      names.push(name);
+      usedNames.add(name);
+    }
+    
+    return names;
+  }
+
+  /**
    * Start driving mode
    */
   public startDriving(currentStep: number = 0) {
@@ -278,9 +333,13 @@ export class CarMechanics {
     // Sort thresholds to ensure proper order
     exitThresholds.sort((a, b) => a - b);
     
+    // Generate unique exit names for this sequence
+    const exitNames = this.generateExitNames(exitThresholds.length);
+    
     // Create planned exits with proper preview spacing
     exitThresholds.forEach((exitThreshold, index) => {
       const exitNumber = index + 1; // Number exits 1, 2, 3, etc.
+      const exitName = exitNames[index]; // Use generated name
       
       // Preview spawns 10-30% before the exit, but not less than 1%, and not within 5 steps of another preview/exit
       let previewThreshold: number;
@@ -299,6 +358,7 @@ export class CarMechanics {
       
       this.plannedExits.push({
         number: exitNumber,
+        exitName: exitName,
         previewThreshold: previewThreshold,
         exitThreshold: exitThreshold,
         laneIndex: this.laneIndices[this.laneIndices.length - 1], // Rightmost lane
@@ -379,9 +439,27 @@ export class CarMechanics {
     );
     visual.setDepth(this.config.roadDepth + 0.5);
     
+    // Create exit name text label
+    const exitText = this.scene.add.text(
+      obstacle.x, obstacle.y,
+      plannedExit.exitName,
+      {
+        fontSize: '12px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2,
+        backgroundColor: '#000000',
+        padding: { x: 4, y: 2 }
+      }
+    );
+    exitText.setOrigin(0.5, 0.5);
+    exitText.setDepth(this.config.roadDepth + 1);
+    
     // Add to driving container
     this.drivingContainer.add(obstacle);
     this.drivingContainer.add(visual);
+    this.drivingContainer.add(exitText);
     
     // Store data for road movement
     obstacle.setData('baseX', plannedExit.previewBaseX);
@@ -389,6 +467,7 @@ export class CarMechanics {
     obstacle.setData('baseW', plannedExit.width);
     obstacle.setData('baseH', plannedExit.height);
     obstacle.setData('visual', visual);
+    obstacle.setData('text', exitText); // Store text reference
     obstacle.setData('laneIndex', plannedExit.laneIndex);
     
     // Add to obstacles array so it gets moved by the road system
@@ -397,6 +476,7 @@ export class CarMechanics {
     // Store for cleanup when exit spawns
     plannedExit.previewObstacle = obstacle;
     plannedExit.previewVisual = visual;
+    plannedExit.previewText = exitText;
   }
 
   /**
@@ -416,11 +496,15 @@ export class CarMechanics {
       if (obstacleIndex > -1) {
         this.obstacles.splice(obstacleIndex, 1);
       }
-      // Destroy both obstacle and visual
+      // Destroy obstacle, visual, and text
       plannedExit.previewObstacle.destroy();
       plannedExit.previewVisual.destroy();
+      if (plannedExit.previewText) {
+        plannedExit.previewText.destroy();
+      }
       plannedExit.previewObstacle = null;
       plannedExit.previewVisual = null;
+      plannedExit.previewText = null;
     }
     
     // Create collidable exit
@@ -447,9 +531,27 @@ export class CarMechanics {
     );
     visual.setDepth(this.config.roadDepth + 0.5);
     
+    // Create exit name text label
+    const exitText = this.scene.add.text(
+      plannedExit.exitBaseX, horizonY + 2,
+      plannedExit.exitName,
+      {
+        fontSize: '14px', // Slightly larger for actual exits
+        color: '#ffffff',
+        fontStyle: 'bold',
+        stroke: '#000000',
+        strokeThickness: 2,
+        backgroundColor: '#000000',
+        padding: { x: 4, y: 2 }
+      }
+    );
+    exitText.setOrigin(0.5, 0.5);
+    exitText.setDepth(this.config.roadDepth + 1);
+    
     // Add to driving container
     this.drivingContainer.add(obstacle);
     this.drivingContainer.add(visual);
+    this.drivingContainer.add(exitText);
     
     // Store data
     obstacle.setData('baseX', plannedExit.exitBaseX);
@@ -457,6 +559,7 @@ export class CarMechanics {
     obstacle.setData('baseW', plannedExit.width);
     obstacle.setData('baseH', plannedExit.height);
     obstacle.setData('visual', visual);
+    obstacle.setData('text', exitText); // Store text reference
     obstacle.setData('laneIndex', plannedExit.laneIndex);
     
     // Add to obstacles array for collision detection
@@ -466,6 +569,7 @@ export class CarMechanics {
     this.activeExits.push({
       obstacle: obstacle,
       visual: visual,
+      exitText: exitText,
       exitNumber: plannedExit.number
     });
   }
@@ -514,12 +618,12 @@ export class CarMechanics {
   }
 
   /**
-   * Handle steering input
+   * Handle steering input - now treats input as target position, not delta
    */
   public handleSteering(value: number) {
     // Ignore steering when not driving
     if (!this.drivingMode) return;
-    this.currentSteeringValue = Phaser.Math.Clamp(value, -100, 100);
+    this.currentSteeringValue = Phaser.Math.Clamp(value, -150, 150); // Store target position
   }
 
   // (removed additive steering gating)
@@ -615,6 +719,33 @@ export class CarMechanics {
   }
 
   /**
+   * Update Matter.js world gravity based on speed percentage
+   */
+  public updateGravityBasedOnSpeed(speedPercentage: number) {
+    if (!this.scene.matter?.world) return;
+    
+    // Calculate gravity multiplier: 1.0 (normal) to 1.8 (max) based on speed
+    const baseGravity = 0.5; // Current base gravity from PHYSICS_CONFIG
+    const maxGravityMultiplier = 1.8; // 1.8x max gravity as requested
+    const minGravityMultiplier = 1.0; // 1.0x normal gravity
+    
+    // Convert speed percentage (0-100) to gravity multiplier (1.0-1.8)
+    const speedFactor = speedPercentage / 100; // 0.0 to 1.0
+    const gravityMultiplier = minGravityMultiplier + (speedFactor * (maxGravityMultiplier - minGravityMultiplier));
+    
+    // Apply gravity scaling
+    const newGravityY = baseGravity * gravityMultiplier;
+    
+    // Update Matter.js world gravity
+    this.scene.matter.world.setGravity(0, newGravityY);
+    
+    // Debug logging every 30 steps to show gravity changes
+    if (this.scene.time.now % 500 < 16) { // Roughly every 500ms
+      console.log(`🌍 Gravity: ${speedPercentage}% speed → ${gravityMultiplier.toFixed(2)}x multiplier → Y: ${newGravityY.toFixed(2)}`);
+    }
+  }
+
+  /**
    * Get current speed multiplier (0.01 to 1.0)
    */
   public getSpeedMultiplier(): number {
@@ -627,6 +758,82 @@ export class CarMechanics {
    */
   public getCarSpeed(): number {
     return this.carSpeed;
+  }
+
+  /**
+   * Debug method to manually spawn a pothole for testing collision detection
+   */
+  public spawnDebugPothole() {
+    if (!this.drivingMode || this.drivingPaused) {
+      console.log('🐛 DEBUG: Cannot spawn pothole - not in driving mode');
+      return;
+    }
+
+    console.log('🐛 DEBUG: Creating debug pothole');
+    
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const horizonY = gameHeight * 0.3;
+    
+    // Create pothole with exact same dimensions and color as real potholes
+    const widthPx = gameWidth * this.config.potholeWidth;  // 30% of screen width
+    const heightPx = gameHeight * this.config.potholeHeight; // 8% of screen height
+    const obstacle = this.scene.add.rectangle(0, 0, widthPx, heightPx, this.config.potholeColor);
+    obstacle.setData('isPothole', true);
+    obstacle.setData('isExit', false);
+    obstacle.setData('isExitPreview', false);
+    
+    // Position it at the normal spawn position like real potholes
+    const initialY = horizonY + Phaser.Math.Between(12, 90);
+    
+    // Choose a random lane index like real potholes
+    const laneIdx = Math.floor(Math.random() * this.laneIndices.length);
+    const laneIndexChosen = this.laneIndices[laneIdx];
+    
+    // Calculate X position with lane effects like real potholes
+    const t0 = Phaser.Math.Clamp((initialY - horizonY) / (gameHeight - horizonY), 0, 1);
+    const bendStrength = this.config.roadBendStrength ?? 140;
+    const end = this.currentCurve * bendStrength;
+    const control = end * 0.6;
+    const bez = (tt: number) => ((1 - tt) * (1 - tt) * 0) + (2 * (1 - tt) * tt * control) + (tt * tt * end);
+    const lensBase = this.getLensStrength();
+    const lensFactorBase = 1 - Phaser.Math.Clamp(Math.abs(this.currentCurve), 0, 1);
+    const lensOffset = (laneIndexChosen >= 0 ? 1 : -1) * lensBase * (t0 * t0) * lensFactorBase;
+    const centerX = gameWidth / 2;
+    const xProjected = centerX + bez(t0) + laneIndexChosen * (this.laneSpacingBottom * t0) + lensOffset;
+    
+    // Apply small horizontal jitter within projected lane
+    const jitter = Phaser.Math.Between(-6, 6);
+    const spawnX = xProjected + jitter;
+    const spawnY = initialY;
+    
+    obstacle.setPosition(spawnX, spawnY);
+    obstacle.setData('laneIndex', laneIndexChosen); // Use actual chosen lane
+    obstacle.setData('baseX', spawnX);
+    obstacle.setData('laneOffset', (spawnX - centerX) / this.laneSpacingBottom); // Calculate actual lane offset
+    obstacle.setData('baseW', widthPx);
+    obstacle.setData('baseH', heightPx);
+    
+    // CRITICAL: Set the logical Y position that the step system will update
+    // This is what makes the pothole move down the screen
+    obstacle.y = spawnY;
+    
+    // Handle visual representation exactly like real potholes
+    obstacle.setDepth(this.config.roadDepth + 0.5);
+    obstacle.setVisible(false); // Hide logic rectangle
+    const visual = this.scene.add.rectangle(obstacle.x, obstacle.y, obstacle.width, obstacle.height, obstacle.fillColor ?? 0xff0000);
+    visual.setDepth(this.config.roadDepth + 0.5);
+    
+    // Add both to driving container so visuals are vertically compressed too
+    this.drivingContainer.add(obstacle);
+    this.drivingContainer.add(visual);
+    obstacle.setData('visual', visual);
+    
+    // Add to obstacles array
+    this.obstacles.push(obstacle);
+    
+    console.log(`🐛 DEBUG: Pothole spawned at (${spawnX}, ${spawnY}) with size ${widthPx}x${heightPx} and color 0x${this.config.potholeColor.toString(16)}`);
+    console.log(`🐛 DEBUG: Total obstacles now: ${this.obstacles.length}`);
   }
 
   /**
@@ -669,13 +876,18 @@ export class CarMechanics {
   private createDrivingCar() {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
+    
+    // Initialize carX to center position
+    this.carX = gameWidth / 2;
+    
     this.drivingCar = this.scene.add.rectangle(
-      gameWidth / 2,
-      Math.floor(gameHeight * 0.85), // move car up on screen while staying near bottom road area
+      this.carX, // Use carX instead of hardcoded center
+      Math.floor(gameHeight * 0.90), // moved down a little more (from 0.88 to 0.90)
       60, // Increased width from 40 to 60 for easier collision
       60,
       0xff0000
     );
+    this.drivingCar.setAlpha(0.7); // Make slightly transparent
     this.drivingCar.setDepth(this.config.roadDepth + 1);
     // keep car fixed relative to screen while world scrolls
     this.drivingCar.setScrollFactor(0, 0);
@@ -817,57 +1029,40 @@ export class CarMechanics {
       return;
     }
     
-    // Use steering value to update car position
-    const normalizedValue = this.currentSteeringValue / 100;
+    // Convert steering position to target car position (position-based control)
+    const normalizedValue = this.currentSteeringValue / 150; // -1 to 1
     const speedMultiplier = this.carSpeed / this.config.carMaxSpeed;
     const dlt = (this.scene.game.loop.delta || 16) * 0.01;
     
+    // Calculate target car position based on steering wheel position
+    const gameWidth = this.scene.cameras.main.width;
+    const centerX = gameWidth / 2;
+    const maxOffset = centerX - this.config.boundaryPadding;
+    
+    // Map steering position (-1 to 1) to car position range
+    const targetCarX = centerX + (normalizedValue * maxOffset);
+    
+    // Debug logging every 30 steps to show position changes
+    if (this.scene.time.now % 500 < 16) { // Roughly every 500ms
+      console.log(`🚗 Position Debug: Steering: ${this.currentSteeringValue.toFixed(1)} → Normalized: ${normalizedValue.toFixed(2)} → Target: ${targetCarX.toFixed(1)} → Current: ${this.carX.toFixed(1)} → MaxOffset: ${maxOffset.toFixed(1)}`);
+    }
+    
+    // Smooth movement towards target position - much faster and speed-independent
+    const moveSpeed = 0.15; // How fast car moves towards target (higher = more responsive)
+    this.carX = Phaser.Math.Linear(this.carX, targetCarX, moveSpeed); // Removed speedMultiplier dependency
+    
+    // Keep car visual centered on screen (don't move with internal position)
+    if (this.drivingCar) {
+      const gameWidth = this.scene.cameras.main.width;
+      this.drivingCar.x = gameWidth / 2; // Always keep car centered
+    }
+    
     // Ease a curve value based on steering to simulate track bend
-    // Opposite-to-steering road curvature for horizon bend
     const targetCurve = Phaser.Math.Clamp(-normalizedValue * 0.8, -1, 1);
     this.currentCurve = Phaser.Math.Linear(this.currentCurve, targetCurve, 0.08);
     
-    // Turn accumulator with distance-based gain and momentum
-    if (Math.abs(normalizedValue) > 0.001) {
-      const steeringDirection = normalizedValue > 0 ? 1 : -1;
-      // Make turn gain proportional to steering distance from center
-      // Use inverse curve: easier to reach extremes, harder in middle
-      const steeringDistance = Math.abs(normalizedValue);
-      const baseTurnGain = this.config.baseTurnGain;
-      const maxTurnGain = this.config.maxTurnGain;
-      const turnGainPower = this.config.turnGainPower;
-      
-      // Use square root curve: gain increases quickly at extremes, slower in middle
-      // This makes it easier to reach road edges
-      const turnGain = baseTurnGain + (maxTurnGain - baseTurnGain) * Math.pow(steeringDistance, turnGainPower);
-      
-      // Additional boost for extreme steering to make road edges more accessible
-      const extremeBoost = steeringDistance > 0.7 ? 1.5 : 1.0;
-      
-      this.turn += steeringDirection * dlt * turnGain * extremeBoost;
-    } else {
-      // Instead of forcing turn to 0, let it decay slowly for momentum
-      this.turn *= (1 - this.config.turnDecayRate);
-      // Only reset to 0 if it's very small to avoid floating point issues
-      if (Math.abs(this.turn) < 0.001) {
-        this.turn = 0;
-      }
-    }
-    this.turn = Phaser.Math.Clamp(this.turn, -this.config.maxTurn, this.config.maxTurn);
-
-    const dx = dlt * (speedMultiplier <= 0 ? 0 : speedMultiplier);
-
-    // Calculate lateral movement with friction applied to velocity
-    let lateralVelocity = this.turn * dx * this.config.steeringSensitivity;
-    
-    // Apply centrifugal effect pushing outward on curves, scaled by speed
-    lateralVelocity -= this.currentCurve * dx * speedMultiplier * this.config.centrifugal;
-    
-    // Apply lateral friction to velocity (not position)
-    lateralVelocity *= this.config.lateralFriction;
-    
-    // Apply the velocity to position
-    this.carX += lateralVelocity;
+    // Update turn value for visual effects (not used for movement anymore)
+    this.turn = Phaser.Math.Clamp(normalizedValue * this.config.maxTurn, -this.config.maxTurn, this.config.maxTurn);
     
     // Apply center return force (if configured)
     if (this.config.centerReturnForce > 0) {
@@ -879,8 +1074,8 @@ export class CarMechanics {
     // Clamp car within road bounds, symmetrically around screen center
     const gameWidthLocal = this.scene.cameras.main.width;
     const centerXLocal = gameWidthLocal / 2;
-    const maxOffset = centerXLocal - this.config.boundaryPadding;
-    this.carX = Phaser.Math.Clamp(this.carX, centerXLocal - maxOffset, centerXLocal + maxOffset);
+    const maxOffsetLocal = centerXLocal - this.config.boundaryPadding;
+    this.carX = Phaser.Math.Clamp(this.carX, centerXLocal - maxOffsetLocal, centerXLocal + maxOffsetLocal);
     // Keep visual car fixed at screen center; do not move rectangle here
     
     // Debug log disabled to avoid console flooding during interaction
@@ -895,40 +1090,34 @@ export class CarMechanics {
   private updateDrivingCamera() {
     if (!this.drivingMode || this.drivingPaused) return;
     
-    // Use world lateral offset (world moves, car stays)
-    let offsetX = -this.worldLateralOffset;
-    // Add slight curve sway to enhance bend sensation
-    offsetX += this.currentCurve * 12;
-    
-    // NEW: Track car's horizontal position for camera movement
+    // Calculate camera offset to follow car movement
     const gameWidth = this.scene.cameras.main.width;
     const carCenterX = gameWidth / 2;
-    const carOffsetFromCenter = this.drivingCar.x - carCenterX;
+    const carOffsetFromCenter = this.carX - carCenterX;
     
-    // Apply horizontal camera tracking - camera follows car movement
-    // Scale the offset to make camera movement feel natural (not too sensitive)
-    const cameraTrackingFactor = 0.3; // 30% of car movement translates to camera movement
-    const cameraOffsetX = carOffsetFromCenter * cameraTrackingFactor;
+    // Apply horizontal camera tracking by moving the driving container instead of scrolling the camera
+    // This keeps the Matter.js world fixed while creating the visual effect of camera tracking
+    const cameraTrackingFactor = 1.0; // 100% of car movement translates to container movement (full tracking)
+    const containerOffsetX = -carOffsetFromCenter * cameraTrackingFactor; // Negative to create opposite movement
     
-    // Keep main camera fixed; do not scroll horizontally
-    const totalOffsetX = 0;
-    this.scene.cameras.main.setScroll(0, 0);
+    // Move the driving container to simulate camera tracking (keeps Matter.js world fixed)
+    this.drivingContainer.x = containerOffsetX;
     
-    // Store camera angle for dash elements to use (but don't apply to main camera)
+    // Store camera angle for dash elements to use
     const speedFactor = this.carSpeed / Math.max(1, this.config.carMaxSpeed);
     const targetAngle = Phaser.Math.Clamp((this.turn + this.currentCurve * 0.6) * 6 * speedFactor, -6, 6);
     this.cameraAngle = Phaser.Math.Linear(this.cameraAngle, targetAngle, 0.15);
     
     // Emit camera angle for dash elements to use
     this.scene.events.emit('cameraAngleChanged', this.cameraAngle);
-    // Debug log disabled to avoid console flooding during driving
   }
 
   /**
    * Reset driving camera to center
    */
   private resetDrivingCamera() {
-    this.scene.cameras.main.setScroll(0, 0);
+    // Reset the driving container position instead of camera scroll
+    this.drivingContainer.x = 0;
   }
 
   /**
@@ -1003,10 +1192,22 @@ export class CarMechanics {
       const isExit = obstacle.getData('isExit');
       const isExitPreview = obstacle.getData('isExitPreview');
       
-      // Only remove non-exit obstacles when they go off screen
-      if (!isExit && !isExitPreview && obstacle.y > this.scene.cameras.main.height) {
+      // Only remove non-exit obstacles when they go well off screen
+      // Check visual position instead of logical position for accurate removal
+      // Keep potholes around longer so they can collide with the car
+      const visual = obstacle.getData('visual');
+      const obstacleY = visual ? visual.y : obstacle.y;
+      const screenHeight = this.scene.cameras.main.height;
+      const removalThreshold = screenHeight + 300; // Remove 300px below screen bottom to allow collision
+      if (!isExit && !isExitPreview && obstacleY > removalThreshold) {
+        const isPothole = obstacle.getData('isPothole');
+        if (isPothole) {
+          console.log(`🗑️ Removing pothole - Visual Y: ${obstacleY.toFixed(1)}, Threshold: ${removalThreshold}, Screen Height: ${screenHeight}`);
+        }
         const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+        const textToDestroy: Phaser.GameObjects.Text | undefined = obstacle.getData('text');
         if (visualToDestroy) visualToDestroy.destroy();
+        if (textToDestroy) textToDestroy.destroy();
         obstacle.destroy();
         const index = this.obstacles.indexOf(obstacle);
         if (index > -1) {
@@ -1028,6 +1229,7 @@ export class CarMechanics {
 
     this.obstacles.forEach(obstacle => {
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+      const text: Phaser.GameObjects.Text | undefined = obstacle.getData('text');
       if (!visual) return;
 
       // Continuous horizontal positioning (every frame)
@@ -1045,6 +1247,12 @@ export class CarMechanics {
       // Update only horizontal position continuously
       visual.x = xProjectedVis;
       
+      // Update text position to match visual
+      if (text) {
+        text.x = xProjectedVis;
+        text.y = visual.y; // Keep text at same Y as visual
+      }
+      
       // Update perspective scaling continuously
       const baseW = obstacle.getData('baseW') ?? obstacle.width;
       const baseH = obstacle.getData('baseH') ?? obstacle.height;
@@ -1054,8 +1262,24 @@ export class CarMechanics {
       visual.displayHeight = baseH * heightScale;
     });
 
-    // Screen-space collision with fixed car representation
-    const carBounds = this.drivingCar.getBounds();
+    // Collision detection using visual rectangle bounds (screen coordinates)
+    // Get the visual car's actual screen position and bounds
+    let carBounds: Phaser.Geom.Rectangle;
+    if (this.drivingCar) {
+      carBounds = this.drivingCar.getBounds();
+    } else {
+      // Fallback: create bounds at visual car position
+      const carX = gameWidth / 2;
+      const carY = Math.floor(gameHeight * 0.85);
+      carBounds = new Phaser.Geom.Rectangle(carX - 30, carY - 30, 60, 60);
+    }
+    
+    // Debug: Log the actual car position vs expected position
+    if (this.scene.time.now % 1000 < 16) { // Log every 1000ms
+      const expectedY = Math.floor(gameHeight * 0.85);
+      console.log(`🚗 Car Position Debug: Actual Y=${carBounds.centerY.toFixed(1)}, Expected Y=${expectedY}, Container Scale=${this.drivingContainer.scaleY}, Container Y=${this.drivingContainer.y}, Container X=${this.drivingContainer.x}`);
+    }
+    
     this.obstacles.forEach(obstacle => {
       // Skip exit previews - they shouldn't trigger collisions
       if (obstacle.getData('isExitPreview')) {
@@ -1063,10 +1287,32 @@ export class CarMechanics {
       }
       
       const visual: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
-      if (visual && Phaser.Geom.Intersects.RectangleToRectangle(carBounds, visual.getBounds())) {
-        const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
-        if (visualToDestroy) visualToDestroy.destroy();
-        this.handleCollisionWithObstacle(obstacle);
+      if (visual) {
+        const visualBounds = visual.getBounds();
+        
+                // Debug logging for collision detection
+                const isPothole = obstacle.getData('isPothole');
+                if (isPothole && this.scene.time.now % 500 < 16) { // Log every 500ms
+                  console.log(`🔍 Collision Check - Car: (${carBounds.left.toFixed(1)}, ${carBounds.top.toFixed(1)}) to (${carBounds.right.toFixed(1)}, ${carBounds.bottom.toFixed(1)})`);
+                  console.log(`🔍 Pothole: (${visualBounds.left.toFixed(1)}, ${visualBounds.top.toFixed(1)}) to (${visualBounds.right.toFixed(1)}, ${visualBounds.bottom.toFixed(1)})`);
+                  console.log(`🔍 Car Visual Position: X=${carBounds.centerX.toFixed(1)}, Y=${carBounds.centerY.toFixed(1)}`);
+                  console.log(`🔍 Pothole logical Y: ${obstacle.y.toFixed(1)}, Visual Y: ${visual.y.toFixed(1)}`);
+                }
+        
+        // Check collision using visual rectangle bounds (screen coordinates)
+        const collision = !(carBounds.right < visualBounds.left || 
+                          carBounds.left > visualBounds.right || 
+                          carBounds.bottom < visualBounds.top || 
+                          carBounds.top > visualBounds.bottom);
+        
+        if (collision) {
+          console.log(`💥 COLLISION DETECTED! Car: (${carBounds.left.toFixed(1)}, ${carBounds.top.toFixed(1)}) to (${carBounds.right.toFixed(1)}, ${carBounds.bottom.toFixed(1)})`);
+          console.log(`💥 Obstacle: (${visualBounds.left.toFixed(1)}, ${visualBounds.top.toFixed(1)}) to (${visualBounds.right.toFixed(1)}, ${visualBounds.bottom.toFixed(1)})`);
+          console.log(`💥 Car Visual Position: X=${carBounds.centerX.toFixed(1)}, Y=${carBounds.centerY.toFixed(1)}`);
+          const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
+          if (visualToDestroy) visualToDestroy.destroy();
+          this.handleCollisionWithObstacle(obstacle);
+        }
       }
     });
     
