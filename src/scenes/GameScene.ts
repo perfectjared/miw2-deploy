@@ -1257,11 +1257,11 @@ export class GameScene extends Phaser.Scene {
     //   this.magneticTarget.setAngle(angle);
     // }
     
-    // Keep rearview mirror container upright (no rotation)
-    // const rearviewContainer = this.children.getByName('rearviewContainer');
-    // if (rearviewContainer) {
-    //   (rearviewContainer as any).setAngle(angle);
-    // }
+    // Apply steering-based rotation to rearview mirror container
+    const rearviewContainer = this.children.getByName('rearviewContainer');
+    if (rearviewContainer) {
+      (rearviewContainer as any).setAngle(angle);
+    }
   }
 
   /**
