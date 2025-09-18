@@ -194,6 +194,7 @@ export class GameUI {
     private steeringDialIndicator!: Phaser.GameObjects.Graphics;
     private steeringAngleText!: Phaser.GameObjects.Text;
     private steeringWheelSVG!: Phaser.GameObjects.Sprite; // SVG overlay
+    private floatingSteeringSVG?: Phaser.GameObjects.Sprite; // Floating SVG during drag
     
     // Speed Crank SVG
     private speedCrankSVG!: Phaser.GameObjects.Sprite; // SVG overlay
@@ -814,11 +815,26 @@ export class GameUI {
        lastPointerX = pointer.x;
        lastPointerY = pointer.y;
        
-       // Move both knob and SVG to front when dragging starts
-       knob.setDepth(99999); // Very high depth during dragging
+       // Hide the original SVG and create a floating one during drag
        if (this.steeringWheelSVG) {
-         this.steeringWheelSVG.setDepth(100000); // Even higher depth for SVG
+         this.steeringWheelSVG.setVisible(false);
+         
+         // Create a floating SVG that follows the mouse
+         if (!this.floatingSteeringSVG) {
+           this.floatingSteeringSVG = this.scene.add.sprite(pointer.x, pointer.y, 'steering-wheel');
+           this.floatingSteeringSVG.setScale(UI_TUNABLES.steering.svgScale);
+           this.floatingSteeringSVG.setOrigin(0.5, 0.5);
+           this.floatingSteeringSVG.setAlpha(UI_TUNABLES.steering.svgAlpha);
+           this.floatingSteeringSVG.setDepth(100000); // Very high depth
+           this.floatingSteeringSVG.setTint(0xffffff);
+         } else {
+           this.floatingSteeringSVG.setVisible(true);
+           this.floatingSteeringSVG.setPosition(pointer.x, pointer.y);
+         }
        }
+       
+       // Move knob to front
+       knob.setDepth(99999);
        
        // Redraw knob with active color
        knob.clear();
@@ -867,6 +883,11 @@ export class GameUI {
         const sensitivityMultiplier = 0.7 + (distanceFromCenter / 150) * 0.3 + Math.pow(distanceFromCenter / 150, 2) * 0.3;
         const adjustedSteeringValue = this.currentSteeringPosition * sensitivityMultiplier;
         
+        // Move floating SVG to follow mouse
+        if (this.floatingSteeringSVG) {
+          this.floatingSteeringSVG.setPosition(pointer.x, pointer.y);
+        }
+        
         // Send the accumulated position directly to car mechanics
         this.scene.events.emit('steeringInput', this.currentSteeringPosition);
         this.updateSteeringIndicator(this.currentSteeringPosition); // Show raw position
@@ -888,11 +909,16 @@ export class GameUI {
       isDragging = false;
       this.isDragging = false;
       
-      // Restore both knob and SVG depths when dragging ends
-      knob.setDepth(50000); // Back to normal depth
-      if (this.steeringWheelSVG) {
-        this.steeringWheelSVG.setDepth(50001); // Back to normal depth
+      // Hide floating SVG and show original
+      if (this.floatingSteeringSVG) {
+        this.floatingSteeringSVG.setVisible(false);
       }
+      if (this.steeringWheelSVG) {
+        this.steeringWheelSVG.setVisible(true);
+      }
+      
+      // Restore knob depth
+      knob.setDepth(50000); // Back to normal depth
       
       // Redraw knob with original color
       knob.clear();
