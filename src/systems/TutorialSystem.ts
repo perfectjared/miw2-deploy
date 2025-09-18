@@ -126,37 +126,28 @@ export class TutorialSystem {
     // Determine which tutorial state to show
     let tutorialState: 'none' | 'keys-and-ignition' | 'steering' | 'exit-warning' = 'none';
     
-    console.log('🔥 TUTORIAL DEBUG: TutorialSystem.updateTutorialOverlay called with state:', state);
-    
     if (state.hasOpenMenu) {
       // Menu is open - no tutorial overlay (menu has its own overlay)
       tutorialState = 'none';
-      console.log('🔥 TUTORIAL DEBUG: Menu is open, setting tutorial to none');
     } else if (state.inExitCollisionPath) {
       // Player is in collision path with an exit - show warning
-      console.log('🚨 TutorialSystem: Exit collision path detected, showing exit-warning');
       tutorialState = 'exit-warning';
     } else if (!state.keysInIgnition) {
       // Keys not in ignition should always be highlighted unless a menu is open
       tutorialState = 'keys-and-ignition';
-      console.log('🔥 TUTORIAL DEBUG: Keys not in ignition, showing keys-and-ignition tutorial');
     } else if (state.keysInIgnition && state.carStarted) {
       // Car started - show steering tutorial if not used yet
       if (state.steeringUsed) {
         tutorialState = 'none';
-        console.log('🔥 TUTORIAL DEBUG: Keys in ignition, car started, steering used - showing none');
       } else {
         tutorialState = 'steering';
-        console.log('🔥 TUTORIAL DEBUG: Keys in ignition, car started, steering not used - showing steering');
       }
     } else if (state.carStarted) {
       // Car started but not driving yet - show steering tutorial
       tutorialState = 'steering';
-      console.log('🔥 TUTORIAL DEBUG: Car started but not driving - showing steering');
     } else {
       // Keys are in ignition but car not started - ignition menu will handle overlay
       tutorialState = 'none';
-      console.log('🔥 TUTORIAL DEBUG: Keys in ignition but car not started - showing none');
     }
     
     // Update overlay visibility and mask

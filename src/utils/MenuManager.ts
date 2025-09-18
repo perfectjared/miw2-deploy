@@ -899,11 +899,9 @@ export class MenuManager {
         
         if (deltaY > swipeThreshold && verticalDominance && Math.abs(deltaY) > 150) {
           // Swipe down detected - remove keys (works even after car has started)
-          console.log('🔥 SWIPE DEBUG: Swipe down detected - removing keys');
           this.closeDialog();
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene) {
-            console.log('🔥 SWIPE DEBUG: Emitting removeKeys event');
             gameScene.events.emit('removeKeys');
           }
           return;

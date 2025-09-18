@@ -423,33 +423,39 @@ export class Keys implements PhysicsObject {
       
       // Break constraint if Keys is snapped to magnetic target
       if ((this.scene as any).keysConstraint) {
-        this.scene.matter.world.removeConstraint((this.scene as any).keysConstraint);
-        (this.scene as any).keysConstraint = null;
-        // Restore key physics & collisions
-        if (this.gameObject.body) {
-          const keyBody = this.gameObject.body as any;
-          keyBody.isStatic = false;
-          if (keyBody._originalCollisionFilter) {
-            keyBody.collisionFilter = { ...keyBody._originalCollisionFilter };
-          } else {
-            keyBody.collisionFilter = { group: 0, category: 0x0001, mask: 0xFFFF };
+        // Use the proper method to remove keys from ignition (handles all car shutdown logic)
+        if ((this.scene as any).removeKeysFromIgnition) {
+          (this.scene as any).removeKeysFromIgnition();
+        } else {
+          // Fallback: manual cleanup if method doesn't exist
+          this.scene.matter.world.removeConstraint((this.scene as any).keysConstraint);
+          (this.scene as any).keysConstraint = null;
+          // Restore key physics & collisions
+          if (this.gameObject.body) {
+            const keyBody = this.gameObject.body as any;
+            keyBody.isStatic = false;
+            if (keyBody._originalCollisionFilter) {
+              keyBody.collisionFilter = { ...keyBody._originalCollisionFilter };
+            } else {
+              keyBody.collisionFilter = { group: 0, category: 0x0001, mask: 0xFFFF };
+            }
+            keyBody.isSensor = !!keyBody._originalIsSensor;
           }
-          keyBody.isSensor = !!keyBody._originalIsSensor;
-        }
-        // Reflect state change immediately so tutorial can react
-        (this.scene as any).keysInIgnition = false;
-        if ((this.scene as any).gameState?.updateState) {
-          (this.scene as any).gameState.updateState({ keysInIgnition: false });
-        }
-        // Close ignition menu if it was open
-        if ((this.scene as any).closeCurrentMenu) {
-          (this.scene as any).closeCurrentMenu();
-        }
-        // Request a debounced tutorial update if available
-        if ((this.scene as any).scheduleTutorialUpdate) {
-          (this.scene as any).scheduleTutorialUpdate(50);
-        } else if ((this.scene as any).updateTutorialSystem) {
-          (this.scene as any).time?.delayedCall(50, () => (this.scene as any).updateTutorialSystem());
+          // Reflect state change immediately so tutorial can react
+          (this.scene as any).keysInIgnition = false;
+          if ((this.scene as any).gameState?.updateState) {
+            (this.scene as any).gameState.updateState({ keysInIgnition: false });
+          }
+          // Close ignition menu if it was open
+          if ((this.scene as any).closeCurrentMenu) {
+            (this.scene as any).closeCurrentMenu();
+          }
+          // Request a debounced tutorial update if available
+          if ((this.scene as any).scheduleTutorialUpdate) {
+            (this.scene as any).scheduleTutorialUpdate(50);
+          } else if ((this.scene as any).updateTutorialSystem) {
+            (this.scene as any).time?.delayedCall(50, () => (this.scene as any).updateTutorialSystem());
+          }
         }
       }
       

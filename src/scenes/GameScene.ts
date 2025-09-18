@@ -572,15 +572,6 @@ export class GameScene extends Phaser.Scene {
     // Apply white fill and black stroke styling
     this.keySVG.setTint(0xffffff); // White fill
     
-    // Debug: Log key SVG creation
-    console.log('🗝️ === KEY SVG CREATION DEBUG ===');
-    console.log('🗝️ Key SVG position:', this.keySVG.x, this.keySVG.y);
-    console.log('🗝️ Key SVG origin:', this.keySVG.originX, this.keySVG.originY);
-    console.log('🗝️ Key SVG scale:', this.keySVG.scaleX, this.keySVG.scaleY);
-    console.log('🗝️ Key SVG visible:', this.keySVG.visible);
-    console.log('🗝️ Key SVG angle:', this.keySVG.angle);
-    console.log('🗝️ ===============================');
-    
     // Create hot-dog SVG overlay that will follow the food item's position (red Trash object)
     this.hotdogSVG = this.add.sprite(100, 200, 'hot-dog'); // Start at red food item's initial position
     // Scale SVG to match the physics object size (radius 60, so scale accordingly)
@@ -783,7 +774,6 @@ export class GameScene extends Phaser.Scene {
       inExitCollisionPath: this.isPlayerInExitCollisionPath()
     };
     
-    console.log('🔥 TUTORIAL DEBUG: updateTutorialSystem called:', tutorialState);
     // Track tutorial state transitions for crank/steering
     const prevCrankShown = this.hasShownCrankTutorial;
     const prevSteeringShown = this.hasShownSteeringTutorial;
@@ -958,57 +948,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /**
-   * Check if keys are properly constrained to ignition and handle car state
-   */
-  private checkKeysConstraintState() {
-    const keysAreConstrained = !!this.keysConstraint;
-    const keysShouldBeConstrained = this.keysInIgnition;
-    
-    // Additional check: verify constraint still exists in Matter.js world
-    let constraintExistsInWorld = false;
-    if (this.keysConstraint && this.matter.world) {
-      try {
-        constraintExistsInWorld = this.matter.world.constraints.includes(this.keysConstraint);
-      } catch (e) {
-        // Constraint might be invalid
-        constraintExistsInWorld = false;
-      }
-    }
-    
-    // Debug: Log constraint state every few frames
-    if (Math.random() < 0.01) { // Log ~1% of the time to avoid spam
-      console.log('🔥 CONSTRAINT DEBUG: keysAreConstrained:', keysAreConstrained, 'keysShouldBeConstrained:', keysShouldBeConstrained, 'constraintExistsInWorld:', constraintExistsInWorld, 'constraint object:', this.keysConstraint);
-    }
-    
-    // If constraint doesn't exist in world but we think it should, clean up
-    if (keysShouldBeConstrained && !constraintExistsInWorld) {
-      console.log('🔥 CAR STOP: Constraint removed from world, cleaning up state');
-      this.keysConstraint = null;
-      this.keysInIgnition = false;
-      this.gameState.updateState({ keysInIgnition: false });
-      this.turnOffCar();
-      this.restoreKeyPhysics();
-      this.resetCrankToZero();
-      this.scheduleTutorialUpdate(SCENE_TUNABLES.tutorial.scheduleDelayMs);
-      return;
-    }
-    
-    // If keys should be constrained but aren't, or vice versa, sync the state
-    if (keysAreConstrained !== keysShouldBeConstrained) {
-      console.log('🔥 CAR STOP: Constraint state mismatch detected - keysAreConstrained:', keysAreConstrained, 'keysShouldBeConstrained:', keysShouldBeConstrained);
-      
-      if (!keysAreConstrained && keysShouldBeConstrained) {
-        // Keys were removed from ignition - turn off car
-        this.keysInIgnition = false;
-        this.gameState.updateState({ keysInIgnition: false });
-        this.turnOffCar();
-        this.restoreKeyPhysics();
-        this.resetCrankToZero();
-        this.scheduleTutorialUpdate(SCENE_TUNABLES.tutorial.scheduleDelayMs);
-      }
-    }
-  }
 
   /**
    * Apply magnetic attraction to keys
@@ -1018,9 +957,6 @@ export class GameScene extends Phaser.Scene {
     if (!this.gameState.isGameStarted()) {
           return;
     }
-    
-    // Check constraint state first
-    this.checkKeysConstraintState();
     
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
         return;
@@ -1127,7 +1063,6 @@ export class GameScene extends Phaser.Scene {
       
     } else if (distance > magneticConfig.magneticRange && this.keysConstraint) {
       // Remove constraint if Keys is dragged too far away
-      console.log('🔥 CAR STOP: Keys dragged too far, removing constraint');
       this.matter.world.removeConstraint(this.keysConstraint);
       this.keysConstraint = null;
       
@@ -1196,7 +1131,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    console.log('Turn Key clicked! Car is now started.');
+    console.log('🚗 TURN KEY: Car is now started.');
     this.carStarted = true;
     this.gameState.updateState({ carStarted: true });
     
@@ -1204,7 +1139,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.carMechanics.isDriving()) {
       const currentStep = this.gameState.getState().step || 0;
       this.carMechanics.startDriving(currentStep);
-      console.log('Driving mode started with car ignition');
+      console.log('🚗 TURN KEY: Driving mode started with car ignition, drivingMode:', this.carMechanics.isDriving());
+    } else {
+      console.log('🚗 TURN KEY: CarMechanics was already driving');
     }
     
     // Do not show story overlay here; it is gated and scheduled in onStepEvent
@@ -1225,7 +1162,6 @@ export class GameScene extends Phaser.Scene {
    * Handle remove keys event
    */
   private onRemoveKeys() {
-    console.log('🔥 CAR STOP: Remove Keys clicked!');
     this.removeKeysFromIgnition();
   }
 
@@ -1277,8 +1213,6 @@ export class GameScene extends Phaser.Scene {
    * Remove keys from ignition
    */
   public removeKeysFromIgnition() {
-    console.log('🔥 CAR STOP: removeKeysFromIgnition called, carStarted:', this.carStarted);
-    
     // Remove constraint if present
     if (this.keysConstraint) {
       this.matter.world.removeConstraint(this.keysConstraint);
@@ -1665,13 +1599,11 @@ export class GameScene extends Phaser.Scene {
    * Event handlers
    */
   private onStepEvent(step: number) {
-    console.log('🔥 CAR STOP: Step event:', step, 'carStarted:', this.carStarted);
     this.gameState.updateState({ step });
     
     // Authoritative car-on guard
     const stateAtStep = this.gameState.getState();
     const carOn = !!(stateAtStep.carStarted && this.carStarted);
-    console.log('🔥 CAR STOP: carOn guard:', carOn, 'stateAtStep.carStarted:', stateAtStep.carStarted, 'this.carStarted:', this.carStarted);
     
     // Update car mechanics speed progression on step events
     if (carOn && this.carMechanics && this.carMechanics.onStepEvent) {
@@ -1998,17 +1930,14 @@ export class GameScene extends Phaser.Scene {
    * Turn the car off: flip flags, stop driving, zero gravity target
    */
   private turnOffCar() {
-    console.log('🔥 CAR STOP: turnOffCar called, carStarted was:', this.carStarted);
     if (!this.carStarted) return;
     this.carStarted = false;
     this.gameState.updateState({ carStarted: false });
     try { 
-      console.log('🔥 CAR STOP: Calling carMechanics.stopDriving()');
       this.carMechanics.stopDriving(); 
     } catch (e) {
-      console.log('🔥 CAR STOP: Error calling stopDriving:', e);
+      console.log('Error calling stopDriving:', e);
     }
     this.gravityXTarget = 0;
-    console.log('🔥 CAR STOP: Car turned off, carStarted now:', this.carStarted);
   }
 }

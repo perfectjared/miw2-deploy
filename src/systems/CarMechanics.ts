@@ -493,6 +493,7 @@ export class CarMechanics {
   public stopDriving() {
     this.drivingMode = false;
     this.carSpeed = 0;
+    this.baseSpeed = 0; // Reset base speed to ensure speed multiplier returns 0
     // Mark progression to restart on next start
     this.speedProgressionStartStep = -1;
   }
@@ -527,7 +528,7 @@ export class CarMechanics {
    * Start automatic speed progression when driving begins
    */
   private startAutomaticSpeedProgression(currentStep: number) {
-    if (this.speedProgressionStartStep === 0) {
+    if (this.speedProgressionStartStep <= 0) {
       this.speedProgressionStartStep = currentStep;
       this.baseSpeed = this.config.carMaxSpeed; // Use max speed as base
       console.log(`🚀 Starting automatic speed progression at step ${currentStep}`);
