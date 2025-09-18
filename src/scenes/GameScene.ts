@@ -1596,18 +1596,22 @@ export class GameScene extends Phaser.Scene {
     console.log('GameScene: Received step event:', step);
     this.gameState.updateState({ step });
     
+    // Authoritative car-on guard
+    const stateAtStep = this.gameState.getState();
+    const carOn = !!(stateAtStep.carStarted && this.carStarted);
+    
     // Update car mechanics speed progression on step events
-    if (this.carStarted && this.carMechanics && this.carMechanics.onStepEvent) {
+    if (carOn && this.carMechanics && this.carMechanics.onStepEvent) {
       this.carMechanics.onStepEvent(step);
     }
     
     // Apply small bump effect to all matter physics objects every step
-    if (this.carStarted) {
+    if (carOn) {
       this.applySmallBumpEffectToAllMatterObjects();
     }
     
     // Apply larger bump effect to all matter physics objects every fourth step
-    if (step % 4 === 0 && this.carStarted) {
+    if (step % 4 === 0 && carOn) {
       this.applyBumpEffectToAllMatterObjects();
     }
     
@@ -1617,7 +1621,7 @@ export class GameScene extends Phaser.Scene {
     }
     // Step-based countdown: only when game and car have both started, and every fourth step
     const state = this.gameState.getState();
-    if (state.gameStarted && this.carStarted && state.gameTime > 0) {
+    if (state.gameStarted && carOn && state.gameTime > 0) {
       this.countdownStepCounter++;
       // Only decrement countdown every fourth step
       if (this.countdownStepCounter >= 4) {
@@ -1634,7 +1638,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Increment progress by speed multiplier per step while driving (scales with speed)
-    if (state.gameStarted && this.carStarted && this.carMechanics.isDriving()) {
+    if (state.gameStarted && carOn && this.carMechanics.isDriving()) {
       const cur = this.gameState.getState().progress || 0;
       const speedMultiplier = this.carMechanics.getSpeedMultiplier();
       const progressIncrement = Math.max(0.1, speedMultiplier); // Minimum 0.1 progress per step
