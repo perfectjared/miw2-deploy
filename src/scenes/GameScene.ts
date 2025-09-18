@@ -1391,6 +1391,11 @@ export class GameScene extends Phaser.Scene {
       this.carMechanics.stopDriving();
       this.drivingMode = false;
     } else {
+      // Do not allow driving to start unless the car is started (ignition on)
+      if (!this.carStarted) {
+        console.log('toggleDrivingMode ignored: car is not started');
+        return;
+      }
       const currentStep = this.gameState.getState().step || 0;
       this.carMechanics.startDriving(currentStep);
       this.drivingMode = true;
