@@ -965,6 +965,35 @@ export class GameScene extends Phaser.Scene {
     const keysAreConstrained = !!this.keysConstraint;
     const keysShouldBeConstrained = this.keysInIgnition;
     
+    // Additional check: verify constraint still exists in Matter.js world
+    let constraintExistsInWorld = false;
+    if (this.keysConstraint && this.matter.world) {
+      try {
+        constraintExistsInWorld = this.matter.world.constraints.includes(this.keysConstraint);
+      } catch (e) {
+        // Constraint might be invalid
+        constraintExistsInWorld = false;
+      }
+    }
+    
+    // Debug: Log constraint state every few frames
+    if (Math.random() < 0.01) { // Log ~1% of the time to avoid spam
+      console.log('🔥 CONSTRAINT DEBUG: keysAreConstrained:', keysAreConstrained, 'keysShouldBeConstrained:', keysShouldBeConstrained, 'constraintExistsInWorld:', constraintExistsInWorld, 'constraint object:', this.keysConstraint);
+    }
+    
+    // If constraint doesn't exist in world but we think it should, clean up
+    if (keysShouldBeConstrained && !constraintExistsInWorld) {
+      console.log('🔥 CAR STOP: Constraint removed from world, cleaning up state');
+      this.keysConstraint = null;
+      this.keysInIgnition = false;
+      this.gameState.updateState({ keysInIgnition: false });
+      this.turnOffCar();
+      this.restoreKeyPhysics();
+      this.resetCrankToZero();
+      this.scheduleTutorialUpdate(SCENE_TUNABLES.tutorial.scheduleDelayMs);
+      return;
+    }
+    
     // If keys should be constrained but aren't, or vice versa, sync the state
     if (keysAreConstrained !== keysShouldBeConstrained) {
       console.log('🔥 CAR STOP: Constraint state mismatch detected - keysAreConstrained:', keysAreConstrained, 'keysShouldBeConstrained:', keysShouldBeConstrained);
