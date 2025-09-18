@@ -472,7 +472,7 @@ export const PHYSICS_CONFIG = {
   
   // Magnetic Attraction
   magneticStrength: 0.005,
-  magneticRadius: 50,
+  magneticRadius: 20, // Reduced from 50 to make it easier to remove keys
   magneticTargetRadius: 25,
   magneticTargetX: 200,
   magneticTargetY: 520, // Moved up 5% from 550

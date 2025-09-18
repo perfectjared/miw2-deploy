@@ -959,6 +959,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Check if keys are properly constrained to ignition and handle car state
+   */
+  private checkKeysConstraintState() {
+    const keysAreConstrained = !!this.keysConstraint;
+    const keysShouldBeConstrained = this.keysInIgnition;
+    
+    // If keys should be constrained but aren't, or vice versa, sync the state
+    if (keysAreConstrained !== keysShouldBeConstrained) {
+      console.log('🔥 CAR STOP: Constraint state mismatch detected - keysAreConstrained:', keysAreConstrained, 'keysShouldBeConstrained:', keysShouldBeConstrained);
+      
+      if (!keysAreConstrained && keysShouldBeConstrained) {
+        // Keys were removed from ignition - turn off car
+        this.keysInIgnition = false;
+        this.gameState.updateState({ keysInIgnition: false });
+        this.turnOffCar();
+        this.restoreKeyPhysics();
+        this.resetCrankToZero();
+        this.scheduleTutorialUpdate(SCENE_TUNABLES.tutorial.scheduleDelayMs);
+      }
+    }
+  }
+
+  /**
    * Apply magnetic attraction to keys
    */
   private applyMagneticAttraction() {
@@ -967,10 +990,8 @@ export class GameScene extends Phaser.Scene {
           return;
     }
     
-    // Debug: Log magnetic attraction calls
-    if (this.keysConstraint) {
-      console.log('🔥 MAGNETIC DEBUG: applyMagneticAttraction called with keysConstraint present');
-    }
+    // Check constraint state first
+    this.checkKeysConstraintState();
     
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
         return;
@@ -1004,10 +1025,8 @@ export class GameScene extends Phaser.Scene {
     const dy = targetPos.y - keysPos.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Debug: Log distance calculation when keys are constrained
-    if (this.keysConstraint) {
-      console.log('🔥 MAGNETIC DEBUG: distance:', distance, 'magneticRange:', magneticConfig.magneticRange, 'keysConstraint present:', !!this.keysConstraint);
-    }
+    // Check if keys are constrained (attached to ignition)
+    const keysAreConstrained = !!this.keysConstraint;
     
     const isDraggingKeys = !!(this.frontseatKeys.gameObject as any).isDragging;
     const attractionWindowActive = Date.now() <= this.keysAttractionUntil;
@@ -1079,7 +1098,7 @@ export class GameScene extends Phaser.Scene {
       
     } else if (distance > magneticConfig.magneticRange && this.keysConstraint) {
       // Remove constraint if Keys is dragged too far away
-      console.log('🔥 CAR STOP: Keys left magnetic range, distance:', distance, 'magneticRange:', magneticConfig.magneticRange);
+      console.log('🔥 CAR STOP: Keys dragged too far, removing constraint');
       this.matter.world.removeConstraint(this.keysConstraint);
       this.keysConstraint = null;
       
@@ -1087,7 +1106,7 @@ export class GameScene extends Phaser.Scene {
       this.keysInIgnition = false;
       this.gameState.updateState({ keysInIgnition: false });
       
-      // Turn car off when key leaves magnetic range
+      // Turn car off when constraint is removed
       this.turnOffCar();
       
       // Fully restore key physics to normal interactive state

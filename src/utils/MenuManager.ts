@@ -897,8 +897,6 @@ export class MenuManager {
         const swipeThreshold = 100; // Much larger threshold
         const verticalDominance = Math.abs(deltaY) > Math.abs(deltaX) * 2; // Must be primarily vertical
         
-        console.log('🔥 SWIPE DEBUG: deltaY:', deltaY, 'deltaX:', deltaX, 'swipeThreshold:', swipeThreshold, 'verticalDominance:', verticalDominance, 'absDeltaY:', Math.abs(deltaY));
-        
         if (deltaY > swipeThreshold && verticalDominance && Math.abs(deltaY) > 150) {
           // Swipe down detected - remove keys (works even after car has started)
           console.log('🔥 SWIPE DEBUG: Swipe down detected - removing keys');
