@@ -1866,10 +1866,9 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     
-    // DISABLED: Apply lateral gravity from steering (conflicts with position-based control)
-    // const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
-    // this.gravityXTarget = -(Phaser.Math.Clamp(value, -150, 150) / 150) * maxGx; // Updated to match new range
-    this.gravityXTarget = 0; // Keep gravity neutral for position-based steering
+    // Apply lateral gravity from steering to affect Matter.js world
+    const maxGx = SCENE_TUNABLES.gravity.maxLateralGx; // tune lateral gravity strength
+    this.gravityXTarget = -(Phaser.Math.Clamp(value, -150, 150) / 150) * maxGx; // Updated to match new range
     
     // Send steering directly to car mechanics for immediate response
     this.carMechanics.handleSteering(value);
