@@ -1427,11 +1427,16 @@ export class MenuManager {
           console.log('Car started!');
           carStarted = true; // Mark car as started
           // Add delay before closing menu
+          console.log('Manual completion: Scheduling turnKey event in 500ms');
           this.scene.time.delayedCall(500, () => {
+            console.log('Manual completion: Executing delayed turnKey event');
             this.closeDialog();
             const gameScene = this.scene.scene.get('GameScene');
             if (gameScene) {
+              console.log('Manual completion: Emitting turnKey event to GameScene');
               gameScene.events.emit('turnKey');
+            } else {
+              console.error('Manual completion: GameScene not found for turnKey event');
             }
           });
         }
