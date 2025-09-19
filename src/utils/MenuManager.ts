@@ -414,6 +414,12 @@ export class MenuManager {
         this.popMenu();
         this.showGameOverMenu();
         break;
+      case 'CYOA':
+        // CYOA menus are one-time events and should not be restored
+        // Simply pop them from the stack to clean up
+        console.log('MenuManager: CYOA menu found in stack - popping without restoration');
+        this.popMenu();
+        break;
     }
   }
 
