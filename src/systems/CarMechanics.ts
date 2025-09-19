@@ -1000,10 +1000,9 @@ export class CarMechanics {
   /**
    * Trigger a planned CYOA
    */
-  private triggerCyoa(plannedCyoa: any) {
-    // Defensive: prevent accidental early trigger of 'after' exit-related events
-    if (plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'after') {
-      // Only allow via scheduled trigger path
+  private triggerCyoa(plannedCyoa: any, options?: { allowAfter?: boolean }) {
+    // Defensive: prevent accidental early trigger of 'after' exit-related events unless explicitly allowed
+    if (plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'after' && !options?.allowAfter) {
       console.warn(`🎭 Guard: Attempted to trigger 'after' exit CYOA ${plannedCyoa.id} early; ignoring`);
       return;
     }
@@ -1070,7 +1069,7 @@ export class CarMechanics {
     
     if (bundledCyoa) {
       console.log(`🎭 Triggering scheduled bundled CYOA for Exit ${exitNumber}`);
-      this.triggerCyoa(bundledCyoa);
+      this.triggerCyoa(bundledCyoa, { allowAfter: true });
       bundledCyoa.triggered = true;
       
       // Update UI immediately to reflect the triggered state
