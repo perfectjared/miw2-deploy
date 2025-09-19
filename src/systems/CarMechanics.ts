@@ -349,27 +349,21 @@ export class CarMechanics {
         const next = this.plannedCyoa[i + 1];
         const spacing = next.cyoaThreshold - current.cyoaThreshold;
         
+        // Skip spacing check if either CYOA is bundled with an exit
+        if (current.isExitRelated && current.exitNumber) {
+          continue; // Bundled CYOAs can be right on top of exits
+        }
+        if (next.isExitRelated && next.exitNumber) {
+          continue; // Bundled CYOAs can be right on top of exits
+        }
+        
         if (spacing < minSpacing) {
           needsAdjustment = true;
           
-          // Adjust the non-exit-related CYOA first
-          if (!current.isExitRelated && !next.isExitRelated) {
-            // Both are regular CYOA - move them apart
-            const adjustment = (minSpacing - spacing) / 2;
-            current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
-            next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
-          } else if (!current.isExitRelated) {
-            // Current is regular, next is exit-related - move current
-            current.cyoaThreshold = Math.max(20, next.cyoaThreshold - minSpacing);
-          } else if (!next.isExitRelated) {
-            // Current is exit-related, next is regular - move next
-            next.cyoaThreshold = Math.min(90, current.cyoaThreshold + minSpacing);
-          } else {
-            // Both are exit-related - this shouldn't happen, but adjust anyway
-            const adjustment = (minSpacing - spacing) / 2;
-            current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
-            next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
-          }
+          // Both are regular CYOA - move them apart
+          const adjustment = (minSpacing - spacing) / 2;
+          current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
+          next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
         }
       }
       

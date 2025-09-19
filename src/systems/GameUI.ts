@@ -266,7 +266,7 @@ export class GameUI {
   /**
    * Update threshold indicators based on planned exits, CYOA, and story
    */
-  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
+  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean; isExitRelated?: boolean; exitNumber?: number }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
     // Clear existing indicators
     this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
     this.progressThresholdIndicators = [];
@@ -299,9 +299,14 @@ export class GameUI {
       }
     });
     
-    // Create triangle indicators for unspawned CYOA (purple triangles)
+    // Create triangle indicators for unspawned CYOA (light grey triangles)
     if (plannedCyoa) {
       plannedCyoa.forEach(cyoa => {
+        // Skip bundled CYOAs - they don't show indicators
+        if (cyoa.isExitRelated && cyoa.exitNumber) {
+          return; // Don't show indicator for bundled CYOAs
+        }
+        
         if (!cyoa.triggered) {
           const triangleX = barX + (cyoa.progressThreshold / 100) * barWidth;
           const triangleY = barY - 16; // Above the exit indicators
