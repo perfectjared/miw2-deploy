@@ -667,18 +667,30 @@ export class CarMechanics {
         }
       }
       
-      // For first sequence, make the 3rd CYOA always exit-related for testing
-      if (isFirstSequence && cyoaId === 3) {
+      // For first sequence, make CYOAs 2 and 3 exit-related for testing (before and after)
+      if (isFirstSequence && (cyoaId === 2 || cyoaId === 3)) {
         isExitRelated = true;
         exitNumber = 1; // Always bundle with Exit 1 for testing
-        exitTiming = 'before'; // First one should be before exit for testing now
-        const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
-        if (chosenExit) {
-          const offset = Phaser.Math.Between(5, 10); // trigger a bit before the exit
-          cyoaThreshold = Math.max(1, chosenExit.exitThreshold - offset);
-          console.log(`First sequence CYOA ${cyoaId} bundled BEFORE Exit ${exitNumber} at ${cyoaThreshold}% (exit at ${chosenExit.exitThreshold}%)`);
-        } else {
-          console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
+        
+        if (cyoaId === 2) {
+          exitTiming = 'before'; // 2nd CYOA is before exit
+          const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+          if (chosenExit) {
+            const offset = Phaser.Math.Between(5, 10); // trigger a bit before the exit
+            cyoaThreshold = Math.max(1, chosenExit.exitThreshold - offset);
+            console.log(`First sequence CYOA ${cyoaId} bundled BEFORE Exit ${exitNumber} at ${cyoaThreshold}% (exit at ${chosenExit.exitThreshold}%)`);
+          } else {
+            console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
+          }
+        } else if (cyoaId === 3) {
+          exitTiming = 'after'; // 3rd CYOA is after exit
+          const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+          if (chosenExit) {
+            cyoaThreshold = chosenExit.exitThreshold; // Same threshold as exit (triggered on close)
+            console.log(`First sequence CYOA ${cyoaId} bundled AFTER Exit ${exitNumber} at ${cyoaThreshold}% (will trigger on exit close)`);
+          } else {
+            console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
+          }
         }
       }
       
@@ -1176,7 +1188,14 @@ export class CarMechanics {
     if (enabled) {
       // Darken the sky color for night time
       this.config.skyColor = 0x202020; // Very dark grey
-      console.log('🌙 CarMechanics: Night time mode enabled');
+      
+      // Check if any menu is currently open - suppress logs during menus
+      const menuScene = this.scene.scene.get('MenuScene');
+      const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+      
+      if (!hasOpenMenu) {
+        console.log('🌙 CarMechanics: Night time mode enabled');
+      }
     } else {
       // Restore normal sky color
       this.config.skyColor = 0x000000; // Black (normal)
