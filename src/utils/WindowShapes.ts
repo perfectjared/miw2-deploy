@@ -39,6 +39,7 @@ export class WindowShapes {
   // Shape animation tracking
   private activeSpeechBubbles = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number }>();
   private activeAnimatedShapes = new Map<string, { graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number }>();
+  private activeSteeringWheels = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, currentRotation: number }>();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -515,6 +516,27 @@ export class WindowShapes {
         this.regenerateShapeWithSubtleAnimation(graphics, shapeType, x, y, width, height);
       }
     });
+    
+    // Update steering wheels on half-steps for organic movement
+    this.activeSteeringWheels.forEach(({ graphics, x, y, radius, currentRotation }) => {
+      if (graphics && graphics.scene) {
+        this.regenerateSteeringWheel(graphics, x, y, radius, currentRotation);
+      }
+    });
+  }
+
+  /**
+   * Register an animated shape for ongoing updates
+   */
+  private registerAnimatedShape(shapeId: string, graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
+    this.activeAnimatedShapes.set(shapeId, { graphics, shapeType, x, y, width, height });
+  }
+
+  /**
+   * Unregister an animated shape to stop updates
+   */
+  private unregisterAnimatedShape(shapeId: string): void {
+    this.activeAnimatedShapes.delete(shapeId);
   }
 
   /**
@@ -587,123 +609,100 @@ export class WindowShapes {
   }
 
   /**
-   * Get count of actively tracked speech bubbles
-   */
-  getActiveSpeechBubbleCount(): number {
-    return this.activeSpeechBubbles.size;
-  }
-
-  /**
-   * Register any shape to be animated with subtle movements
-   */
-  registerAnimatedShape(id: string, graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
-    // No timer needed - animations are now driven by half-step events
-    this.activeAnimatedShapes.set(id, { graphics, shapeType, x, y, width, height });
-  }
-
-  /**
-   * Unregister an animated shape
-   */
-  unregisterAnimatedShape(id: string): void {
-    this.activeAnimatedShapes.delete(id);
-  }
-
-  /**
-   * Regenerate any shape with subtle animations (smaller variations than speech bubbles)
+   * Regenerate shapes with subtle organic animation - EXACTLY like createCollageRect
    */
   private regenerateShapeWithSubtleAnimation(graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
-    // Clear the existing graphics
     graphics.clear();
-
-    // Use the same logic as createCollageRect but with smaller variations
+    
+    // Use the EXACT same approach as createCollageRect but with fresh random values
     const strokeWidth = 2;
     const strokeColor = 0x000000; // Black
-    // Set fill color based on shape type
-    let fillColor = 0xd0d0d0; // Default darker grey for backgrounds
-    if (shapeType === 'button') {
+    
+    // Determine fill color based on shape type
+    let fillColor = 0xffffff; // Default white
+    if (shapeType === 'window') {
+      fillColor = 0xd0d0d0; // Darker grey for main windows
+    } else if (shapeType === 'button') {
       fillColor = 0xffffff; // White for buttons
     }
     const fillAlpha = 1.0;
     
-    // Create polygon points with same structure as original but smaller variations
-    const offset = 5; // Same offset as original
+    // Create polygon points with extra random points along edges - SAME LOGIC
+    const offset = 5; // Make polygon 5 pixels larger on each side
     const polygonPoints = [];
     
-    // Reduce variation for subtle animation (was -5 to 5, now -2 to 2)
-    const subtleVariation = 2;
-    
-    // Add random extra points (same count as original)
+    // Add random extra points (same range as original)
     const extraPointCount = Phaser.Math.Between(2, 5);
     
-    // Create arrays for points along each edge (same as original)
+    // Create arrays for points along each edge - SAME STRUCTURE
     const topEdgePoints = [];
     const rightEdgePoints = [];
     const bottomEdgePoints = [];
     const leftEdgePoints = [];
     
-    // Always include corners with small random movement
+    // Always include corners with random movement - SAME LOGIC
     topEdgePoints.push({ 
-      x: x - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation), 
-      y: y - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation)  
+      x: x - offset + Phaser.Math.Between(-5, -2),
+      y: y - offset + Phaser.Math.Between(-5, -2)
     }); // Top-left corner
     rightEdgePoints.push({ 
-      x: x + width + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3), 
-      y: y - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation)  
+      x: x + width + offset + Phaser.Math.Between(2, 5),
+      y: y - offset + Phaser.Math.Between(-5, -2)
     }); // Top-right corner
     bottomEdgePoints.push({ 
-      x: x + width + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3), 
-      y: y + height + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3) 
+      x: x + width + offset + Phaser.Math.Between(2, 5),
+      y: y + height + offset + Phaser.Math.Between(2, 5)
     }); // Bottom-right corner
     leftEdgePoints.push({ 
-      x: x - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation), 
-      y: y + height + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3) 
+      x: x - offset + Phaser.Math.Between(-5, -2),
+      y: y + height + offset + Phaser.Math.Between(2, 5)
     }); // Bottom-left corner
     
-    // Add random extra points to edges (same logic as original)
+    // Add random extra points to edges - SAME LOGIC
     for (let i = 0; i < extraPointCount; i++) {
       const edgeIndex = Phaser.Math.Between(0, 3);
       
       switch (edgeIndex) {
         case 0: // Top edge
           topEdgePoints.push({
-            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation),
-            y: y - offset + Phaser.Math.Between(-subtleVariation-4, -subtleVariation)
+            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-4, 4),
+            y: y - offset + Phaser.Math.Between(-8, -2)
           });
           break;
         case 1: // Right edge
           rightEdgePoints.push({
-            x: x + width + offset + Phaser.Math.Between(subtleVariation, subtleVariation+4),
-            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation)
+            x: x + width + offset + Phaser.Math.Between(2, 8),
+            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-4, 4)
           });
           break;
         case 2: // Bottom edge
           bottomEdgePoints.push({
-            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation),
-            y: y + height + offset + Phaser.Math.Between(subtleVariation, subtleVariation+4)
+            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-4, 4),
+            y: y + height + offset + Phaser.Math.Between(2, 8)
           });
           break;
         case 3: // Left edge
           leftEdgePoints.push({
-            x: x - offset + Phaser.Math.Between(-subtleVariation-4, -subtleVariation),
-            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation)
+            x: x - offset + Phaser.Math.Between(-8, -2),
+            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-4, 4)
           });
           break;
       }
     }
     
-    // Sort points along each edge to maintain proper order (same as original)
-    topEdgePoints.sort((a, b) => a.x - b.x); // Left to right
-    rightEdgePoints.sort((a, b) => a.y - b.y); // Top to bottom
-    bottomEdgePoints.sort((a, b) => b.x - a.x); // Right to left
-    leftEdgePoints.sort((a, b) => b.y - a.y); // Bottom to top
+    // Sort points along each edge - SAME SORTING
+    topEdgePoints.sort((a, b) => a.x - b.x);
+    rightEdgePoints.sort((a, b) => a.y - b.y);
+    bottomEdgePoints.sort((a, b) => b.x - a.x);
+    leftEdgePoints.sort((a, b) => b.y - a.y);
     
-    // Combine all points in clockwise order
+    // Combine all points in clockwise order - SAME ORDER
     polygonPoints.push(...topEdgePoints);
     polygonPoints.push(...rightEdgePoints);
     polygonPoints.push(...bottomEdgePoints);
     polygonPoints.push(...leftEdgePoints);
-
-    // Draw shadow first (same as original)
+    
+    // Draw shadow first - SAME SHADOW
     const shadowOffset = 6;
     graphics.fillStyle(0x222222, 1.0);
     graphics.beginPath();
@@ -713,8 +712,8 @@ export class WindowShapes {
     }
     graphics.closePath();
     graphics.fillPath();
-
-    // Draw main polygon (same as original)
+    
+    // Draw main polygon border - SAME BORDER
     graphics.lineStyle(strokeWidth, strokeColor);
     graphics.fillStyle(fillColor, fillAlpha);
     graphics.beginPath();
@@ -726,9 +725,160 @@ export class WindowShapes {
     graphics.fillPath();
     graphics.strokePath();
     
-    // Draw the filled rectangle on top (same as original)
+    // Draw clean rectangle on top - SAME RECTANGLE
     graphics.fillStyle(fillColor, fillAlpha);
     graphics.fillRect(x, y, width, height);
+  }
+
+  /**
+   * Get count of actively tracked speech bubbles
+   */
+  getActiveSpeechBubbleCount(): number {
+    return this.activeSpeechBubbles.size;
+  }
+
+  /**
+   * Create an animated steering wheel with organic, jagged edges
+   */
+  createAnimatedSteeringWheel(x: number, y: number, radius: number): Phaser.GameObjects.Graphics {
+    const graphics = this.scene.add.graphics();
+    
+    // Register this steering wheel for half-step animation
+    const wheelId = `steeringwheel_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.registerSteeringWheel(wheelId, graphics, x, y, radius, 0);
+    
+    // Store the ID for cleanup
+    (graphics as any).wheelId = wheelId;
+    
+    // Add cleanup when graphics is destroyed
+    graphics.on('destroy', () => {
+      this.unregisterSteeringWheel(wheelId);
+    });
+    
+    // Draw initial steering wheel
+    this.regenerateSteeringWheel(graphics, x, y, radius, 0);
+    
+    return graphics;
+  }
+
+  /**
+   * Register a steering wheel for half-step animations
+   */
+  registerSteeringWheel(id: string, graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, rotation: number): void {
+    this.activeSteeringWheels.set(id, { graphics, x, y, radius, currentRotation: rotation });
+  }
+
+  /**
+   * Unregister a steering wheel from animations
+   */
+  unregisterSteeringWheel(id: string): void {
+    this.activeSteeringWheels.delete(id);
+  }
+
+  /**
+   * Update the rotation of a specific steering wheel
+   */
+  updateSteeringWheelRotation(graphics: Phaser.GameObjects.Graphics, rotation: number): void {
+    // Find the steering wheel by graphics object
+    for (const [id, wheelData] of this.activeSteeringWheels) {
+      if (wheelData.graphics === graphics) {
+        wheelData.currentRotation = rotation;
+        // Regenerate immediately with new rotation
+        this.regenerateSteeringWheel(graphics, wheelData.x, wheelData.y, wheelData.radius, rotation);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Regenerate steering wheel with simplified SVG geometry
+   */
+  private regenerateSteeringWheel(graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, rotation: number): void {
+    graphics.clear();
+    
+    const strokeWidth = 3;
+    const strokeColor = 0x000000; // Black
+    const fillColor = 0xffffff; // White
+    const fillAlpha = 1.0;
+    
+    // Create simplified points from the original SVG geometry
+    // The SVG has complex paths - we'll extract key structural points and connect with straight lines
+    const simplifiedPoints = this.createSimplifiedSteeringWheelGeometry(x, y, radius, rotation);
+    
+    // Draw shadow first
+    const shadowOffset = 2;
+    graphics.fillStyle(0x222222, 0.3);
+    this.drawPolygonFromPoints(graphics, simplifiedPoints, shadowOffset, shadowOffset);
+    
+    // Draw main shape
+    graphics.lineStyle(strokeWidth, strokeColor);
+    graphics.fillStyle(fillColor, fillAlpha);
+    this.drawPolygonFromPoints(graphics, simplifiedPoints, 0, 0);
+    graphics.fillPath();
+    graphics.strokePath();
+  }
+
+  /**
+   * Create simplified steering wheel geometry by extracting key points from SVG and removing detail
+   */
+  private createSimplifiedSteeringWheelGeometry(x: number, y: number, radius: number, rotation: number): Array<{x: number, y: number}> {
+    const variation = 0.3; // Organic variation
+    
+    // Simplified key points extracted from the steering wheel SVG structure
+    // Removing complex curves and keeping only essential shape-defining points
+    const basePoints = [
+      // Top section - simplified from the complex curved grip
+      { angle: -Math.PI/2 - 0.6, r: radius * 0.9 },     // top left outer
+      { angle: -Math.PI/2 - 0.3, r: radius * 0.7 },     // top left inner  
+      { angle: -Math.PI/2, r: radius * 0.65 },          // top center
+      { angle: -Math.PI/2 + 0.3, r: radius * 0.7 },     // top right inner
+      { angle: -Math.PI/2 + 0.6, r: radius * 0.9 },     // top right outer
+      
+      // Right section - simplified from grip handle
+      { angle: 0.2, r: radius },                        // right outer
+      { angle: 0.6, r: radius * 0.8 },                  // right grip point
+      { angle: 1.0, r: radius * 0.6 },                  // right inner
+      
+      // Bottom section - simplified arc
+      { angle: Math.PI/2 - 0.2, r: radius * 0.5 },      // bottom right
+      { angle: Math.PI/2, r: radius * 0.45 },           // bottom center  
+      { angle: Math.PI/2 + 0.2, r: radius * 0.5 },      // bottom left
+      
+      // Left section - simplified from grip handle
+      { angle: Math.PI - 1.0, r: radius * 0.6 },        // left inner
+      { angle: Math.PI - 0.6, r: radius * 0.8 },        // left grip point
+      { angle: Math.PI - 0.2, r: radius },              // left outer
+      
+      // Back to top - completing the shape
+      { angle: -Math.PI + 0.4, r: radius * 0.95 },      // left top connection
+    ];
+    
+    // Convert to actual coordinates with rotation and organic variation
+    return basePoints.map(point => {
+      const actualRadius = point.r + Phaser.Math.Between(-variation, variation);
+      const actualAngle = point.angle + rotation;
+      
+      return {
+        x: x + Math.cos(actualAngle) * actualRadius,
+        y: y + Math.sin(actualAngle) * actualRadius
+      };
+    });
+  }
+
+  /**
+   * Draw polygon from points with optional offset
+   */
+  private drawPolygonFromPoints(graphics: Phaser.GameObjects.Graphics, points: Array<{x: number, y: number}>, offsetX: number, offsetY: number): void {
+    if (points.length === 0) return;
+    
+    graphics.beginPath();
+    graphics.moveTo(points[0].x + offsetX, points[0].y + offsetY);
+    
+    for (let i = 1; i < points.length; i++) {
+      graphics.lineTo(points[i].x + offsetX, points[i].y + offsetY);
+    }
+    
+    graphics.closePath();
   }
 
   /**
@@ -741,19 +891,12 @@ export class WindowShapes {
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    }, true, 'dialog'); // Enable animation
+    }, true, 'window'); // Enable animation for main window
     container.add(mainWindow);
     
     // Close button (X) in top-right corner - white for interaction
     const closeButton = this.createCollageButton(width - 35, 5, 25, 25);
     container.add(closeButton);
-    
-    // Add cleanup when container is destroyed
-    container.on('destroy', () => {
-      if ((mainWindow as any).animationId) {
-        this.unregisterAnimatedShape((mainWindow as any).animationId);
-      }
-    });
     
     return container;
   }
@@ -768,7 +911,7 @@ export class WindowShapes {
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    }, true, 'confirmDialog'); // Enable animation
+    }, true, 'window'); // Enable animation for main window
     container.add(mainWindow);
     
     // Close button in top-right - white for interaction
@@ -785,13 +928,6 @@ export class WindowShapes {
     container.add(leftButton);
     container.add(rightButton);
     
-    // Add cleanup when container is destroyed
-    container.on('destroy', () => {
-      if ((mainWindow as any).animationId) {
-        this.unregisterAnimatedShape((mainWindow as any).animationId);
-      }
-    });
-    
     return container;
   }
 
@@ -805,7 +941,7 @@ export class WindowShapes {
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    }, true, 'menu'); // Enable animation
+    }, true, 'window'); // Enable animation for main window
     container.add(mainWindow);
     
     // Close button in top-left - white for interaction
@@ -824,13 +960,6 @@ export class WindowShapes {
       container.add(menuButton);
     }
     
-    // Add cleanup when container is destroyed
-    container.on('destroy', () => {
-      if ((mainWindow as any).animationId) {
-        this.unregisterAnimatedShape((mainWindow as any).animationId);
-      }
-    });
-    
     return container;
   }
 
@@ -844,7 +973,7 @@ export class WindowShapes {
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    }, true, 'panel'); // Enable animation
+    }, true, 'window'); // Enable animation for main window
     container.add(mainWindow);
     
     // Four corner buttons - white for interaction
@@ -867,13 +996,6 @@ export class WindowShapes {
     const bottomRightButton = this.createCollageButton(width - buttonSize - offset, height - buttonSize - offset, buttonSize, buttonSize);
     container.add(bottomRightButton);
     
-    // Add cleanup when container is destroyed
-    container.on('destroy', () => {
-      if ((mainWindow as any).animationId) {
-        this.unregisterAnimatedShape((mainWindow as any).animationId);
-      }
-    });
-    
     return container;
   }
 
@@ -887,20 +1009,13 @@ export class WindowShapes {
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    }, true, 'messageBox'); // Enable animation
+    }, true, 'window'); // Enable animation for main window
     container.add(mainWindow);
     
     // Single OK button centered at bottom - white for interaction
     const buttonWidth = 80;
     const okButton = this.createCollageButton((width - buttonWidth) / 2, height - 40, buttonWidth, 30);
     container.add(okButton);
-    
-    // Add cleanup when container is destroyed
-    container.on('destroy', () => {
-      if ((mainWindow as any).animationId) {
-        this.unregisterAnimatedShape((mainWindow as any).animationId);
-      }
-    });
     
     return container;
   }
