@@ -1089,7 +1089,10 @@ export class GameScene extends Phaser.Scene {
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
       if (!this.carStarted && this.keysConstraint) {
+        console.log('Showing turn key menu - carStarted:', this.carStarted, 'keysConstraint:', !!this.keysConstraint);
         this.showTurnKeyMenu();
+      } else {
+        console.log('Not showing turn key menu - carStarted:', this.carStarted, 'keysConstraint:', !!this.keysConstraint);
       }
       
       // Make Keys move vertically with camera when snapped
@@ -2183,6 +2186,7 @@ export class GameScene extends Phaser.Scene {
    */
   private turnOffCar() {
     if (!this.carStarted) return;
+    console.log('Turning off car - carStarted was:', this.carStarted);
     this.carStarted = false;
     this.gameState.updateState({ carStarted: false });
     try { 
@@ -2191,5 +2195,6 @@ export class GameScene extends Phaser.Scene {
       console.log('Error calling stopDriving:', e);
     }
     this.gravityXTarget = 0;
+    console.log('Car turned off - carStarted is now:', this.carStarted);
   }
 }
