@@ -405,7 +405,7 @@ export class MenuManager {
     
     const menuToRestore = this.menuStack[this.menuStack.length - 1];
     
-    // Simple rule: Only restore if the menu is in the PERSISTENT category
+    // Simple rule: Only restore PERSISTENT menus, and only if user didn't dismiss them
     const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
     const isOneTime = this.MENU_CATEGORIES.ONE_TIME.includes(menuToRestore.type);
     
