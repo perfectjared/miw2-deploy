@@ -1308,6 +1308,8 @@ export class MenuManager {
       ? `Something happened ${cyoaData.exitTiming === 'before' ? 'before' : 'after'} Exit ${cyoaData.exitNumber}!`
       : 'Something happened!';
     
+    console.log(`🎭 CYOA Menu: isExitRelated=${cyoaData.isExitRelated}, exitNumber=${cyoaData.exitNumber}, exitTiming=${cyoaData.exitTiming}, description="${cyoaDescription}"`);
+    
     const menuConfig: MenuConfig = {
       title: 'CYOA',
       content: cyoaDescription,
