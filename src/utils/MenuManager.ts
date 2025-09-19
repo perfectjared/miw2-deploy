@@ -1,28 +1,27 @@
 /**
- * MENU MANAGER - UNIFIED MENU SYSTEM
+ * MENU MANAGER - SIMPLIFIED UNIFIED MENU SYSTEM
  * 
  * This class handles all menu creation, display, and management throughout the game.
  * It provides a consistent interface for creating different types of menus with
  * proper hierarchy, styling, and user interaction handling.
  * 
  * Key Features:
- * - Menu hierarchy system (prevents menu conflicts)
+ * - Simplified menu hierarchy system (prevents menu conflicts)
+ * - Category-based menu management (PERSISTENT, TEMPORARY, ONE_TIME, OVERLAY)
  * - Unified overlay background system (same as tutorial overlays)
  * - Consistent styling and positioning
  * - Event-driven menu creation
  * - Save/load integration
  * - Slider controls for interactive elements
  * 
- * Menu Types:
- * - Start Menu: Game initialization and resume options
- * - Pause Menu: Game pause/resume controls
- * - Save Menu: Save game functionality
- * - Turn Key Menu: Car ignition with slider control
- * - Obstacle Menus: Pothole and exit interactions
- * - Game Over Menu: End game state
+ * Menu Categories:
+ * - PERSISTENT: Menus that should be restored (START, PAUSE, GAME_OVER, TURN_KEY)
+ * - TEMPORARY: Menus that can be restored but are context-dependent (OBSTACLE, EXIT, SHOP, SAVE)
+ * - ONE_TIME: Menus that should never be restored (CYOA, STORY, MORAL_DECISION)
+ * - OVERLAY: Non-blocking overlays (TUTORIAL, PET_STORY)
  * 
- * The system uses a stack-based approach to manage menu priority and
- * ensures only one menu is active at a time with proper cleanup.
+ * The system uses a simplified stack-based approach with clear cleanup rules
+ * and ensures only one menu is active at a time with predictable behavior.
  */
 
 import Phaser from 'phaser';
@@ -95,7 +94,7 @@ export class MenuManager {
   // CLASS PROPERTIES
   // ============================================================================
   
-  // Menu Hierarchy System
+  // Menu Hierarchy System - Simplified
   private readonly MENU_PRIORITIES = {
     TURN_KEY: 110,    // Highest priority - turn key menu (must always show)
     START: 100,       // High priority - start menu
@@ -113,6 +112,14 @@ export class MenuManager {
     MORAL_DECISION: 50, // Medium priority - moral decision menu
     PET_STORY: 40,    // Low priority - pet story UI
     TUTORIAL: 20      // Lowest priority - tutorial overlay
+  };
+
+  // Menu Categories - Simplified cleanup rules
+  private readonly MENU_CATEGORIES = {
+    PERSISTENT: ['START', 'PAUSE', 'GAME_OVER', 'TURN_KEY'], // Menus that should be restored
+    TEMPORARY: ['OBSTACLE', 'EXIT', 'SHOP', 'SAVE'], // Menus that can be restored but are context-dependent
+    ONE_TIME: ['CYOA', 'STORY', 'MORAL_DECISION'], // Menus that should never be restored
+    OVERLAY: ['TUTORIAL', 'PET_STORY'] // Non-blocking overlays
   };
   
   private scene: Phaser.Scene;
@@ -169,12 +176,32 @@ export class MenuManager {
     return null;
   }
 
-  private clearAllCyoaMenusFromStack() {
+  // Simplified cleanup methods
+  private clearMenusFromStack(menuType: string) {
     const initialLength = this.menuStack.length;
-    this.menuStack = this.menuStack.filter(menu => menu.type !== 'CYOA');
+    this.menuStack = this.menuStack.filter(menu => menu.type !== menuType);
     const removedCount = initialLength - this.menuStack.length;
     if (removedCount > 0) {
-      console.log(`MenuManager: Cleared ${removedCount} CYOA menu(s) from stack. Stack now:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+      console.log(`MenuManager: Cleared ${removedCount} ${menuType} menu(s) from stack. Stack now:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+    }
+  }
+  
+  private resumeGame() {
+    const appScene = this.scene.scene.get('AppScene');
+    const gameScene = this.scene.scene.get('GameScene');
+    
+    if (appScene) {
+      (appScene as any).isPaused = false;
+      console.log('MenuManager: Game resumed');
+    }
+    
+    if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
+      (gameScene as any).carMechanics.resumeDriving();
+      console.log('MenuManager: Resumed CarMechanics driving');
+    }
+    
+    if (gameScene) {
+      gameScene.events.emit('gameResumed');
     }
   }
 
@@ -366,40 +393,40 @@ export class MenuManager {
     return current ? current.type : null;
   }
   
+  // Debug helper to see current stack state
+  public getStackState(): string {
+    if (this.menuStack.length === 0) return 'Empty stack';
+    return this.menuStack.map(m => `${m.type}(${m.priority})`).join(' → ');
+  }
+  
   private shouldRestorePreviousMenu(): boolean {
-    // Only restore if there's a menu in the stack, no current dialog, and the menu being restored wasn't user-dismissed
+    // Basic checks
     if (this.menuStack.length === 0 || this.currentDialog) return false;
     
     const menuToRestore = this.menuStack[this.menuStack.length - 1];
     
-    // CYOA menus are one-time events and should never be restored
-    if (menuToRestore.type === 'CYOA') {
-      console.log('MenuManager: shouldRestorePreviousMenu - CYOA menu found, not restoring (one-time event)');
+    // Simple rule: Only restore if the menu is in the PERSISTENT category
+    const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
+    const isOneTime = this.MENU_CATEGORIES.ONE_TIME.includes(menuToRestore.type);
+    
+    if (isOneTime) {
+      console.log(`MenuManager: ${menuToRestore.type} is one-time event, not restoring`);
       return false;
     }
     
-    // If the user just dismissed a CYOA menu, don't restore anything
-    // This prevents complex menu restoration chains after CYOA events
-    if (this.userDismissedMenuType === 'CYOA') {
-      console.log('MenuManager: shouldRestorePreviousMenu - CYOA was just dismissed, not restoring anything');
+    if (!isPersistent) {
+      console.log(`MenuManager: ${menuToRestore.type} is temporary, not restoring`);
       return false;
     }
     
-    // If there are any CYOA menus in the stack, don't restore anything
-    // This prevents complex restoration chains when CYOA menus are involved
-    const hasCyoaInStack = this.menuStack.some(menu => menu.type === 'CYOA');
-    if (hasCyoaInStack) {
-      console.log('MenuManager: shouldRestorePreviousMenu - CYOA menu found in stack, not restoring anything');
+    // Don't restore if user explicitly dismissed this menu type
+    if (menuToRestore.type === this.userDismissedMenuType) {
+      console.log(`MenuManager: User dismissed ${menuToRestore.type}, not restoring`);
       return false;
     }
     
-    const shouldRestore = menuToRestore.type !== this.userDismissedMenuType;
-    
-    console.log('MenuManager: shouldRestorePreviousMenu - stack length:', this.menuStack.length, 'currentDialog:', !!this.currentDialog, 'menuToRestore:', menuToRestore.type, 'userDismissed:', this.userDismissedMenuType, 'shouldRestore:', shouldRestore);
-    if (this.menuStack.length > 0) {
-      console.log('MenuManager: Stack contents:', this.menuStack.map(m => `${m.type}(${m.priority})`));
-    }
-    return shouldRestore;
+    console.log(`MenuManager: Restoring ${menuToRestore.type} (persistent menu)`);
+    return true;
   }
   
   private restorePreviousMenu() {
@@ -408,54 +435,39 @@ export class MenuManager {
     const previousMenu = this.menuStack[this.menuStack.length - 1];
     console.log(`MenuManager: Restoring previous menu: ${previousMenu.type}`);
     
+    // Pop the menu from stack first
+    this.popMenu();
+    
+    // Restore based on menu type - simplified approach
     switch (previousMenu.type) {
       case 'START':
-        this.popMenu();
         this.showStartMenu();
         break;
       case 'PAUSE':
-        this.popMenu();
         this.showPauseMenu();
         break;
       case 'TURN_KEY':
-        // Check if keys are still in ignition before restoring ignition menu
+        // Check if keys are still in ignition before restoring
         const gameScene = this.scene.scene.get('GameScene');
-        console.log('MenuManager: Attempting to restore TURN_KEY menu, keysInIgnition:', gameScene ? (gameScene as any).keysInIgnition : 'no gameScene');
         if (gameScene && (gameScene as any).keysInIgnition) {
-          // Pop the menu from stack first, then show it
-          console.log('MenuManager: Popping TURN_KEY from stack and showing it');
-          this.popMenu();
           this.showTurnKeyMenu();
         } else {
           console.log('MenuManager: Not restoring ignition menu - keys not in ignition');
-          this.popMenu(); // Remove from stack since it shouldn't be restored
         }
         break;
       case 'SAVE':
-        this.popMenu();
         this.showSaveMenu();
         break;
       case 'OBSTACLE':
         if (previousMenu.config) {
-          this.popMenu();
           this.showObstacleMenu(previousMenu.config.type, previousMenu.config.damage);
         }
         break;
       case 'GAME_OVER':
-        this.popMenu();
         this.showGameOverMenu();
         break;
-      case 'EXIT':
-        // EXIT menus should not trigger after CYOA when restored
-        // The after CYOA logic is already handled by the close button
-        console.log('MenuManager: EXIT menu found in stack - popping without triggering after CYOA (already handled)');
-        this.popMenu();
-        break;
-      case 'CYOA':
-        // CYOA menus are one-time events and should not be restored
-        // Simply pop them from the stack to clean up
-        console.log('MenuManager: CYOA menu found in stack - popping without restoration');
-        this.popMenu();
+      default:
+        console.log(`MenuManager: No restoration logic for ${previousMenu.type}`);
         break;
     }
   }
@@ -2311,55 +2323,25 @@ export class MenuManager {
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
     
-    // Handle special resumption logic for certain menu types
-    if (this.currentDisplayedMenuType === 'CYOA') {
-      // CYOA menus are one-time events - clear ALL CYOA menus from the stack
-      this.clearAllCyoaMenusFromStack();
-      
-      // Resume the game when CYOA menu closes
-      const appScene = this.scene.scene.get('AppScene');
-      if (appScene) {
-        (appScene as any).isPaused = false;
-        console.log('MenuManager: Game resumed after CYOA menu');
-      }
-      
-      // Resume driving after CYOA menu closes
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
-        (gameScene as any).carMechanics.resumeDriving();
-        console.log('MenuManager: Resumed CarMechanics driving after CYOA');
-      }
-      // Emit game resumed event
-      if (gameScene) {
-        gameScene.events.emit('gameResumed');
-      }
-    } else if (this.currentDisplayedMenuType === 'EXIT') {
-      // Resume the game when EXIT menu closes
-      const appScene = this.scene.scene.get('AppScene');
-      if (appScene) {
-        (appScene as any).isPaused = false;
-        console.log('MenuManager: Game resumed after EXIT menu');
-      }
-      
-      // Resume driving after EXIT menu closes
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
-        (gameScene as any).carMechanics.resumeDriving();
-        console.log('MenuManager: Resumed CarMechanics driving after EXIT');
-      }
-      // Emit game resumed event
-      if (gameScene) {
-        gameScene.events.emit('gameResumed');
-      }
-    }
-    
-    // Pop the current displayed menu from the stack (not necessarily the top)
+    // Handle menu-specific cleanup based on category
     if (this.currentDisplayedMenuType) {
-      this.popSpecificMenu(this.currentDisplayedMenuType);
+      const menuType = this.currentDisplayedMenuType;
+      
+      if (this.MENU_CATEGORIES.ONE_TIME.includes(menuType)) {
+        // One-time menus: Clean up all instances from stack
+        this.clearMenusFromStack(menuType);
+        this.resumeGame();
+      } else if (this.MENU_CATEGORIES.TEMPORARY.includes(menuType)) {
+        // Temporary menus: Just pop this instance
+        this.popSpecificMenu(menuType);
+        this.resumeGame();
+      } else if (this.MENU_CATEGORIES.PERSISTENT.includes(menuType)) {
+        // Persistent menus: Just pop this instance, don't resume game
+        this.popSpecificMenu(menuType);
+      }
     }
     
     this.clearCurrentDialog();
-    // Don't reset the flag immediately - let clearCurrentDialog handle it after restoration
   }
 
   public closeCurrentDialog() {
