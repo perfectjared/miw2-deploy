@@ -46,6 +46,7 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showRegionChoiceMenu', this.showRegionChoiceMenu, this);
     this.events.on('showCYOA', this.showCYOA, this);
     this.events.on('showCyoaMenu', this.showCyoaMenu, this);
+    this.events.on('showStoryMenu', this.showStoryMenu, this);
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
     this.events.on('showMoralDecision', this.showMoralDecision, this);
     this.events.on('showPetStoryUI', this.showPetStoryUI, this);
@@ -128,6 +129,10 @@ export class MenuScene extends Phaser.Scene {
 
   private showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number }) {
     this.menuManager.showCyoaMenu(cyoaData);
+  }
+
+  private showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
+    this.menuManager.showStoryMenu(storyData);
   }
 
   private showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {

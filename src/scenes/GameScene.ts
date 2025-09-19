@@ -691,10 +691,11 @@ export class GameScene extends Phaser.Scene {
     this.gameState.setEventCallbacks({
       onStateChange: (state) => {
         this.gameUI.updateUI(state);
-        // Update threshold indicators based on planned exits and CYOA
+        // Update threshold indicators based on planned exits, CYOA, and story
         const plannedExits = this.carMechanics.getPlannedExits();
         const plannedCyoa = this.carMechanics.getPlannedCyoa();
-        this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa);
+        const plannedStory = this.carMechanics.getPlannedStory();
+        this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
         // Auto-snap crank to 0 when keys are out of ignition
         // Speed crank removed - no need to reset
         this.scheduleTutorialUpdate(0);

@@ -153,6 +153,14 @@ export class CarMechanics {
     exitNumber?: number; // Which exit this CYOA is related to (if isExitRelated)
     triggered: boolean; // Whether CYOA has been triggered
   }> = [];
+
+  // Story Planning System - one story event per driving sequence
+  private plannedStory: {
+    storyThreshold: number; // When to trigger story (0-100)
+    isExitRelated: boolean; // True if this story is related to an exit
+    exitNumber?: number; // Which exit this story is related to (if isExitRelated)
+    triggered: boolean; // Whether story has been triggered
+  } | null = null;
   
   private currentSequenceProgress: number = 0;
   private lastPotholeSpawnStep: number = 0;
@@ -507,9 +515,10 @@ export class CarMechanics {
    * Plan exits for the current driving sequence
    */
   private planExitsForSequence() {
-    // Clear previous planned exits and CYOA
+    // Clear previous planned exits, CYOA, and story
     this.plannedExits = [];
     this.plannedCyoa = [];
+    this.plannedStory = null;
     this.currentSequenceProgress = 0;
     
     // Plan 2-3 exits per sequence
@@ -643,6 +652,75 @@ export class CarMechanics {
     
     console.log('🎯 Planned CYOA:', this.plannedCyoa.map(c => `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (exit-related)` : ''}`));
     console.log('🎯 Total planned CYOA:', this.plannedCyoa.length);
+    
+    // Plan one story event for this driving sequence
+    this.planStoryForSequence(numExits);
+  }
+
+  /**
+   * Plan one story event for the current driving sequence
+   */
+  private planStoryForSequence(numExits: number) {
+    // Decide if story should be exit-related (30% chance)
+    const isExitRelated = Math.random() < 0.3;
+    let storyThreshold: number;
+    let exitNumber: number | undefined;
+    
+    if (isExitRelated && numExits > 0) {
+      // Story is related to a random exit - occurs after leaving that exit
+      exitNumber = Phaser.Math.Between(1, numExits);
+      const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+      
+      if (chosenExit) {
+        // Schedule story to occur 8-20% after the exit threshold
+        const postExitOffset = Phaser.Math.Between(8, 20);
+        storyThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
+        
+        console.log(`📖 Story scheduled after Exit ${exitNumber} at ${storyThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+      } else {
+        // Fallback: random threshold if exit not found
+        storyThreshold = Phaser.Math.Between(20, 80);
+        console.log(`📖 Story scheduled at random threshold ${storyThreshold}% (exit-related fallback)`);
+      }
+    } else {
+      // Story is independent - occurs at a random threshold
+      storyThreshold = Phaser.Math.Between(15, 85);
+      console.log(`📖 Story scheduled at independent threshold ${storyThreshold}%`);
+    }
+    
+    // Ensure story doesn't conflict with CYOA events (minimum 10% spacing)
+    const minSpacing = 10;
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    while (attempts < maxAttempts) {
+      let needsAdjustment = false;
+      
+      // Check spacing against planned CYOA
+      for (const cyoa of this.plannedCyoa) {
+        if (Math.abs(cyoa.cyoaThreshold - storyThreshold) < minSpacing) {
+          needsAdjustment = true;
+          break;
+        }
+      }
+      
+      if (needsAdjustment) {
+        // Try a different threshold
+        storyThreshold = Phaser.Math.Between(15, 85);
+        attempts++;
+      } else {
+        break;
+      }
+    }
+    
+    this.plannedStory = {
+      storyThreshold: storyThreshold,
+      isExitRelated: isExitRelated,
+      exitNumber: exitNumber,
+      triggered: false
+    };
+    
+    console.log(`📖 Planned story: ${storyThreshold}%${isExitRelated ? ` (exit-related)` : ''}`);
   }
 
   /**
@@ -689,6 +767,13 @@ export class CarMechanics {
         plannedCyoa.triggered = true;
       }
     });
+    
+    // Check if planned story should be triggered
+    if (this.plannedStory && !this.plannedStory.triggered && progress >= this.plannedStory.storyThreshold) {
+      console.log(`📖 Triggering story at progress ${progress}%${this.plannedStory.isExitRelated ? ` (exit-related)` : ''}`);
+      this.triggerStory(this.plannedStory);
+      this.plannedStory.triggered = true;
+    }
   }
 
   /**
@@ -883,6 +968,26 @@ export class CarMechanics {
   }
 
   /**
+   * Trigger a planned story
+   */
+  private triggerStory(plannedStory: any) {
+    console.log(`📖 Triggering story${plannedStory.isExitRelated ? ` (related to exit ${plannedStory.exitNumber})` : ''}`);
+    
+    // Pause driving
+    this.pauseDriving();
+    
+    // Show story menu
+    const menuScene = this.scene.scene.get('MenuScene');
+    if (menuScene) {
+      (menuScene as any).events.emit('showStoryMenu', {
+        isExitRelated: plannedStory.isExitRelated,
+        exitNumber: plannedStory.exitNumber
+      });
+      this.scene.scene.bringToTop('MenuScene');
+    }
+  }
+
+  /**
    * Get planned exits for UI display (shows exit thresholds, not preview thresholds)
    */
   public getPlannedExits() {
@@ -902,6 +1007,22 @@ export class CarMechanics {
       isExitRelated: cyoa.isExitRelated,
       exitNumber: cyoa.exitNumber
     }));
+  }
+
+  /**
+   * Get planned story for UI display
+   */
+  public getPlannedStory() {
+    if (!this.plannedStory || this.plannedStory.triggered) {
+      return null;
+    }
+    
+    return {
+      progressThreshold: this.plannedStory.storyThreshold,
+      triggered: this.plannedStory.triggered,
+      isExitRelated: this.plannedStory.isExitRelated,
+      exitNumber: this.plannedStory.exitNumber
+    };
   }
 
   /**

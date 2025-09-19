@@ -107,6 +107,7 @@ export class MenuManager {
     EXIT: 50,         // Medium priority - exit choice menu
     SHOP: 50,         // Medium priority - shop menu
     CYOA: 50,         // Medium priority - choose-your-own-adventure menu
+    STORY: 50,        // Medium priority - story menu
     VIRTUAL_PET: 50,  // Medium priority -  menu
     MORAL_DECISION: 50, // Medium priority - moral decision menu
     PET_STORY: 40,    // Low priority - pet story UI
@@ -1257,6 +1258,45 @@ export class MenuManager {
     };
 
     this.createDialog(menuConfig, 'CYOA');
+  }
+
+  public showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
+    if (!this.canShowMenu('STORY')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('STORY', storyData);
+    
+    // Pause the game when story menu opens
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused for story menu');
+    }
+    
+    const storyDescription = storyData.isExitRelated 
+      ? `A story unfolds near Exit ${storyData.exitNumber}...`
+      : 'A story unfolds on the road...';
+    
+    const menuConfig: MenuConfig = {
+      title: 'STORY',
+      content: storyDescription,
+      buttons: [
+        {
+          text: 'Continue',
+          onClick: () => {
+            this.closeDialog();
+            // Resume driving after story
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene) {
+              (gameScene as any).resumeAfterCyoa();
+            }
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+
+    this.createDialog(menuConfig, 'STORY');
   }
 
   public showGameOverMenu() {

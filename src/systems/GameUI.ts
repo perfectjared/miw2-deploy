@@ -254,9 +254,9 @@ export class GameUI {
   }
 
   /**
-   * Update threshold indicators based on planned exits and CYOA
+   * Update threshold indicators based on planned exits, CYOA, and story
    */
-  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean }>) {
+  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
     // Clear existing indicators
     this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
     this.progressThresholdIndicators = [];
@@ -311,6 +311,26 @@ export class GameUI {
           this.progressThresholdIndicators.push(triangle);
         }
       });
+    }
+    
+    // Create triangle indicator for unspawned story (white triangle)
+    if (plannedStory && !plannedStory.triggered) {
+      const triangleX = barX + (plannedStory.progressThreshold / 100) * barWidth;
+      const triangleY = barY - 24; // Above the CYOA indicators
+      
+      const triangle = this.scene.add.graphics();
+      triangle.fillStyle(GREYSCALE_PALETTE.white, 0.9); // White for story
+      triangle.beginPath();
+      triangle.moveTo(triangleX, triangleY);
+      triangle.lineTo(triangleX - 4, triangleY + 8);
+      triangle.lineTo(triangleX + 4, triangleY + 8);
+      triangle.closePath();
+      triangle.fillPath();
+      
+      triangle.setScrollFactor(0);
+      triangle.setDepth(10002);
+      
+      this.progressThresholdIndicators.push(triangle);
     }
   }
 
