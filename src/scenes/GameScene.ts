@@ -1565,6 +1565,16 @@ export class GameScene extends Phaser.Scene {
     console.log('Ignition menu hidden');
     // Re-enable gameplay input when menu closes
     this.input.enabled = true;
+    
+    // Resume game when ignition menu is closed
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+    }
+    
+    // Emit game resumed event to resume driving
+    this.events.emit('gameResumed');
+    console.log('Game resumed after ignition menu closed');
   }
 
   /**
