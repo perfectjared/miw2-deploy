@@ -53,10 +53,20 @@ export class VirtualPet {
 	private pet!: Phaser.GameObjects.Ellipse;
 	private faceSVG!: Phaser.GameObjects.Sprite; // Face emotion overlay
 	private foodValue: number = 0; // 0..10
+	private bathroomValue: number = 10; // 0..10 (10 = empty bladder)
+	private boredValue: number = 5; // 0..10 (higher = having fun)
 	private foodBarBG!: Phaser.GameObjects.Rectangle;
 	private foodBarFill!: Phaser.GameObjects.Rectangle;
 	private foodLabel!: Phaser.GameObjects.Text;
 	private foodDecayTimer?: Phaser.Time.TimerEvent;
+	private bathroomBarBG!: Phaser.GameObjects.Rectangle;
+	private bathroomBarFill!: Phaser.GameObjects.Rectangle;
+	private bathroomLabel!: Phaser.GameObjects.Text;
+	private bathroomDecayTimer?: Phaser.Time.TimerEvent;
+	private boredBarBG!: Phaser.GameObjects.Rectangle;
+	private boredBarFill!: Phaser.GameObjects.Rectangle;
+	private boredLabel!: Phaser.GameObjects.Text;
+	private boredDecayTimer?: Phaser.Time.TimerEvent;
 	private lastCamWidth: number = 0;
 	private debugGraphics?: Phaser.GameObjects.Graphics;
 	private isHovering: boolean = false;
@@ -176,7 +186,7 @@ export class VirtualPet {
 			menuScene?.events.emit('showVirtualPetMenu', this.pet);
 		});
 
-		// Food meter (label + bar) alongside the pet (track its position)
+		// Food/Bathroom/Bored meters (labels + bars) alongside the pet (track their positions)
 		const camWidth = cam.width;
 		this.lastCamWidth = camWidth;
 		// Use the same pet radius as the ellipse above
@@ -202,7 +212,41 @@ export class VirtualPet {
 		this.foodBarFill.setScrollFactor(0);
 		this.foodBarFill.setVisible(false); // Hide from pet display
 
-		this.container.add([this.foodLabel, this.foodBarBG, this.foodBarFill]);
+		// Bathroom meter just below Food
+		const bathY = barY + 14;
+		this.bathroomLabel = this.scene.add.text(barX - 46, bathY - 9, 'BATH', {
+			fontSize: '12px',
+			color: '#ffffff',
+			fontStyle: 'bold'
+		});
+		this.bathroomLabel.setScrollFactor(0);
+		this.bathroomLabel.setVisible(false);
+		this.bathroomBarBG = this.scene.add.rectangle(barX + Math.floor(barWidth / 2), bathY, barWidth, barHeight, 0x000000, 0.6);
+		this.bathroomBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+		this.bathroomBarBG.setScrollFactor(0);
+		this.bathroomBarBG.setVisible(false);
+		this.bathroomBarFill = this.scene.add.rectangle(barX - Math.floor(barWidth / 2), bathY, Math.floor(barWidth * (this.bathroomValue / 10)), barHeight - 2, 0x3498db, 1).setOrigin(0, 0.5);
+		this.bathroomBarFill.setScrollFactor(0);
+		this.bathroomBarFill.setVisible(false);
+
+		// Bored meter below Bathroom
+		const boredY = bathY + 14;
+		this.boredLabel = this.scene.add.text(barX - 46, boredY - 9, 'BORED', {
+			fontSize: '12px',
+			color: '#ffffff',
+			fontStyle: 'bold'
+		});
+		this.boredLabel.setScrollFactor(0);
+		this.boredLabel.setVisible(false);
+		this.boredBarBG = this.scene.add.rectangle(barX + Math.floor(barWidth / 2), boredY, barWidth, barHeight, 0x000000, 0.6);
+		this.boredBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+		this.boredBarBG.setScrollFactor(0);
+		this.boredBarBG.setVisible(false);
+		this.boredBarFill = this.scene.add.rectangle(barX - Math.floor(barWidth / 2), boredY, Math.floor(barWidth * (this.boredValue / 10)), barHeight - 2, 0x9b59b6, 1).setOrigin(0, 0.5);
+		this.boredBarFill.setScrollFactor(0);
+		this.boredBarFill.setVisible(false);
+
+		this.container.add([this.foodLabel, this.foodBarBG, this.foodBarFill, this.bathroomLabel, this.bathroomBarBG, this.bathroomBarFill, this.boredLabel, this.boredBarBG, this.boredBarFill]);
 
 		// Debug graphics (hidden by default)
 		this.debugGraphics = this.scene.add.graphics();
@@ -216,12 +260,28 @@ export class VirtualPet {
 		this.steeringListenerBound = (value: number) => this.applySteeringSway(value);
 		this.scene.events.on('steeringInput', this.steeringListenerBound, this);
 
-		// Start passive food decay
+		// Start passive food/bathroom/bored decay
 		this.foodDecayTimer = this.scene.time.addEvent({
 			delay: 2000,
 			loop: true,
 			callback: () => {
 				this.setFood(this.foodValue - 1);
+			}
+		});
+		this.bathroomDecayTimer = this.scene.time.addEvent({
+			delay: 2500,
+			loop: true,
+			callback: () => {
+				// bathroom fills over time (lower value = needs bathroom)
+				this.setBathroom(this.bathroomValue - 1);
+			}
+		});
+		this.boredDecayTimer = this.scene.time.addEvent({
+			delay: 2200,
+			loop: true,
+			callback: () => {
+				// boredom increases over time (lower value = bored)
+				this.setBored(this.boredValue - 1);
 			}
 		});
 	}
@@ -326,12 +386,32 @@ export class VirtualPet {
 				// Recompute fill width based on new total (0..10 scale)
 				const clamped = Phaser.Math.Clamp(this.foodValue, 0, 10);
 				this.foodBarFill.width = Math.max(0, Math.floor(newBarWidth * (clamped / 10)) - 2);
+				// Resize other bars
+				if (this.bathroomBarBG && this.bathroomBarFill) {
+					this.bathroomBarBG.width = newBarWidth;
+					const bclamped = Phaser.Math.Clamp(this.bathroomValue, 0, 10);
+					this.bathroomBarFill.width = Math.max(0, Math.floor(newBarWidth * (bclamped / 10)) - 2);
+				}
+				if (this.boredBarBG && this.boredBarFill) {
+					this.boredBarBG.width = newBarWidth;
+					const xclamped = Phaser.Math.Clamp(this.boredValue, 0, 10);
+					this.boredBarFill.width = Math.max(0, Math.floor(newBarWidth * (xclamped / 10)) - 2);
+				}
 			}
 			const barX = this.pet.x + petRadius + 12;
 			const barY = this.pet.y;
 			this.foodBarBG.setPosition(barX, barY);
 			this.foodBarFill.setPosition(barX - Math.floor(this.foodBarBG.width / 2), barY);
 			this.foodLabel.setPosition(barX - 46, barY - 9);
+			// Position other meters
+			const bathY = barY + 14;
+			this.bathroomBarBG?.setPosition(barX, bathY);
+			this.bathroomBarFill?.setPosition(barX - Math.floor((this.bathroomBarBG?.width as number) / 2), bathY);
+			this.bathroomLabel?.setPosition(barX - 46, bathY - 9);
+			const boredY = bathY + 14;
+			this.boredBarBG?.setPosition(barX, boredY);
+			this.boredBarFill?.setPosition(barX - Math.floor((this.boredBarBG?.width as number) / 2), boredY);
+			this.boredLabel?.setPosition(barX - 46, boredY - 9);
 		}
 	}
 
@@ -398,10 +478,40 @@ export class VirtualPet {
 		this.foodBarFill.fillColor = color as any;
 	}
 
+	private refreshBathroomBar() {
+		if (!this.bathroomBarBG || !this.bathroomBarFill) return;
+		const totalWidth = this.bathroomBarBG.width;
+		const clamped = Phaser.Math.Clamp(this.bathroomValue, 0, 10);
+		this.bathroomBarFill.width = Math.max(0, Math.floor(totalWidth * (clamped / 10)) - 2);
+		// Blue shades: high = fine, low = urgent
+		const color = clamped > 6 ? 0x3498db : (clamped > 3 ? 0x5dade2 : 0x1f618d);
+		this.bathroomBarFill.fillColor = color as any;
+	}
+
+	private refreshBoredBar() {
+		if (!this.boredBarBG || !this.boredBarFill) return;
+		const totalWidth = this.boredBarBG.width;
+		const clamped = Phaser.Math.Clamp(this.boredValue, 0, 10);
+		this.boredBarFill.width = Math.max(0, Math.floor(totalWidth * (clamped / 10)) - 2);
+		// Purple shades: high = engaged, low = bored
+		const color = clamped > 6 ? 0x9b59b6 : (clamped > 3 ? 0xbb8fce : 0x6c3483);
+		this.boredBarFill.fillColor = color as any;
+	}
+
 	public setFood(value: number) {
 		this.foodValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshFoodBar();
 		this.updateFaceEmotion(); // Update face based on new food value
+	}
+
+	public setBathroom(value: number) {
+		this.bathroomValue = Phaser.Math.Clamp(value, 0, 10);
+		this.refreshBathroomBar();
+	}
+
+	public setBored(value: number) {
+		this.boredValue = Phaser.Math.Clamp(value, 0, 10);
+		this.refreshBoredBar();
 	}
 
 	/** Gradually add food over a short duration */
@@ -435,6 +545,22 @@ export class VirtualPet {
 			label: this.foodLabel,
 			background: this.foodBarBG,
 			fill: this.foodBarFill
+		};
+	}
+
+	public getBathroomMeterElements(): { label: Phaser.GameObjects.Text, background: Phaser.GameObjects.Rectangle, fill: Phaser.GameObjects.Rectangle } {
+		return {
+			label: this.bathroomLabel,
+			background: this.bathroomBarBG,
+			fill: this.bathroomBarFill
+		};
+	}
+
+	public getBoredMeterElements(): { label: Phaser.GameObjects.Text, background: Phaser.GameObjects.Rectangle, fill: Phaser.GameObjects.Rectangle } {
+		return {
+			label: this.boredLabel,
+			background: this.boredBarBG,
+			fill: this.boredBarFill
 		};
 	}
 

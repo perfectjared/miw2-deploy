@@ -1572,12 +1572,15 @@ export class MenuManager {
         
         // Bobbing animation removed - pet copy stays in fixed position
 
-        // Add food meter to the menu
+        // Add food/bathroom/bored meters to the menu
         const gameScene = this.scene.scene.get('GameScene');
         if (gameScene && (gameScene as any).virtualPet) {
-          const foodMeter = (gameScene as any).virtualPet.getFoodMeterElements();
+          const pet = (gameScene as any).virtualPet;
+          const foodMeter = pet.getFoodMeterElements();
+          const bathMeter = pet.getBathroomMeterElements?.();
+          const boredMeter = pet.getBoredMeterElements?.();
           
-          // Create food meter elements for the menu
+          // Create identical meter elements for the menu
           const foodLabel = this.scene.add.text(0, 20, 'FOOD', {
             fontSize: '16px',
             color: '#ffffff',
@@ -1598,8 +1601,32 @@ export class MenuManager {
           foodBarFill.setOrigin(0, 0.5);
           foodBarFill.setScrollFactor(0);
           
-          // Add food meter elements to the dialog
-          (this.currentDialog as any).add([foodLabel, foodBarBG, foodBarFill]);
+          // Bathroom meter
+          const bathLabel = this.scene.add.text(0, 70, 'BATH', {
+            fontSize: '16px', color: '#ffffff', fontStyle: 'bold', align: 'center'
+          }).setOrigin(0.5);
+          bathLabel.setScrollFactor(0);
+          const bathBG = this.scene.add.rectangle(0, 95, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+          bathBG.setStrokeStyle(2, 0xffffff, 0.8);
+          bathBG.setScrollFactor(0);
+          const bathVal = Phaser.Math.Clamp(pet?.['bathroomValue'] ?? 0, 0, 10);
+          const bathFill = this.scene.add.rectangle(-foodBarWidth/2, 95, Math.floor(foodBarWidth * (bathVal / 10)), foodBarHeight - 4, 0x3498db, 1).setOrigin(0, 0.5);
+          bathFill.setScrollFactor(0);
+
+          // Bored meter
+          const boredLabel = this.scene.add.text(0, 120, 'BORED', {
+            fontSize: '16px', color: '#ffffff', fontStyle: 'bold', align: 'center'
+          }).setOrigin(0.5);
+          boredLabel.setScrollFactor(0);
+          const boredBG = this.scene.add.rectangle(0, 145, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+          boredBG.setStrokeStyle(2, 0xffffff, 0.8);
+          boredBG.setScrollFactor(0);
+          const boredVal = Phaser.Math.Clamp(pet?.['boredValue'] ?? 0, 0, 10);
+          const boredFill = this.scene.add.rectangle(-foodBarWidth/2, 145, Math.floor(foodBarWidth * (boredVal / 10)), foodBarHeight - 4, 0x9b59b6, 1).setOrigin(0, 0.5);
+          boredFill.setScrollFactor(0);
+
+          // Add all meters to the dialog
+          (this.currentDialog as any).add([foodLabel, foodBarBG, foodBarFill, bathLabel, bathBG, bathFill, boredLabel, boredBG, boredFill]);
         }
       } catch (error) {
         console.log('Could not create pet copy in menu:', error);
