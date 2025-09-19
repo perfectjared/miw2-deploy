@@ -515,8 +515,18 @@ export class CarMechanics {
     this.plannedStory = null;
     this.currentSequenceProgress = 0;
     
-    // Plan 2-3 exits per sequence
-    const numExits = Phaser.Math.Between(2, 3);
+    // Check if this is the first driving sequence (for testing)
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    
+    // Plan exits per sequence
+    let numExits: number;
+    if (isFirstSequence) {
+      numExits = 2; // Deterministic: 2 exits for first sequence
+      console.log('🎯 First driving sequence - deterministic: 2 exits');
+    } else {
+      numExits = Phaser.Math.Between(2, 3); // Random for other sequences
+    }
     // Planning numbered exits for this driving sequence
     
     const gameWidth = this.scene.cameras.main.width;
@@ -528,8 +538,14 @@ export class CarMechanics {
     const exitOffsetLeft = 40; // Move exits 40px left
     const previewOffsetRight = 15; // Move previews 15px right
     
-    // Plan 1-3 CYOA per sequence
-    const numCyoa = Phaser.Math.Between(1, 3);
+    // Plan CYOA per sequence
+    let numCyoa: number;
+    if (isFirstSequence) {
+      numCyoa = 3; // Deterministic: 3 CYOAs for first sequence (including 1 exit CYOA)
+      console.log('🎭 First driving sequence - deterministic: 3 CYOAs');
+    } else {
+      numCyoa = Phaser.Math.Between(1, 3); // Random for other sequences
+    }
     // Planning CYOA for this driving sequence
     
     // Generate all thresholds together with improved spacing
@@ -589,11 +605,11 @@ export class CarMechanics {
       let exitNumber: number | undefined;
       let cyoaThreshold = threshold;
       
-      // If we have 3 CYOA, the 3rd should be bundled with a specific exit
-      if (numCyoa === 3 && cyoaId === 3) {
-        isExitRelated = true;
-        // Pick a random exit to bundle with (only if exits exist)
-        if (numExits > 0) {
+      // Allow any CYOA to be exit-related (except when there's only 1 CYOA)
+      if (numCyoa > 1 && numExits > 0) {
+        // 30% chance for any CYOA to be exit-related
+        if (Math.random() < 0.3) {
+          isExitRelated = true;
           exitNumber = Phaser.Math.Between(1, numExits);
           
           // Find the chosen exit to validate it exists
@@ -607,10 +623,17 @@ export class CarMechanics {
             isExitRelated = false;
             exitNumber = undefined;
           }
-        } else {
-          console.log(`🎭 CYOA ${cyoaId} - No exits available, making it non-exit-related`);
-          isExitRelated = false;
-          exitNumber = undefined;
+        }
+      }
+      
+      // For first sequence, make the 3rd CYOA always exit-related for testing
+      if (isFirstSequence && cyoaId === 3) {
+        isExitRelated = true;
+        exitNumber = Phaser.Math.Between(1, numExits);
+        const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+        if (chosenExit) {
+          cyoaThreshold = chosenExit.exitThreshold;
+          console.log(`🎭 First sequence CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% (testing)`);
         }
       }
       
