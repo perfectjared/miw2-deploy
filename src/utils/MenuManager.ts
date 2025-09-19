@@ -767,19 +767,16 @@ export class MenuManager {
         // Debug line intentionally minimized
         
         if (finalExitNumber) {
-          console.log(`MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 1 step later`);
+          console.log(`MenuManager: Player closed Exit ${finalExitNumber} - checking for after CYOA`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
-            const delay = 1; // trigger on the very next step
-            console.log(`MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, ${delay})`);
-            (gameScene as any).carMechanics.scheduleExitCyoa(finalExitNumber, delay);
-            console.log(`MenuManager: scheduleExitCyoa call completed`);
+            // Trigger after CYOA directly instead of scheduling
+            (gameScene as any).carMechanics.triggerAfterExitCyoa(finalExitNumber);
           } else {
-            console.error(`🎭 MenuManager: ERROR - Could not find GameScene or carMechanics`);
+            console.error(`MenuManager: ERROR - Could not find GameScene or carMechanics`);
           }
         } else {
-          // Gracefully skip scheduling if we cannot resolve an exit number
-          console.warn(`🎭 MenuManager: No exit number resolved on Close - skipping CYOA scheduling`);
+          console.warn(`MenuManager: No exit number resolved on Close - skipping after CYOA`);
         }
         
         this.closeDialog();

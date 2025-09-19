@@ -163,12 +163,7 @@ export class CarMechanics {
     triggered: boolean; // Whether story has been triggered
   } | null = null;
   
-  // Scheduled Exit CYOA System - CYOA triggered after leaving exits
-  private scheduledExitCyoa: {
-    exitNumber: number;
-    triggerStep: number;
-    triggered: boolean;
-  } | null = null;
+  // Scheduled Exit CYOA System - REMOVED (now using direct triggering)
 
   // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
   private suppressRegularCyoaUntilStep: number = 0;
@@ -1076,66 +1071,48 @@ export class CarMechanics {
   }
 
   /**
-   * Schedule an exit CYOA to trigger after a certain number of steps
+   * Trigger after exit CYOA directly (simplified approach)
    */
-  public scheduleExitCyoa(exitNumber: number, stepsDelay: number): void {
-    console.log(`scheduleExitCyoa: Scheduling CYOA for Exit ${exitNumber} in ${stepsDelay} steps`);
+  public triggerAfterExitCyoa(exitNumber: number): void {
+    console.log(`triggerAfterExitCyoa: Looking for after CYOA for Exit ${exitNumber}`);
     
-    // Get current step from GameScene
-    const gameScene = this.scene.scene.get('GameScene') as any;
-    const currentStep = gameScene?.gameState?.getState()?.step || 0;
-    const triggerStep = currentStep + stepsDelay;
-    
-    console.log(`scheduleExitCyoa: Current step ${currentStep}, CYOA will trigger at step ${triggerStep}`);
-    
-    // Store the scheduled CYOA
-    // If an existing schedule is present for a different exit or earlier step, replace it
-    if (!this.scheduledExitCyoa || triggerStep >= (this.scheduledExitCyoa.triggerStep || 0) || this.scheduledExitCyoa.exitNumber !== exitNumber) {
-      this.scheduledExitCyoa = {
-        exitNumber: exitNumber,
-        triggerStep: triggerStep,
-        triggered: false
-      };
-    }
-    
-    console.log(`scheduleExitCyoa: Scheduled CYOA stored - exitNumber: ${exitNumber}, triggerStep: ${triggerStep}`);
-  }
-
-  /**
-   * Trigger the scheduled exit CYOA
-   */
-  private triggerScheduledExitCyoa(): void {
-    if (!this.scheduledExitCyoa) return;
-    
-    const exitNumber = this.scheduledExitCyoa.exitNumber;
-    console.log(`triggerScheduledExitCyoa: Looking for bundled CYOA for Exit ${exitNumber}`);
-    console.log(`Available planned CYOAs:`, this.plannedCyoa.map(cyoa => 
-      `CYOA ${cyoa.id}: ${cyoa.isExitRelated ? `exit-related (Exit ${cyoa.exitNumber})` : 'regular'} at ${cyoa.cyoaThreshold}% (triggered: ${cyoa.triggered})`
-    ));
-    
-    // Find the bundled CYOA for this exit (only bundled ones, not all exit-related)
-    const bundledCyoa = this.plannedCyoa.find(cyoa => 
-      cyoa.isExitRelated && cyoa.exitNumber === exitNumber && (!cyoa.exitTiming || cyoa.exitTiming === 'after') && !cyoa.triggered
+    // Find the after CYOA for this exit
+    const afterCyoa = this.plannedCyoa.find(cyoa => 
+      cyoa.isExitRelated && 
+      cyoa.exitNumber === exitNumber && 
+      cyoa.exitTiming === 'after' && 
+      !cyoa.triggered
     );
     
-    if (bundledCyoa) {
-      console.log(`Triggering scheduled bundled CYOA for Exit ${exitNumber}`);
-      this.triggerCyoa(bundledCyoa, { allowAfter: true });
-      bundledCyoa.triggered = true;
+    if (afterCyoa) {
+      console.log(`triggerAfterExitCyoa: Found after CYOA ${afterCyoa.id} for Exit ${exitNumber} - triggering now`);
+      this.triggerCyoa(afterCyoa, { allowAfter: true });
+      afterCyoa.triggered = true;
       
-      // Update UI immediately to reflect the triggered state
+      // Update UI immediately
       const gameScene = this.scene.scene.get('GameScene') as any;
       if (gameScene && gameScene.gameUI) {
         const plannedExits = this.getPlannedExits();
         const plannedCyoa = this.getPlannedCyoa();
         const plannedStory = this.getPlannedStory();
         gameScene.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
-        console.log(`UI updated after CYOA triggered - triangle should disappear`);
       }
     } else {
-      console.log(`No bundled CYOA found for Exit ${exitNumber} - CYOA will be skipped`);
+      console.log(`triggerAfterExitCyoa: No after CYOA found for Exit ${exitNumber}`);
     }
   }
+
+  /**
+   * Schedule an exit CYOA to trigger after a certain number of steps
+   * @deprecated - Use triggerAfterExitCyoa instead for direct triggering
+   */
+  public scheduleExitCyoa(exitNumber: number, stepsDelay: number): void {
+    console.log(`scheduleExitCyoa: DEPRECATED - Use triggerAfterExitCyoa instead`);
+    // Redirect to direct triggering
+    this.triggerAfterExitCyoa(exitNumber);
+  }
+
+  // triggerScheduledExitCyoa method removed - now using direct triggering
 
   /**
    * Trigger a planned story
@@ -1295,14 +1272,7 @@ export class CarMechanics {
       }
     }
 
-    // Check for scheduled exit CYOA
-    if (this.scheduledExitCyoa && !this.scheduledExitCyoa.triggered) {
-      if (currentStep >= this.scheduledExitCyoa.triggerStep) {
-        console.log(`onStepEvent: Triggering scheduled CYOA for Exit ${this.scheduledExitCyoa.exitNumber} at step ${currentStep}`);
-        this.triggerScheduledExitCyoa();
-        this.scheduledExitCyoa.triggered = true;
-      }
-    }
+    // Scheduled CYOA system removed - now using direct triggering
     
     // Update speed progression on step events only
     this.updateCarSpeedWithProgression(currentStep);
@@ -2548,3 +2518,4 @@ export class CarMechanics {
     });
   }
 }
+
