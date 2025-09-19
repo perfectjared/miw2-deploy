@@ -117,15 +117,15 @@ export const UI_LAYOUT = {
   
   // Center elements
   countdownX: 0.5,            // 50% from left edge (centered)
-  countdownY: 0.2,           // 35% from top edge (below rearview)
+  countdownY: 0.15,           // 15% from top edge (moved up from 20%)
   
   // Bottom elements
   progressX: 0.02,            // 2% from left edge
-  progressY: 0.95,            // 95% from top edge (bottom)
+  progressY: 0.92,            // 92% from top edge (moved up from 95%)
   
   // Rearview rectangle (virtual pets)
   rearviewX: 0.55,             // 50% from left edge (centered)
-  rearviewY: -0.05,            // 15% from top edge
+  rearviewY: 0.05,             // 5% from top edge (moved down from -0.05%)
   rearviewWidth: 0.92,        // 85% of screen width
   rearviewHeight: 0.4,       // 20% of screen height
   

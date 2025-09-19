@@ -24,6 +24,10 @@ export interface GameStateData {
   gameTime: number;
   step: number;
   
+  // Tutorial State
+  tutorialPhase: 'none' | 'initial_driving' | 'countdown' | 'interrupt' | 'normal';
+  tutorialStep: number;
+  
   // Player Stats
   money: number;
   health: number;
@@ -173,6 +177,77 @@ export class GameState {
     if (JSON.stringify(oldState) !== JSON.stringify(this.state)) {
       this.notifyStateChange();
     }
+  }
+
+  /**
+   * Start the tutorial sequence
+   */
+  public startTutorial() {
+    this.updateState({
+      tutorialPhase: 'initial_driving',
+      tutorialStep: 0
+    });
+    
+    console.log('🎓 Tutorial started: initial driving phase');
+  }
+  
+  /**
+   * Advance tutorial to next phase
+   */
+  public advanceTutorial() {
+    const currentPhase = this.state.tutorialPhase;
+    let nextPhase: GameStateData['tutorialPhase'];
+    let nextStep = this.state.tutorialStep + 1;
+    
+    switch (currentPhase) {
+      case 'initial_driving':
+        if (nextStep >= 4) {
+          nextPhase = 'countdown';
+          nextStep = 0;
+        } else {
+          nextPhase = 'initial_driving';
+        }
+        break;
+      case 'countdown':
+        nextPhase = 'interrupt';
+        nextStep = 0;
+        break;
+      case 'interrupt':
+        nextPhase = 'normal';
+        nextStep = 0;
+        break;
+      default:
+        nextPhase = 'normal';
+        nextStep = 0;
+    }
+    
+    this.updateState({
+      tutorialPhase: nextPhase,
+      tutorialStep: nextStep
+    });
+    
+    console.log(`🎓 Tutorial advanced: ${currentPhase} → ${nextPhase} (step: ${nextStep})`);
+  }
+  
+  /**
+   * Check if currently in tutorial
+   */
+  public isInTutorial(): boolean {
+    return this.state.tutorialPhase !== 'none' && this.state.tutorialPhase !== 'normal';
+  }
+  
+  /**
+   * Get current tutorial phase
+   */
+  public getTutorialPhase(): GameStateData['tutorialPhase'] {
+    return this.state.tutorialPhase;
+  }
+  
+  /**
+   * Get current tutorial step
+   */
+  public getTutorialStep(): number {
+    return this.state.tutorialStep;
   }
 
   /**
@@ -382,6 +457,10 @@ export class GameState {
       gameStarted: false,
       gameTime: this.config.initialGameTime,
       step: 0,
+      
+      // Tutorial State
+      tutorialPhase: 'none',
+      tutorialStep: 0,
       
       // Player Stats
       money: this.config.initialMoney,

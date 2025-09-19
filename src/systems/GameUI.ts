@@ -253,9 +253,9 @@ export class GameUI {
   }
 
   /**
-   * Update threshold indicators based on planned exits
+   * Update threshold indicators based on planned exits and CYOA
    */
-  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>) {
+  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean }>) {
     // Clear existing indicators
     this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
     this.progressThresholdIndicators = [];
@@ -266,14 +266,14 @@ export class GameUI {
     
     if (!barWidth || !barX || !barY) return;
     
-    // Create triangle indicators for unspawned exits
+    // Create triangle indicators for unspawned exits (orange triangles)
     plannedExits.forEach(exit => {
       if (!exit.spawned) {
         const triangleX = barX + (exit.progressThreshold / 100) * barWidth;
         const triangleY = barY - 8; // Above the progress bar
         
         const triangle = this.scene.add.graphics();
-        triangle.fillStyle(0xff6b35, 0.8); // Orange color
+        triangle.fillStyle(0xff6b35, 0.8); // Orange color for exits
         triangle.beginPath();
         triangle.moveTo(triangleX, triangleY);
         triangle.lineTo(triangleX - 4, triangleY + 8);
@@ -287,6 +287,30 @@ export class GameUI {
         this.progressThresholdIndicators.push(triangle);
       }
     });
+    
+    // Create triangle indicators for unspawned CYOA (purple triangles)
+    if (plannedCyoa) {
+      plannedCyoa.forEach(cyoa => {
+        if (!cyoa.triggered) {
+          const triangleX = barX + (cyoa.progressThreshold / 100) * barWidth;
+          const triangleY = barY - 16; // Above the exit indicators
+          
+          const triangle = this.scene.add.graphics();
+          triangle.fillStyle(0x9b59b6, 0.8); // Purple color for CYOA
+          triangle.beginPath();
+          triangle.moveTo(triangleX, triangleY);
+          triangle.lineTo(triangleX - 4, triangleY + 8);
+          triangle.lineTo(triangleX + 4, triangleY + 8);
+          triangle.closePath();
+          triangle.fillPath();
+          
+          triangle.setScrollFactor(0);
+          triangle.setDepth(10002);
+          
+          this.progressThresholdIndicators.push(triangle);
+        }
+      });
+    }
   }
 
   /**

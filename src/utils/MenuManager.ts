@@ -629,21 +629,146 @@ export class MenuManager {
     this.createDialog(menuConfig);
   }
 
-  public showExitMenu() {
+  /**
+   * Show tutorial interrupt menu
+   */
+  public showTutorialInterrupt() {
+    if (!this.canShowMenu('TUTORIAL_INTERRUPT')) return;
+    this.clearCurrentDialog();
+    this.pushMenu('TUTORIAL_INTERRUPT');
+    
+    // Create countdown button
+    let countdown = 8;
+    
+    const menuConfig: MenuConfig = {
+      title: 'TUTORIAL',
+      content: 'You have to take care of these little guys.',
+      buttons: [
+        {
+          text: `Continue (${countdown})`,
+          onClick: () => {
+            // Menu will auto-close after 8 steps, but allow manual close too
+            console.log('🎓 Tutorial interrupt manually closed');
+            this.closeDialog();
+            
+            // Emit event to GameScene to trigger rearview mirror reveal
+            console.log('🎓 Emitting tutorialInterruptClosed event (manual)');
+            // Emit through the scene to ensure it reaches GameScene
+            this.scene.scene.get('GameScene')?.events.emit('tutorialInterruptClosed');
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#27ae60', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+    
+    this.createDialog(menuConfig, 'TUTORIAL_INTERRUPT');
+    
+    // Store countdown state for step-based updates
+    (this.currentDialog as any).tutorialCountdown = countdown;
+    
+    // Find the button text object and store reference
+    const buttonText = this.currentDialog.list.find((child: any) => 
+      child instanceof Phaser.GameObjects.Text && child.text.includes('Continue')
+    ) as Phaser.GameObjects.Text;
+    
+    if (buttonText) {
+      (this.currentDialog as any).buttonText = buttonText;
+      console.log('🎓 Tutorial interrupt: Button text found and stored');
+    } else {
+      console.warn('🎓 Tutorial interrupt: Could not find button text object');
+    }
+  }
+
+  /**
+   * Update tutorial interrupt countdown (called from GameScene on each step)
+   */
+  public updateTutorialInterruptCountdown() {
+    if (!this.currentDialog || this.currentDisplayedMenuType !== 'TUTORIAL_INTERRUPT') {
+      return;
+    }
+
+    const countdown = (this.currentDialog as any).tutorialCountdown;
+    const buttonText = (this.currentDialog as any).buttonText;
+
+    console.log(`🎓 Tutorial interrupt countdown update: current=${countdown}`);
+
+    if (countdown !== undefined && countdown > 0) {
+      // Decrement countdown
+      (this.currentDialog as any).tutorialCountdown = countdown - 1;
+      const newCountdown = countdown - 1;
+      
+      // Update button text with new countdown value
+      if (buttonText) {
+        const newText = newCountdown > 0 ? `Continue (${newCountdown})` : 'Continue';
+        buttonText.setText(newText);
+        console.log(`🎓 Tutorial interrupt countdown: ${newCountdown}`);
+      }
+      
+      // Auto-close menu when countdown reaches 0
+      if (newCountdown <= 0) {
+        console.log('🎓 Tutorial interrupt countdown reached 0 - auto-closing menu');
+        this.closeDialog();
+        
+        // Emit event to GameScene to trigger rearview mirror reveal
+        console.log('🎓 Emitting tutorialInterruptClosed event');
+        // Emit through the scene to ensure it reaches GameScene
+        this.scene.scene.get('GameScene')?.events.emit('tutorialInterruptClosed');
+      }
+    }
+  }
+
+  public showExitMenu(shopCount: number = 3) {
     if (!this.canShowMenu('EXIT')) return;
     this.clearCurrentDialog();
     this.pushMenu('EXIT');
+    
+    // Generate shop names based on count
+    const shopNames = this.generateShopNames(shopCount);
+    
+    // Create buttons for each shop
+    const buttons: MenuButton[] = shopNames.map((shopName, index) => ({
+      text: shopName,
+      onClick: () => { this.handleExitShopChoice(shopName); }
+    }));
+    
+    // Add close button
+    buttons.push({ text: 'Close', onClick: () => this.closeDialog() });
+    
     const menuConfig: MenuConfig = {
       title: 'EXIT',
-      content: 'Choose a shop to visit.',
-      buttons: [
-        { text: 'Shop 1', onClick: () => { this.handleExitShopChoice('Shop 1'); } },
-        { text: 'Shop 2', onClick: () => { this.handleExitShopChoice('Shop 2'); } },
-        { text: 'Shop 3', onClick: () => { this.handleExitShopChoice('Shop 3'); } },
-        { text: 'Close', onClick: () => this.closeDialog() }
-      ]
+      content: `Choose a shop to visit. (${shopCount} shops available)`,
+      buttons: buttons
     };
     this.createDialog(menuConfig, 'EXIT');
+  }
+
+  /**
+   * Generate shop names based on count
+   */
+  private generateShopNames(count: number): string[] {
+    const shopTypes = [
+      'Gas Station', 'Convenience Store', 'Rest Stop', 'Truck Stop',
+      'Roadside Diner', 'Motel Shop', 'Service Center', 'Market',
+      'General Store', 'Trading Post', 'Outpost', 'Depot'
+    ];
+    
+    const names: string[] = [];
+    const usedNames = new Set<string>();
+    
+    for (let i = 0; i < count; i++) {
+      let name: string;
+      let attempts = 0;
+      
+      do {
+        name = shopTypes[Math.floor(Math.random() * shopTypes.length)];
+        attempts++;
+      } while (usedNames.has(name) && attempts < 20);
+      
+      usedNames.add(name);
+      names.push(name);
+    }
+    
+    return names;
   }
 
   private handleExitShopChoice(shopName: string) {
@@ -1081,6 +1206,50 @@ export class MenuManager {
     };
 
     this.createDialog(menuConfig, 'OBSTACLE');
+  }
+
+  public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number }) {
+    if (!this.canShowMenu('CYOA')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('CYOA', cyoaData);
+    
+    const cyoaDescription = cyoaData.isExitRelated 
+      ? `Something happened near Exit ${cyoaData.exitNumber}!`
+      : 'Something happened!';
+    
+    const menuConfig: MenuConfig = {
+      title: 'CYOA',
+      content: cyoaDescription,
+      buttons: [
+        {
+          text: 'OK',
+          onClick: () => {
+            this.closeDialog();
+            // Resume driving after CYOA
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene) {
+              (gameScene as any).resumeAfterCyoa();
+            }
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        },
+        {
+          text: 'No',
+          onClick: () => {
+            this.closeDialog();
+            // Resume driving after CYOA (same as OK for now)
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene) {
+              (gameScene as any).resumeAfterCyoa();
+            }
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#666666', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+
+    this.createDialog(menuConfig, 'CYOA');
   }
 
   public showGameOverMenu() {
@@ -1672,7 +1841,7 @@ export class MenuManager {
     
     // Create semi-transparent black background covering the screen (same as tutorial overlay)
     const background = this.scene.add.graphics();
-    background.fillStyle(0x000000, 0.7); // Black, 70% opacity
+    background.fillStyle(0x000000, 0.3); // Black, 30% opacity (reduced from 70%)
     background.fillRect(0, 0, gameWidth, gameHeight);
     overlay.add(background);
     
@@ -1936,6 +2105,20 @@ export class MenuManager {
   private closeDialog() {
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
+    
+    // Handle special resumption logic for certain menu types
+    if (this.currentDisplayedMenuType === 'CYOA') {
+      // Resume driving after CYOA menu closes
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
+        (gameScene as any).carMechanics.resumeDriving();
+        console.log('MenuManager: Resumed CarMechanics driving after CYOA');
+      }
+      // Emit game resumed event
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
+      }
+    }
     
     // Pop the current displayed menu from the stack (not necessarily the top)
     if (this.currentDisplayedMenuType) {

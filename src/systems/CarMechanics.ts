@@ -88,6 +88,7 @@ export class CarMechanics {
   // Car State
   private drivingMode: boolean = false;
   private drivingPaused: boolean = false;
+  private tutorialMode: boolean = false; // New: tutorial mode flag
   private carSpeed: number = 0;
   private carX: number = 0;
   private currentSteeringValue: number = 0;
@@ -96,7 +97,7 @@ export class CarMechanics {
   // Speed Progression System
   private baseSpeed: number = 0; // Base speed from crank input
   private speedProgressionStartStep: number = 0; // When speed progression started (step-based)
-  private speedProgressionDurationSteps: number = 1800; // 1800 steps to reach max progression (30 seconds at 60fps)
+  private speedProgressionDurationSteps: number = 600; // 600 steps to reach max progression (10 seconds at 60fps) - faster for testing
   private maxSpeedMultiplier: number = 1.0; // Maximum 1x speed multiplier (100%)
   // private shouldAutoRestartDriving: boolean = false; // Unused
   // private shouldAutoResumeAfterCollision: boolean = false; // Unused
@@ -131,6 +132,7 @@ export class CarMechanics {
   private plannedExits: Array<{
     number: number; // Exit number (1, 2, 3, etc.)
     exitName: string; // Display name (e.g., "EXIT 1", "EXIT 2-3", "EXIT 1-A")
+    shopCount: number; // Number of shops (1-4, with 1 and 4 being rare)
     previewThreshold: number; // When to spawn preview (0-100)
     exitThreshold: number; // When to spawn actual exit (0-100)
     laneIndex: number;
@@ -140,6 +142,15 @@ export class CarMechanics {
     height: number;
     previewSpawned: boolean;
     exitSpawned: boolean;
+  }> = [];
+
+  // CYOA Planning System - random choose-your-own-adventure events during driving
+  private plannedCyoa: Array<{
+    id: number; // CYOA ID (1, 2, 3, etc.)
+    cyoaThreshold: number; // When to trigger CYOA (0-100)
+    isExitRelated: boolean; // True if this CYOA is related to an exit
+    exitNumber?: number; // Which exit this CYOA is related to (if isExitRelated)
+    triggered: boolean; // Whether CYOA has been triggered
   }> = [];
   
   private currentSequenceProgress: number = 0;
@@ -210,6 +221,182 @@ export class CarMechanics {
   }
 
   /**
+   * Generate well-spaced thresholds for exits and CYOA events
+   */
+  private generateSpacedThresholds(numExits: number, numCyoa: number): { exits: number[], cyoa: number[] } {
+    const minSpacing = 12; // Minimum spacing between any events (12%)
+    const totalEvents = numExits + numCyoa;
+    
+    // Define ranges for different event types
+    const exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
+    const cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+    
+    // Generate all possible positions
+    const allPositions: Array<{ value: number, type: 'exit' | 'cyoa', index: number }> = [];
+    
+    // Generate exit positions
+    for (let i = 0; i < numExits; i++) {
+      allPositions.push({
+        value: Phaser.Math.Between(exitRange.min, exitRange.max),
+        type: 'exit',
+        index: i
+      });
+    }
+    
+    // Generate CYOA positions (excluding the exit-bundled one if there are 3 CYOA)
+    const cyoaToGenerate = numCyoa === 3 ? numCyoa - 1 : numCyoa; // Don't generate position for exit-bundled CYOA
+    for (let i = 0; i < cyoaToGenerate; i++) {
+      allPositions.push({
+        value: Phaser.Math.Between(cyoaRange.min, cyoaRange.max),
+        type: 'cyoa',
+        index: i
+      });
+    }
+    
+    // Sort by value
+    allPositions.sort((a, b) => a.value - b.value);
+    
+    // Apply spacing algorithm
+    let attempts = 0;
+    const maxAttempts = 50;
+    
+    while (attempts < maxAttempts) {
+      let needsAdjustment = false;
+      
+      // Check spacing between consecutive events
+      for (let i = 0; i < allPositions.length - 1; i++) {
+        const current = allPositions[i];
+        const next = allPositions[i + 1];
+        const spacing = next.value - current.value;
+        
+        if (spacing < minSpacing) {
+          needsAdjustment = true;
+          
+          // Move events apart
+          const adjustment = (minSpacing - spacing) / 2;
+          current.value = Math.max(0, current.value - adjustment);
+          next.value = Math.min(100, next.value + adjustment);
+          
+          // Ensure we stay within valid ranges
+          if (current.type === 'exit') {
+            current.value = Phaser.Math.Clamp(current.value, exitRange.min, exitRange.max);
+          } else {
+            current.value = Phaser.Math.Clamp(current.value, cyoaRange.min, cyoaRange.max);
+          }
+          
+          if (next.type === 'exit') {
+            next.value = Phaser.Math.Clamp(next.value, exitRange.min, exitRange.max);
+          } else {
+            next.value = Phaser.Math.Clamp(next.value, cyoaRange.min, cyoaRange.max);
+          }
+        }
+      }
+      
+      if (!needsAdjustment) break;
+      
+      // Re-sort after adjustments
+      allPositions.sort((a, b) => a.value - b.value);
+      attempts++;
+    }
+    
+    // Separate exits and CYOA
+    const exits = allPositions
+      .filter(p => p.type === 'exit')
+      .map(p => p.value)
+      .sort((a, b) => a - b);
+    
+    const cyoa = allPositions
+      .filter(p => p.type === 'cyoa')
+      .map(p => p.value)
+      .sort((a, b) => a - b);
+    
+    // If there are 3 CYOA, add a placeholder for the exit-bundled one
+    if (numCyoa === 3) {
+      cyoa.push(0); // Placeholder - will be replaced with actual post-exit threshold
+    }
+    
+    console.log(`🎯 Generated ${exits.length} exits and ${cyoa.length} CYOA with improved spacing`);
+    console.log(`🎯 Exit thresholds: [${exits.join(', ')}]`);
+    console.log(`🎯 CYOA thresholds: [${cyoa.join(', ')}]`);
+    
+    return { exits, cyoa };
+  }
+
+  /**
+   * Ensure all CYOA events are properly spaced
+   */
+  private ensureCyoaSpacing() {
+    const minSpacing = 12; // Minimum spacing between CYOA events
+    let attempts = 0;
+    const maxAttempts = 50;
+    
+    while (attempts < maxAttempts) {
+      let needsAdjustment = false;
+      
+      // Sort CYOA by threshold
+      this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+      
+      // Check spacing between consecutive CYOA events
+      for (let i = 0; i < this.plannedCyoa.length - 1; i++) {
+        const current = this.plannedCyoa[i];
+        const next = this.plannedCyoa[i + 1];
+        const spacing = next.cyoaThreshold - current.cyoaThreshold;
+        
+        if (spacing < minSpacing) {
+          needsAdjustment = true;
+          
+          // Adjust the non-exit-related CYOA first
+          if (!current.isExitRelated && !next.isExitRelated) {
+            // Both are regular CYOA - move them apart
+            const adjustment = (minSpacing - spacing) / 2;
+            current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
+            next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
+          } else if (!current.isExitRelated) {
+            // Current is regular, next is exit-related - move current
+            current.cyoaThreshold = Math.max(20, next.cyoaThreshold - minSpacing);
+          } else if (!next.isExitRelated) {
+            // Current is exit-related, next is regular - move next
+            next.cyoaThreshold = Math.min(90, current.cyoaThreshold + minSpacing);
+          } else {
+            // Both are exit-related - this shouldn't happen, but adjust anyway
+            const adjustment = (minSpacing - spacing) / 2;
+            current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
+            next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
+          }
+        }
+      }
+      
+      if (!needsAdjustment) break;
+      attempts++;
+    }
+    
+    if (attempts >= maxAttempts) {
+      console.warn('⚠️ Could not achieve proper CYOA spacing after maximum attempts');
+    } else {
+      console.log('✅ CYOA spacing verified');
+    }
+  }
+
+  /**
+   * Generate shop count (1-4 shops, with 1 and 4 being rare)
+   */
+  private generateShopCount(): number {
+    const rand = Math.random();
+    
+    // 1 shop: 10% chance (rare)
+    if (rand < 0.1) return 1;
+    
+    // 4 shops: 10% chance (rare)
+    if (rand < 0.2) return 4;
+    
+    // 2 shops: 40% chance (common)
+    if (rand < 0.6) return 2;
+    
+    // 3 shops: 40% chance (common)
+    return 3;
+  }
+
+  /**
    * Generate unique exit names for a driving sequence
    */
   private generateExitNames(count: number): string[] {
@@ -261,6 +448,29 @@ export class CarMechanics {
   }
 
   /**
+   * Enable tutorial mode (no obstacles, no progress, no speed increase)
+   */
+  public enableTutorialMode() {
+    this.tutorialMode = true;
+    console.log('🎓 Tutorial mode enabled - no obstacles, no progress, no speed increase');
+  }
+  
+  /**
+   * Disable tutorial mode (normal gameplay)
+   */
+  public disableTutorialMode() {
+    this.tutorialMode = false;
+    console.log('🎓 Tutorial mode disabled - normal gameplay resumed');
+  }
+  
+  /**
+   * Check if in tutorial mode
+   */
+  public isInTutorialMode(): boolean {
+    return this.tutorialMode;
+  }
+
+  /**
    * Start driving mode
    */
   public startDriving(currentStep: number = 0) {
@@ -298,8 +508,9 @@ export class CarMechanics {
    * Plan exits for the current driving sequence
    */
   private planExitsForSequence() {
-    // Clear previous planned exits
+    // Clear previous planned exits and CYOA
     this.plannedExits = [];
+    this.plannedCyoa = [];
     this.currentSequenceProgress = 0;
     
     // Plan 2-3 exits per sequence
@@ -315,23 +526,14 @@ export class CarMechanics {
     const exitOffsetLeft = 40; // Move exits 40px left
     const previewOffsetRight = 15; // Move previews 15px right
     
-    // Generate exit thresholds with proper spacing
-    const exitThresholds: number[] = [];
-    for (let i = 0; i < numExits; i++) {
-      let exitThreshold: number;
-      let attempts = 0;
-      
-      do {
-        // Spread exits across the sequence (30-85% range)
-        exitThreshold = Phaser.Math.Between(30, 85);
-        attempts++;
-      } while (attempts < 10 && exitThresholds.some(t => Math.abs(t - exitThreshold) < 15));
-      
-      exitThresholds.push(exitThreshold);
-    }
+    // Plan 1-3 CYOA per sequence
+    const numCyoa = Phaser.Math.Between(1, 3);
+    console.log(`Planning ${numCyoa} CYOA for this driving sequence`);
     
-    // Sort thresholds to ensure proper order
-    exitThresholds.sort((a, b) => a - b);
+    // Generate all thresholds together with improved spacing
+    const allThresholds = this.generateSpacedThresholds(numExits, numCyoa);
+    const exitThresholds = allThresholds.exits;
+    const cyoaThresholds = allThresholds.cyoa;
     
     // Generate unique exit names for this sequence
     const exitNames = this.generateExitNames(exitThresholds.length);
@@ -341,24 +543,28 @@ export class CarMechanics {
       const exitNumber = index + 1; // Number exits 1, 2, 3, etc.
       const exitName = exitNames[index]; // Use generated name
       
-      // Preview spawns 10-30% before the exit, but not less than 1%, and not within 5 steps of another preview/exit
+      // Preview spawns 20-45% before the exit, but not less than 1%, and not within 8 steps of another preview/exit
       let previewThreshold: number;
       let attempts = 0;
       
       do {
-        const previewOffset = Phaser.Math.Between(10, 30);
+        const previewOffset = Phaser.Math.Between(20, 45);
         previewThreshold = Math.max(1, exitThreshold - previewOffset);
         attempts++;
       } while (attempts < 10 && (
         // Check against other exits
-        exitThresholds.some(t => Math.abs(t - previewThreshold) < 5) ||
+        exitThresholds.some(t => Math.abs(t - previewThreshold) < 8) ||
         // Check against other previews
-        this.plannedExits.some(e => Math.abs(e.previewThreshold - previewThreshold) < 5)
+        this.plannedExits.some(e => Math.abs(e.previewThreshold - previewThreshold) < 8)
       ));
+      
+      // Generate shop count (1-4 shops, with 1 and 4 being rare)
+      const shopCount = this.generateShopCount();
       
       this.plannedExits.push({
         number: exitNumber,
         exitName: exitName,
+        shopCount: shopCount,
         previewThreshold: previewThreshold,
         exitThreshold: exitThreshold,
         laneIndex: this.laneIndices[this.laneIndices.length - 1], // Rightmost lane
@@ -371,14 +577,84 @@ export class CarMechanics {
       });
     });
     
-    console.log('🎯 Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}%`));
+    console.log('🎯 Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
     console.log('🎯 Total planned exits:', this.plannedExits.length);
+    
+    // Create planned CYOA
+    cyoaThresholds.forEach((threshold, index) => {
+      const cyoaId = index + 1;
+      let isExitRelated = false;
+      let exitNumber: number | undefined;
+      let cyoaThreshold = threshold;
+      
+      // If we have 3 CYOA, one should be exit-related and occur after leaving an exit
+      if (numCyoa === 3 && cyoaId === 3) {
+        isExitRelated = true;
+        // Pick a random exit to be related to
+        exitNumber = Phaser.Math.Between(1, numExits);
+        
+        // Find the chosen exit and schedule CYOA to occur after leaving it
+        const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+        if (chosenExit) {
+          // Schedule CYOA to occur 5-15% after the exit threshold
+          const postExitOffset = Phaser.Math.Between(5, 15);
+          cyoaThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
+          
+          // Ensure this CYOA doesn't conflict with other CYOA events
+          const minSpacing = 12; // Minimum spacing between CYOA events
+          let attempts = 0;
+          const maxAttempts = 20;
+          
+          while (attempts < maxAttempts) {
+            let needsAdjustment = false;
+            
+            // Check spacing against other planned CYOA
+            for (const existingCyoa of this.plannedCyoa) {
+              if (Math.abs(existingCyoa.cyoaThreshold - cyoaThreshold) < minSpacing) {
+                needsAdjustment = true;
+                break;
+              }
+            }
+            
+            if (needsAdjustment) {
+              // Try a different offset
+              const newPostExitOffset = Phaser.Math.Between(5, 15);
+              cyoaThreshold = Math.min(100, chosenExit.exitThreshold + newPostExitOffset);
+              attempts++;
+            } else {
+              break;
+            }
+          }
+          
+          console.log(`🎭 CYOA ${cyoaId} scheduled after Exit ${exitNumber} at ${cyoaThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+        }
+      }
+      
+      this.plannedCyoa.push({
+        id: cyoaId,
+        cyoaThreshold: cyoaThreshold,
+        isExitRelated: isExitRelated,
+        exitNumber: exitNumber,
+        triggered: false
+      });
+    });
+    
+    // Final spacing check for all CYOA events
+    this.ensureCyoaSpacing();
+    
+    console.log('🎯 Planned CYOA:', this.plannedCyoa.map(c => `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (exit-related)` : ''}`));
+    console.log('🎯 Total planned CYOA:', this.plannedCyoa.length);
   }
 
   /**
    * Update progress and spawn planned exits when thresholds are reached
    */
   public updateProgress(progress: number) {
+    // In tutorial mode, don't update progress or spawn anything
+    if (this.tutorialMode) {
+      return;
+    }
+    
     this.currentSequenceProgress = progress;
     
     // Debug logging for exit spawning
@@ -403,6 +679,15 @@ export class CarMechanics {
         console.log(`🚪 Spawning Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExit(plannedExit);
         plannedExit.exitSpawned = true;
+      }
+    });
+    
+    // Check if any planned CYOA should be triggered
+    this.plannedCyoa.forEach(plannedCyoa => {
+      if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
+        console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%${plannedCyoa.isExitRelated ? ` (exit-related)` : ''}`);
+        this.triggerCyoa(plannedCyoa);
+        plannedCyoa.triggered = true;
       }
     });
   }
@@ -439,10 +724,11 @@ export class CarMechanics {
     );
     visual.setDepth(this.config.roadDepth + 0.5);
     
-    // Create exit name text label
+    // Create exit name text label with shop count
+    const shopText = plannedExit.shopCount === 1 ? '1 Shop' : `${plannedExit.shopCount} Shops`;
     const exitText = this.scene.add.text(
       obstacle.x, obstacle.y,
-      plannedExit.exitName,
+      `${plannedExit.exitName}\n${shopText}`,
       {
         fontSize: '12px',
         color: '#ffffff',
@@ -450,7 +736,8 @@ export class CarMechanics {
         stroke: '#000000',
         strokeThickness: 2,
         backgroundColor: '#000000',
-        padding: { x: 4, y: 2 }
+        padding: { x: 4, y: 2 },
+        align: 'center'
       }
     );
     exitText.setOrigin(0.5, 0.5);
@@ -561,6 +848,7 @@ export class CarMechanics {
     obstacle.setData('visual', visual);
     obstacle.setData('text', exitText); // Store text reference
     obstacle.setData('laneIndex', plannedExit.laneIndex);
+    obstacle.setData('shopCount', plannedExit.shopCount); // Store shop count for menu
     
     // Add to obstacles array for collision detection
     this.obstacles.push(obstacle);
@@ -575,12 +863,45 @@ export class CarMechanics {
   }
 
   /**
+   * Trigger a planned CYOA
+   */
+  private triggerCyoa(plannedCyoa: any) {
+    console.log(`🎭 Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber})` : ''}`);
+    
+    // Pause driving
+    this.pauseDriving();
+    
+    // Show CYOA menu
+    const menuScene = this.scene.scene.get('MenuScene');
+    if (menuScene) {
+      (menuScene as any).events.emit('showCyoaMenu', {
+        cyoaId: plannedCyoa.id,
+        isExitRelated: plannedCyoa.isExitRelated,
+        exitNumber: plannedCyoa.exitNumber
+      });
+      this.scene.scene.bringToTop('MenuScene');
+    }
+  }
+
+  /**
    * Get planned exits for UI display (shows exit thresholds, not preview thresholds)
    */
   public getPlannedExits() {
     return this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
       progressThreshold: exit.exitThreshold,
       spawned: exit.exitSpawned
+    }));
+  }
+
+  /**
+   * Get planned CYOA for UI display
+   */
+  public getPlannedCyoa() {
+    return this.plannedCyoa.filter(cyoa => !cyoa.triggered).map(cyoa => ({
+      progressThreshold: cyoa.cyoaThreshold,
+      triggered: cyoa.triggered,
+      isExitRelated: cyoa.isExitRelated,
+      exitNumber: cyoa.exitNumber
     }));
   }
 
@@ -621,8 +942,8 @@ export class CarMechanics {
    * Handle steering input - now treats input as target position, not delta
    */
   public handleSteering(value: number) {
-    // Ignore steering when not driving
-    if (!this.drivingMode) return;
+    // Allow steering in tutorial mode, but ignore when not driving
+    if (!this.drivingMode && !this.tutorialMode) return;
     this.currentSteeringValue = Phaser.Math.Clamp(value, -150, 150); // Store target position
   }
 
@@ -659,6 +980,12 @@ export class CarMechanics {
       return;
     }
     
+    // In tutorial mode, maintain constant low speed without progression
+    if (this.tutorialMode) {
+      this.carSpeed = this.baseSpeed * 0.1; // Fixed 10% speed in tutorial
+      return;
+    }
+    
     if (this.speedProgressionStartStep <= 0) {
       // No progression started yet or needs restart, start at 1% speed
       this.carSpeed = this.baseSpeed * 0.01; // Start at 1% of base speed
@@ -687,7 +1014,7 @@ export class CarMechanics {
     const logFactor = Math.log(distanceToTarget + 1) / Math.log(2);
     
     // Base increment starts much higher for faster initial progression
-    const baseIncrementPercent = 0.03; // 3% per step (much faster progression)
+    const baseIncrementPercent = 0.08; // 8% per step (much faster progression for testing)
     const incrementPercent = baseIncrementPercent * logFactor;
     
     // Calculate the actual speed increment
@@ -1019,8 +1346,11 @@ export class CarMechanics {
   private updateCarPosition() {
     if (!this.drivingMode || this.drivingPaused) return;
     
-    // Only allow steering when speed is sufficient
-    if (this.carSpeed < this.config.minSpeedForSteering) {
+    // In tutorial mode, allow steering even at low speeds
+    const minSpeedForSteering = this.tutorialMode ? 0 : this.config.minSpeedForSteering;
+    
+    // Only allow steering when speed is sufficient (or in tutorial mode)
+    if (this.carSpeed < minSpeedForSteering) {
       this.currentSteeringValue = 0;
       // decay turn to neutral when nearly stopped
       this.turn = Math.abs(this.turn) < 0.01 ? 0 : Phaser.Math.Linear(this.turn, 0, this.config.turnResetMultiplier);
@@ -1357,7 +1687,8 @@ export class CarMechanics {
       }
       const menuScene = this.scene.scene.get('MenuScene');
       if (menuScene) {
-        (menuScene as any).events.emit('showObstacleMenu', 'exit');
+        const shopCount = obstacle.getData('shopCount') || 3; // Default to 3 if not set
+        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount);
         this.scene.scene.bringToTop('MenuScene');
       }
     }

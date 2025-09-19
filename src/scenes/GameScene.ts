@@ -107,6 +107,7 @@ export class GameScene extends Phaser.Scene {
   private potholeHitStep: number | null = null;
   private stopMenuOpen: boolean = false;
   private countdownStepCounter: number = 0; // Track steps for countdown timing
+  private tutorialInterruptStep: number | null = null; // Track when tutorial interrupt should end
   // Matter tilt-gravity based on steering
   private gravityBaseY: number = SCENE_TUNABLES.gravity.baseY;
   private gravityXCurrent: number = 0;
@@ -712,9 +713,10 @@ export class GameScene extends Phaser.Scene {
     this.gameState.setEventCallbacks({
       onStateChange: (state) => {
         this.gameUI.updateUI(state);
-        // Update threshold indicators based on planned exits
+        // Update threshold indicators based on planned exits and CYOA
         const plannedExits = this.carMechanics.getPlannedExits();
-        this.gameUI.updateThresholdIndicators(plannedExits);
+        const plannedCyoa = this.carMechanics.getPlannedCyoa();
+        this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa);
         // Auto-snap crank to 0 when keys are out of ignition
         // Speed crank removed - no need to reset
         this.scheduleTutorialUpdate(0);
@@ -766,6 +768,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('removeKeys', this.onRemoveKeys, this);
     this.events.on('ignitionMenuShown', this.onIgnitionMenuShown, this);
     this.events.on('ignitionMenuHidden', this.onIgnitionMenuHidden, this);
+    this.events.on('tutorialInterruptClosed', this.onTutorialInterruptClosed, this);
     this.events.on('speedUpdate', this.onSpeedUpdate, this);
     this.events.on('steeringInput', this.onSteeringInput, this);
     // Speed crank removed - using automatic speed progression
@@ -1087,8 +1090,13 @@ export class GameScene extends Phaser.Scene {
         // console.log('Key collision disabled while constrained');
       }
       
-      // Update tutorial overlay (debounced)
-      this.scheduleTutorialUpdate(0);
+    // Update tutorial overlay (debounced)
+    this.scheduleTutorialUpdate(0);
+    
+    // If in tutorial, start the initial driving phase
+    if (this.gameState.isInTutorial()) {
+      console.log('🎓 Tutorial: Car started, beginning initial driving phase');
+    }
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
       if (!this.carStarted && this.keysConstraint) {
@@ -1189,31 +1197,37 @@ export class GameScene extends Phaser.Scene {
     // Animate rearview mirror sliding down on first car start
     if (this.firstCarStart) {
       this.firstCarStart = false;
-      const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
-      if (rearviewContainer) {
-        // Animate sliding down to correct position (y = 0)
-        this.tweens.add({
-          targets: rearviewContainer,
-          y: 0,
-          duration: 1800, // 1.8 seconds for slower, more elegant slide
-          ease: 'Cubic.easeOut', // Smoother ease-out curve
-          delay: 500, // Small delay after car starts
-          onComplete: () => {
-            // Fade in the virtual pets smoothly when rearview container reaches final position
-            this.virtualPets.forEach((pet, index) => {
-              const petContainer = pet.getRoot?.();
-              if (petContainer) {
-                this.tweens.add({
-                  targets: petContainer,
-                  alpha: 1,
-                  duration: 800, // 0.8 seconds fade-in
-                  ease: 'Cubic.easeOut',
-                  delay: index * 100 // Stagger each pet by 100ms for elegant appearance
-                });
-              }
-            });
-          }
-        });
+      
+      // Don't animate rearview mirror during tutorial - it will be revealed after interrupt
+      if (!this.gameState.isInTutorial()) {
+        const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
+        if (rearviewContainer) {
+          // Animate sliding down to correct position (y = 0)
+          this.tweens.add({
+            targets: rearviewContainer,
+            y: 0,
+            duration: 1800, // 1.8 seconds for slower, more elegant slide
+            ease: 'Cubic.easeOut', // Smoother ease-out curve
+            delay: 500, // Small delay after car starts
+            onComplete: () => {
+              // Fade in the virtual pets smoothly when rearview container reaches final position
+              this.virtualPets.forEach((pet, index) => {
+                const petContainer = pet.getRoot?.();
+                if (petContainer) {
+                  this.tweens.add({
+                    targets: petContainer,
+                    alpha: 1,
+                    duration: 800, // 0.8 seconds fade-in
+                    ease: 'Cubic.easeOut',
+                    delay: index * 100 // Stagger each pet by 100ms for elegant appearance
+                  });
+                }
+              });
+            }
+          });
+        }
+      } else {
+        console.log('🎓 Tutorial mode: Skipping rearview mirror animation - will be revealed after interrupt');
       }
     }
 
@@ -1257,11 +1271,12 @@ export class GameScene extends Phaser.Scene {
     //   this.magneticTarget.setAngle(angle);
     // }
     
-    // Apply steering-based rotation to rearview mirror container
-    const rearviewContainer = this.children.getByName('rearviewContainer');
-    if (rearviewContainer) {
-      (rearviewContainer as any).setAngle(angle);
-    }
+    // Keep rearview mirror container fixed (no rotation with camera)
+    // The rearview mirror should stay upright and not move with physics
+    // const rearviewContainer = this.children.getByName('rearviewContainer');
+    // if (rearviewContainer) {
+    //   (rearviewContainer as any).setAngle(angle);
+    // }
   }
 
   /**
@@ -1373,11 +1388,15 @@ export class GameScene extends Phaser.Scene {
    */
   public startGame() {
     this.gameState.startGame();
+    this.gameState.startTutorial(); // Start tutorial sequence
+    this.carMechanics.enableTutorialMode(); // Enable tutorial mode
     // Don't set carStarted = true here - car is not started yet
     this.scheduleTutorialUpdate(0);
     
     // Activate magnetic target when game starts
     this.activateMagneticTarget();
+    
+    console.log('🎯 Game started with tutorial sequence');
   }
 
   /**
@@ -1669,10 +1688,162 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Handle tutorial sequence steps
+   */
+  private handleTutorialStep(step: number) {
+    const tutorialPhase = this.gameState.getTutorialPhase();
+    const tutorialStep = this.gameState.getTutorialStep();
+    
+    console.log(`🎓 Tutorial step ${step}: phase=${tutorialPhase}, tutorialStep=${tutorialStep}`);
+    
+    switch (tutorialPhase) {
+      case 'initial_driving':
+        // Show countdown after 4 steps
+        if (tutorialStep >= 4) {
+          this.gameState.advanceTutorial();
+          this.showTutorialCountdown();
+        } else {
+          this.gameState.advanceTutorial(); // Increment tutorial step
+        }
+        break;
+        
+      case 'countdown':
+        // Show interrupt after countdown
+        this.gameState.advanceTutorial();
+        this.showTutorialInterrupt();
+        break;
+        
+      case 'interrupt':
+        // Don't advance tutorial phase here - it will be advanced when interrupt menu closes
+        // Just continue with interrupt handling
+        break;
+        
+      default:
+        console.warn('🎓 Unknown tutorial phase:', tutorialPhase);
+    }
+  }
+  
+  /**
+   * Show tutorial countdown
+   */
+  private showTutorialCountdown() {
+    console.log('🎓 Showing tutorial countdown');
+    // TODO: Show countdown UI
+  }
+  
+  /**
+   * Show tutorial interrupt (virtual pet care)
+   */
+  private showTutorialInterrupt() {
+    console.log('🎓 Showing tutorial interrupt - virtual pet care');
+    
+    // Show interrupt menu
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('showTutorialInterrupt');
+      this.scene.bringToTop('MenuScene');
+    }
+    
+    // Schedule menu to disappear after 8 steps
+    this.tutorialInterruptStep = this.gameState.getState().step + 8;
+  }
+  
+  /**
+   * Handle tutorial interrupt closed event
+   */
+  private onTutorialInterruptClosed() {
+    console.log('🎓 GameScene: Tutorial interrupt closed event received!');
+    console.log('🎓 Tutorial interrupt closed - revealing rearview mirror');
+    
+    // Advance tutorial phase to normal
+    this.gameState.advanceTutorial();
+    console.log('🎓 Tutorial phase advanced to:', this.gameState.getTutorialPhase());
+    
+    // Disable tutorial mode so progress can start
+    this.carMechanics.disableTutorialMode();
+    console.log('🎓 Tutorial mode disabled - progress can now start');
+    
+    // Wait a moment for menu to fully close, then reveal rearview mirror
+    this.time.delayedCall(200, () => {
+      console.log('🎓 Starting rearview mirror reveal animation');
+      this.revealRearviewMirror();
+    });
+    
+    // Clear the interrupt step
+    this.tutorialInterruptStep = null;
+  }
+
+  /**
+   * Reveal rearview mirror with animation
+   */
+  private revealRearviewMirror() {
+    console.log('🎓 Revealing rearview mirror');
+    
+    // Reveal rearview mirror by moving it down
+    const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
+    console.log('🎓 Rearview container found:', !!rearviewContainer);
+    
+    if (rearviewContainer) {
+      const cam = this.cameras.main;
+      const targetY = Math.floor(cam.height * UI_LAYOUT.rearviewY);
+      console.log('🎓 Target Y position:', targetY, 'Current Y:', rearviewContainer.y);
+      
+      // Animate rearview mirror sliding down
+      this.tweens.add({
+        targets: rearviewContainer,
+        y: targetY,
+        duration: 1000,
+        ease: 'Power2',
+        onComplete: () => {
+          console.log('🎓 Rearview mirror revealed');
+          
+          // Fade in the virtual pets smoothly when rearview container reaches final position
+          this.virtualPets.forEach((pet, index) => {
+            const petContainer = pet.getRoot?.();
+            if (petContainer) {
+              this.tweens.add({
+                targets: petContainer,
+                alpha: 1,
+                duration: 800, // 0.8 seconds fade-in
+                ease: 'Cubic.easeOut',
+                delay: index * 100 // Stagger each pet by 100ms for elegant appearance
+              });
+            }
+          });
+        }
+      });
+    } else {
+      console.error('🎓 ERROR: Rearview container not found!');
+    }
+  }
+
+  /**
+   * End tutorial sequence and start normal game
+   */
+  private endTutorialSequence() {
+    console.log('🎓 Ending tutorial sequence - tutorial mode will be disabled when interrupt closes');
+    // Don't disable tutorial mode here - it will be disabled when interrupt menu closes
+    // TODO: Hide tutorial UI elements
+  }
+
+  /**
    * Event handlers
    */
   private onStepEvent(step: number) {
     this.gameState.updateState({ step });
+    
+    // Handle tutorial sequence
+    if (this.gameState.isInTutorial()) {
+      this.handleTutorialStep(step);
+      
+      // Update tutorial interrupt countdown if menu is open
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene && (menuScene as any).menuManager) {
+        (menuScene as any).menuManager.updateTutorialInterruptCountdown();
+      }
+      
+      return;
+    }
     
     // Authoritative car-on guard
     const stateAtStep = this.gameState.getState();
@@ -1950,7 +2121,7 @@ export class GameScene extends Phaser.Scene {
       // Use internal carX position for collision detection since visual car is always centered
       const carX = (this.carMechanics as any).carX; // Internal car position
       const screenWidth = this.cameras.main.width;
-      const rightmostThreshold = screenWidth * 0.7; // Car needs to be in rightmost 30% of screen
+      const rightmostThreshold = screenWidth * 0.8; // Car needs to be in rightmost 20% of screen
       
       const carInRightmostArea = carX >= rightmostThreshold;
       

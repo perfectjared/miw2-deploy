@@ -103,9 +103,13 @@ export class AppScene extends Phaser.Scene {
     });
 
 
-    // Add pause button - positioned above driving view
-    // JARED'S NOTE: make these two buttons share the same style
-    const pauseButton = this.add.text(10, 100, 'PAUSE', {
+    // Add pause and save buttons - positioned in top left corner, stacked vertically
+    const buttonX = 10; // Left margin
+    const buttonSpacing = 35; // Vertical spacing between buttons
+    const buttonY1 = 20; // Top button (pause)
+    const buttonY2 = buttonY1 + buttonSpacing; // Bottom button (save)
+    
+    const pauseButton = this.add.text(buttonX, buttonY1, 'PAUSE', {
       fontSize: '16px',
       color: '#ffffff',
       backgroundColor: '#0000ff',
@@ -122,7 +126,7 @@ export class AppScene extends Phaser.Scene {
       pauseButton.setStyle({ backgroundColor: '#0000ff' });
     });
 
-    const saveButton = this.add.text(80, 100, 'SAVE', {
+    const saveButton = this.add.text(buttonX, buttonY2, 'SAVE', {
       fontSize: '16px',
       color: '#ffffff',
       backgroundColor: '#27ae60',

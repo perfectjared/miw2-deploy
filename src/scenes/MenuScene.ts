@@ -41,9 +41,11 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showGameOverMenu', this.showGameOverMenu, this);
     this.events.on('showStartMenu', this.showStartMenu, this);
     this.events.on('showTurnKeyMenu', this.showTurnKeyMenu, this);
+    this.events.on('showTutorialInterrupt', this.showTutorialInterrupt, this);
     this.events.on('showDestinationMenu', this.showDestinationMenu, this);
     this.events.on('showRegionChoiceMenu', this.showRegionChoiceMenu, this);
     this.events.on('showCYOA', this.showCYOA, this);
+    this.events.on('showCyoaMenu', this.showCyoaMenu, this);
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
     this.events.on('showMoralDecision', this.showMoralDecision, this);
     this.events.on('showPetStoryUI', this.showPetStoryUI, this);
@@ -96,16 +98,20 @@ export class MenuScene extends Phaser.Scene {
     this.menuManager.showGameOverMenu();
   }
 
-  private showObstacleMenu(obstacleType: string) {
+  private showObstacleMenu(obstacleType: string, shopCount?: number) {
     if (obstacleType === 'pothole') {
       this.menuManager.showPotholeMenu();
     } else if (obstacleType === 'exit') {
-      this.menuManager.showExitMenu();
+      this.menuManager.showExitMenu(shopCount || 3);
     }
   }
 
   private showTurnKeyMenu() {
     this.menuManager.showTurnKeyMenu();
+  }
+
+  private showTutorialInterrupt() {
+    this.menuManager.showTutorialInterrupt();
   }
 
   private showDestinationMenu(includeFinalShowStep?: boolean) {
@@ -118,6 +124,10 @@ export class MenuScene extends Phaser.Scene {
 
   private showCYOA(cfg?: { imageKey?: string; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {
     this.menuManager.showCYOAMenu(cfg);
+  }
+
+  private showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number }) {
+    this.menuManager.showCyoaMenu(cyoaData);
   }
 
   private showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {
