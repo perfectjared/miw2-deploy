@@ -732,11 +732,17 @@ export class MenuManager {
       onClick: () => { 
         // Trigger exit CYOA before handling shop choice if this exit has one
         if (exitNumber) {
-          console.log(`MenuManager: Shop ${shopName} selected for Exit ${exitNumber} - checking for CYOA`);
+          console.log(`🎭 MenuManager: Shop ${shopName} selected for Exit ${exitNumber} - checking for CYOA`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
+            console.log(`🎭 MenuManager: Calling triggerExitCyoa(${exitNumber}) for shop choice`);
             (gameScene as any).carMechanics.triggerExitCyoa(exitNumber);
+            console.log(`🎭 MenuManager: triggerExitCyoa call completed for shop choice`);
+          } else {
+            console.error(`🎭 MenuManager: GameScene or carMechanics not found for shop choice!`);
           }
+        } else {
+          console.log(`🎭 MenuManager: No exitNumber provided to shop button`);
         }
         this.handleExitShopChoice(shopName); 
       }
@@ -748,11 +754,17 @@ export class MenuManager {
       onClick: () => {
         // Trigger exit CYOA before closing if this exit has one
         if (exitNumber) {
-          console.log(`MenuManager: Close button pressed for Exit ${exitNumber} - checking for CYOA`);
+          console.log(`🎭 MenuManager: Close button pressed for Exit ${exitNumber} - checking for CYOA`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
+            console.log(`🎭 MenuManager: Calling triggerExitCyoa(${exitNumber})`);
             (gameScene as any).carMechanics.triggerExitCyoa(exitNumber);
+            console.log(`🎭 MenuManager: triggerExitCyoa call completed`);
+          } else {
+            console.error(`🎭 MenuManager: GameScene or carMechanics not found!`);
           }
+        } else {
+          console.log(`🎭 MenuManager: No exitNumber provided to Close button`);
         }
         this.closeDialog();
       }

@@ -236,9 +236,21 @@ export class CarMechanics {
     const minSpacing = 12; // Minimum spacing between any events (12%)
     const totalEvents = numExits + numCyoa;
     
+    // Check if this is the first driving sequence (for testing)
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    
     // Define ranges for different event types
-    const exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
-    const cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+    let exitRange, cyoaRange;
+    if (isFirstSequence) {
+      // For first sequence testing: exit very early
+      exitRange = { min: 15, max: 25 }; // First exit at 15-25% for testing
+      cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+      console.log('🎯 First sequence: Exit range 15-25% for testing');
+    } else {
+      exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
+      cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+    }
     
     // Generate all possible positions
     const allPositions: Array<{ value: number, type: 'exit' | 'cyoa', index: number }> = [];
@@ -629,11 +641,13 @@ export class CarMechanics {
       // For first sequence, make the 3rd CYOA always exit-related for testing
       if (isFirstSequence && cyoaId === 3) {
         isExitRelated = true;
-        exitNumber = Phaser.Math.Between(1, numExits);
+        exitNumber = 1; // Always bundle with Exit 1 for testing
         const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
         if (chosenExit) {
           cyoaThreshold = chosenExit.exitThreshold;
           console.log(`🎭 First sequence CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% (testing)`);
+          console.log(`🎭 CYOA threshold set to: ${cyoaThreshold}%`);
+          console.log(`🎭 Exit ${exitNumber} threshold: ${chosenExit.exitThreshold}%`);
           console.log(`🎭 Available exits:`, this.plannedExits.map(e => `Exit ${e.number} at ${e.exitThreshold}%`));
         } else {
           console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
@@ -1035,22 +1049,35 @@ export class CarMechanics {
    * Get planned exits for UI display (shows exit thresholds, not preview thresholds)
    */
   public getPlannedExits() {
-    return this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
+    const result = this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
       progressThreshold: exit.exitThreshold,
       spawned: exit.exitSpawned
     }));
+    
+    // Debug logging for exits
+    console.log(`🎯 getPlannedExits: Returning ${result.length} exits:`, result.map(e => `${e.progressThreshold}%`));
+    
+    return result;
   }
 
   /**
    * Get planned CYOA for UI display
    */
   public getPlannedCyoa() {
-    return this.plannedCyoa.filter(cyoa => !cyoa.triggered).map(cyoa => ({
+    const result = this.plannedCyoa.filter(cyoa => !cyoa.triggered).map(cyoa => ({
       progressThreshold: cyoa.cyoaThreshold,
       triggered: cyoa.triggered,
       isExitRelated: cyoa.isExitRelated,
       exitNumber: cyoa.exitNumber
     }));
+    
+    // Debug logging for bundled CYOA
+    const bundledCyoa = result.find(cyoa => cyoa.isExitRelated);
+    if (bundledCyoa) {
+      console.log(`🎭 getPlannedCyoa: Bundled CYOA found - threshold: ${bundledCyoa.progressThreshold}%, exit: ${bundledCyoa.exitNumber}`);
+    }
+    
+    return result;
   }
 
   /**
