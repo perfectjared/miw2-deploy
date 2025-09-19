@@ -1452,6 +1452,18 @@ export class GameScene extends Phaser.Scene {
     console.log('GameScene: Exit taken');
   }
 
+  /** Resume gameplay after CYOA (Choose Your Own Adventure) menu */
+  public resumeAfterCyoa(): void {
+    // Resume driving and unpause app if it was paused
+    this.carMechanics.resumeDriving();
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+    }
+    this.events.emit('gameResumed');
+    console.log('GameScene: Resumed after CYOA');
+  }
+
   /** Handle region selection */
   public selectRegion(regionId: string): void {
     console.log(`GameScene: Region selected: ${regionId}`);
