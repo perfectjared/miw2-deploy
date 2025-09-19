@@ -769,8 +769,9 @@ export class MenuManager {
           console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 4 steps later`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
-            console.log(`🎭 MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, 4)`);
-            (gameScene as any).carMechanics.scheduleExitCyoa(finalExitNumber, 4); // Schedule CYOA for 4 steps later
+            const delay = 8; // Slightly longer to ensure post-close steps elapse
+            console.log(`🎭 MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, ${delay})`);
+            (gameScene as any).carMechanics.scheduleExitCyoa(finalExitNumber, delay);
             console.log(`🎭 MenuManager: scheduleExitCyoa call completed`);
           } else {
             console.error(`🎭 MenuManager: ERROR - Could not find GameScene or carMechanics`);

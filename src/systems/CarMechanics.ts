@@ -1039,11 +1039,14 @@ export class CarMechanics {
     console.log(`🎭 scheduleExitCyoa: Current step ${currentStep}, CYOA will trigger at step ${triggerStep}`);
     
     // Store the scheduled CYOA
-    this.scheduledExitCyoa = {
-      exitNumber: exitNumber,
-      triggerStep: triggerStep,
-      triggered: false
-    };
+    // If an existing schedule is present for a different exit or earlier step, replace it
+    if (!this.scheduledExitCyoa || triggerStep >= (this.scheduledExitCyoa.triggerStep || 0) || this.scheduledExitCyoa.exitNumber !== exitNumber) {
+      this.scheduledExitCyoa = {
+        exitNumber: exitNumber,
+        triggerStep: triggerStep,
+        triggered: false
+      };
+    }
     
     console.log(`🎭 scheduleExitCyoa: Scheduled CYOA stored - exitNumber: ${exitNumber}, triggerStep: ${triggerStep}`);
   }
