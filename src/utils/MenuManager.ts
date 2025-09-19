@@ -1334,6 +1334,8 @@ export class MenuManager {
   }
 
   public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
+    console.log(`🎭 MenuManager.showCyoaMenu called for CYOA ${cyoaData.cyoaId} - Call stack:`, new Error().stack?.split('\n').slice(1, 6));
+    
     if (!this.canShowMenu('CYOA')) return;
     
     this.clearCurrentDialog();
