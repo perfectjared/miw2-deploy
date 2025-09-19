@@ -1088,11 +1088,14 @@ export class GameScene extends Phaser.Scene {
     }
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
+      console.log('Checking ignition menu conditions - carStarted:', this.carStarted, 'keysConstraint:', !!this.keysConstraint, 'keysInIgnition:', this.keysInIgnition);
       if (!this.carStarted && this.keysConstraint) {
-        console.log('Showing turn key menu - carStarted:', this.carStarted, 'keysConstraint:', !!this.keysConstraint);
+        console.log('✅ Showing turn key menu - conditions met');
         this.showTurnKeyMenu();
       } else {
-        console.log('Not showing turn key menu - carStarted:', this.carStarted, 'keysConstraint:', !!this.keysConstraint);
+        console.log('❌ Not showing turn key menu - conditions not met');
+        if (this.carStarted) console.log('  - Reason: car already started');
+        if (!this.keysConstraint) console.log('  - Reason: no keys constraint');
       }
       
       // Make Keys move vertically with camera when snapped
@@ -1146,11 +1149,15 @@ export class GameScene extends Phaser.Scene {
    * Show turn key menu
    */
   public showTurnKeyMenu() {
-     const menuScene = this.scene.get('MenuScene');
-     if (menuScene) {
+    console.log('🎯 showTurnKeyMenu() called - emitting showTurnKeyMenu event');
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
       menuScene.events.emit('showTurnKeyMenu');
-       this.scene.bringToTop('MenuScene');
-     }
+      this.scene.bringToTop('MenuScene');
+      console.log('✅ Turn key menu event emitted and MenuScene brought to top');
+    } else {
+      console.log('❌ MenuScene not found!');
+    }
   }
 
   /**
