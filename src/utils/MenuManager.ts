@@ -205,6 +205,25 @@ export class MenuManager {
     }
   }
 
+  private pauseGame() {
+    const appScene = this.scene.scene.get('AppScene');
+    const gameScene = this.scene.scene.get('GameScene');
+    
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused');
+    }
+    
+    if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
+      (gameScene as any).carMechanics.pauseDriving();
+      console.log('MenuManager: Paused CarMechanics driving');
+    }
+    
+    if (gameScene) {
+      gameScene.events.emit('gamePaused');
+    }
+  }
+
   // STORY OVERLAY -----------------------------------------------------------
   public showStoryOverlay(title: string, content: string) {
     // Non-blocking: don't use menu stack or overlay background
@@ -1334,32 +1353,16 @@ export class MenuManager {
   }
 
   public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
-    console.log(`🎭 MenuManager.showCyoaMenu called for CYOA ${cyoaData.cyoaId} - Call stack:`, new Error().stack?.split('\n').slice(1, 6));
+    // SIMPLIFIED: CYOA menus are completely independent and immediate
+    console.log(`🎭 SIMPLE CYOA: Creating ${cyoaData.exitTiming || 'regular'} CYOA ${cyoaData.cyoaId} for Exit ${cyoaData.exitNumber || 'N/A'}`);
     
-    if (!this.canShowMenu('CYOA')) return;
-    
+    // Clear any existing dialog immediately
     this.clearCurrentDialog();
-    this.pushMenu('CYOA', cyoaData);
     
-    // Pause the game when CYOA menu opens
-    const appScene = this.scene.scene.get('AppScene');
-    if (appScene) {
-      (appScene as any).isPaused = true;
-      console.log('MenuManager: Game paused for CYOA menu');
-    }
-    
-    // Emit gamePaused event to ensure CarMechanics is properly paused
-    const gameScene = this.scene.scene.get('GameScene');
-    if (gameScene) {
-      gameScene.events.emit('gamePaused');
-      console.log('MenuManager: Emitted gamePaused event for CYOA menu');
-    }
-    
+    // Don't use the complex menu stack for CYOA - create directly
     const cyoaDescription = cyoaData.isExitRelated 
       ? `Something happened ${cyoaData.exitTiming === 'before' ? 'before' : 'after'} Exit ${cyoaData.exitNumber}!`
       : 'Something happened!';
-    
-    console.log(`🎭 CYOA Menu: isExitRelated=${cyoaData.isExitRelated}, exitNumber=${cyoaData.exitNumber}, exitTiming=${cyoaData.exitTiming}, description="${cyoaDescription}"`);
     
     const menuConfig: MenuConfig = {
       title: 'CYOA',
@@ -1368,23 +1371,29 @@ export class MenuManager {
         {
           text: 'OK',
           onClick: () => {
-            this.closeDialog();
-            // closeDialog() now handles game resumption automatically
+            console.log(`🎭 SIMPLE CYOA: User clicked OK on ${cyoaData.exitTiming || 'regular'} CYOA ${cyoaData.cyoaId}`);
+            this.clearCurrentDialog();
+            this.resumeGame();
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'No',
           onClick: () => {
-            this.closeDialog();
-            // closeDialog() now handles game resumption automatically
+            console.log(`🎭 SIMPLE CYOA: User clicked No on ${cyoaData.exitTiming || 'regular'} CYOA ${cyoaData.cyoaId}`);
+            this.clearCurrentDialog();
+            this.resumeGame();
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#666666', padding: { x: 10, y: 5 } }
         }
       ]
     };
 
+    // Create dialog directly without complex menu management
     this.createDialog(menuConfig, 'CYOA');
+    
+    // Pause game immediately
+    this.pauseGame();
   }
 
   public showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
