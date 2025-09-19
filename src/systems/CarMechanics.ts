@@ -175,6 +175,10 @@ export class CarMechanics {
   // Also guard a window BEFORE upcoming exits to avoid regular CYOA right before an exit
   private preExitCyoaGuardPercent: number = 6; // percent progress window before any upcoming exit
 
+  // Strong guard for the exact exit-collision tick: only allow the matching 'before' CYOA
+  private exitCollisionGuardActive: boolean = false;
+  private exitCollisionNumberGuard: number | null = null;
+
   // Pending Exit Menu to show after a 'before' CYOA is closed
   private pendingExitAfterCyoa: { shopCount: number; exitNumber: number } | null = null;
   
@@ -1024,6 +1028,14 @@ export class CarMechanics {
    * Trigger a planned CYOA
    */
   private triggerCyoa(plannedCyoa: any, options?: { allowAfter?: boolean }) {
+    // If we're on the exact exit-collision tick, only allow the matching 'before' bundled CYOA
+    if (this.exitCollisionGuardActive) {
+      const allowed = plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'before' && plannedCyoa.exitNumber === this.exitCollisionNumberGuard;
+      if (!allowed) {
+        console.warn(`🎭 Guard: Blocking non-matching CYOA during exit-collision tick`);
+        return;
+      }
+    }
     // Defensive: prevent accidental early trigger of 'after' exit-related events unless explicitly allowed
     if (plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'after' && !options?.allowAfter) {
       console.warn(`🎭 Guard: Attempted to trigger 'after' exit CYOA ${plannedCyoa.id} early; ignoring`);
@@ -2006,6 +2018,10 @@ export class CarMechanics {
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
 
+        // Activate exact-tick guard
+        this.exitCollisionGuardActive = true;
+        this.exitCollisionNumberGuard = exitNumber ?? null;
+
         // Set suppression window for regular CYOAs to avoid accidental co-trigger at the same time
         try {
           const gs: any = this.scene.scene.get('GameScene');
@@ -2029,6 +2045,8 @@ export class CarMechanics {
           }
         }
       }
+      // Deactivate the exact-tick guard on the next tick
+      this.scene.time.delayedCall(0, () => { this.exitCollisionGuardActive = false; this.exitCollisionNumberGuard = null; });
     }
     obstacle.destroy();
     const index = this.obstacles.indexOf(obstacle);
