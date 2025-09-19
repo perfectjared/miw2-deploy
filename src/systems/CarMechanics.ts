@@ -586,9 +586,17 @@ export class CarMechanics {
     const exitNames = this.generateExitNames(exitThresholds.length);
     
     // Create planned exits with proper preview spacing
-    exitThresholds.forEach((exitThreshold, index) => {
-      const exitNumber = index + 1; // Number exits 1, 2, 3, etc.
-      const exitName = exitNames[index]; // Use generated name
+    // Sort exits by threshold to ensure encounter order (Exit 1 = first encountered)
+    const sortedExits = exitThresholds.map((exitThreshold, index) => ({
+      threshold: exitThreshold,
+      name: exitNames[index],
+      originalIndex: index
+    })).sort((a, b) => a.threshold - b.threshold);
+    
+    sortedExits.forEach((exitData, encounterIndex) => {
+      const exitNumber = encounterIndex + 1; // Number exits 1, 2, 3, etc. by encounter order
+      const exitThreshold = exitData.threshold;
+      const exitName = exitData.name;
       
       // Preview spawns 20-45% before the exit, but not less than 1%, and not within 8 steps of another preview/exit
       let previewThreshold: number;
