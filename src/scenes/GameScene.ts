@@ -715,7 +715,7 @@ export class GameScene extends Phaser.Scene {
    * Handle region selection from menu
    */
   public selectRegion(regionId: string) {
-    console.log(`🌍 Region selected: ${regionId}`);
+    console.log(`Region selected: ${regionId}`);
     
     // Change region in game state
     this.gameState.changeRegion(regionId);
@@ -1397,7 +1397,7 @@ export class GameScene extends Phaser.Scene {
    * Show turn key menu
    */
   public showTurnKeyMenu() {
-    console.log('🎯 showTurnKeyMenu() called - emitting showTurnKeyMenu event');
+    console.log('showTurnKeyMenu() called - emitting showTurnKeyMenu event');
     const menuScene = this.scene.get('MenuScene');
     if (menuScene) {
       menuScene.events.emit('showTurnKeyMenu');

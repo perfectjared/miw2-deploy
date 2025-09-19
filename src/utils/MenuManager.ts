@@ -766,13 +766,13 @@ export class MenuManager {
         // Debug line intentionally minimized
         
         if (finalExitNumber) {
-          console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 1 step later`);
+          console.log(`MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 1 step later`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
             const delay = 1; // trigger on the very next step
-            console.log(`🎭 MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, ${delay})`);
+            console.log(`MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, ${delay})`);
             (gameScene as any).carMechanics.scheduleExitCyoa(finalExitNumber, delay);
-            console.log(`🎭 MenuManager: scheduleExitCyoa call completed`);
+            console.log(`MenuManager: scheduleExitCyoa call completed`);
           } else {
             console.error(`🎭 MenuManager: ERROR - Could not find GameScene or carMechanics`);
           }
@@ -792,7 +792,7 @@ export class MenuManager {
     };
     this.createDialog(menuConfig, 'EXIT');
     // Attach exit number to the dialog instance as a definitive source
-    try { (this.currentDialog as any).exitNumber = exitNumForMenu; console.log('🎭 showExitMenu: attached dialog exitNumber=', exitNumForMenu); } catch {}
+    try { (this.currentDialog as any).exitNumber = exitNumForMenu; console.log('showExitMenu: attached dialog exitNumber=', exitNumForMenu); } catch {}
   }
 
   /**
@@ -1248,7 +1248,7 @@ export class MenuManager {
       }
       // Persist exit number immediately so downstream menus can access it reliably
       (this as any)._lastExitNumber = resolvedExitNumber ?? (this as any)._lastExitNumber;
-      try { console.log(`🎭 showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber); } catch {}
+      try { console.log(`showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber); } catch {}
       this.showExitMenu(damage, resolvedExitNumber);
       return;
     }

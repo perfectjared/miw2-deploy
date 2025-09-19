@@ -248,7 +248,7 @@ export class GameState {
       tutorialStep: nextStep
     });
     
-    console.log(`🎓 Tutorial advanced: ${currentPhase} → ${nextPhase} (step: ${nextStep})`);
+    console.log(`Tutorial advanced: ${currentPhase} -> ${nextPhase} (step: ${nextStep})`);
   }
   
   /**
@@ -737,7 +737,7 @@ export class GameState {
     const newListeners = this.state.monthlyListeners + listenerChange;
     this.updateState({ monthlyListeners: newListeners });
     
-    console.log(`📻 Buzz: ${this.state.buzz}, Listener change: ${listenerChange}, New total: ${newListeners}`);
+    console.log(`Buzz: ${this.state.buzz}, Listener change: ${listenerChange}, New total: ${newListeners}`);
   }
 
   /**

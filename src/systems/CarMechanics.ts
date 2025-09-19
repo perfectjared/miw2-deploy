@@ -266,7 +266,7 @@ export class CarMechanics {
       // For first sequence testing: exit very early
       exitRange = { min: 15, max: 25 }; // First exit at 15-25% for testing
       cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
-      console.log('🎯 First sequence: Exit range 15-25% for testing');
+      console.log('First sequence: Exit range 15-25% for testing');
     } else {
       exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
       cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
@@ -555,7 +555,7 @@ export class CarMechanics {
     let numExits: number;
     if (isFirstSequence) {
       numExits = 2; // Deterministic: 2 exits for first sequence
-      console.log('🎯 First driving sequence - deterministic: 2 exits');
+      console.log('First driving sequence - deterministic: 2 exits');
     } else {
       numExits = Phaser.Math.Between(2, 3); // Random for other sequences
     }
@@ -574,7 +574,7 @@ export class CarMechanics {
     let numCyoa: number;
     if (isFirstSequence) {
       numCyoa = 3; // Deterministic: 3 CYOAs for first sequence (including 1 exit CYOA)
-      console.log('🎭 First driving sequence - deterministic: 3 CYOAs');
+      console.log('First driving sequence - deterministic: 3 CYOAs');
     } else {
       numCyoa = Phaser.Math.Between(1, 3); // Random for other sequences
     }
@@ -627,8 +627,8 @@ export class CarMechanics {
       });
     });
     
-    console.log('🎯 Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
-    console.log('🎯 Total planned exits:', this.plannedExits.length);
+    console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
+    console.log('Total planned exits:', this.plannedExits.length);
     
     // Create planned CYOA
     cyoaThresholds.forEach((threshold, index) => {
@@ -657,9 +657,9 @@ export class CarMechanics {
             } else {
               cyoaThreshold = chosenExit.exitThreshold; // Same threshold as exit (triggered on close)
             }
-            console.log(`🎭 CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% - will only trigger if exit is taken`);
+            console.log(`CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% - will only trigger if exit is taken`);
           } else {
-            console.log(`🎭 CYOA ${cyoaId} - Exit ${exitNumber} not found, making it non-exit-related`);
+            console.log(`CYOA ${cyoaId} - Exit ${exitNumber} not found, making it non-exit-related`);
             isExitRelated = false;
             exitNumber = undefined;
             exitTiming = undefined;
@@ -676,7 +676,7 @@ export class CarMechanics {
         if (chosenExit) {
           const offset = Phaser.Math.Between(5, 10); // trigger a bit before the exit
           cyoaThreshold = Math.max(1, chosenExit.exitThreshold - offset);
-          console.log(`🎭 First sequence CYOA ${cyoaId} bundled BEFORE Exit ${exitNumber} at ${cyoaThreshold}% (exit at ${chosenExit.exitThreshold}%)`);
+          console.log(`First sequence CYOA ${cyoaId} bundled BEFORE Exit ${exitNumber} at ${cyoaThreshold}% (exit at ${chosenExit.exitThreshold}%)`);
         } else {
           console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
         }
@@ -695,8 +695,8 @@ export class CarMechanics {
     // Final spacing check for all CYOA events
     this.ensureCyoaSpacing();
     
-    console.log('🎯 Planned CYOA:', this.plannedCyoa.map(c => `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (exit-related)` : ''}`));
-    console.log('🎯 Total planned CYOA:', this.plannedCyoa.length);
+    console.log('Planned CYOA:', this.plannedCyoa.map(c => `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (exit-related)` : ''}`));
+    console.log('Total planned CYOA:', this.plannedCyoa.length);
     
     // Plan one story event for this driving sequence
     this.planStoryForSequence(numExits);
@@ -721,16 +721,16 @@ export class CarMechanics {
         const postExitOffset = Phaser.Math.Between(8, 20);
         storyThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
         
-        console.log(`📖 Story scheduled after Exit ${exitNumber} at ${storyThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+        console.log(`Story scheduled after Exit ${exitNumber} at ${storyThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
       } else {
         // Fallback: random threshold if exit not found
         storyThreshold = Phaser.Math.Between(20, 80);
-        console.log(`📖 Story scheduled at random threshold ${storyThreshold}% (exit-related fallback)`);
+        console.log(`Story scheduled at random threshold ${storyThreshold}% (exit-related fallback)`);
       }
     } else {
       // Story is independent - occurs at a random threshold
       storyThreshold = Phaser.Math.Between(15, 85);
-      console.log(`📖 Story scheduled at independent threshold ${storyThreshold}%`);
+      console.log(`Story scheduled at independent threshold ${storyThreshold}%`);
     }
     
     // Ensure story doesn't conflict with CYOA events or exits (minimum 10% spacing)
@@ -776,7 +776,7 @@ export class CarMechanics {
       triggered: false
     };
     
-    console.log(`📖 Planned story: ${storyThreshold}%${isExitRelated ? ` (exit-related)` : ''}`);
+    console.log(`Planned story: ${storyThreshold}%${isExitRelated ? ` (exit-related)` : ''}`);
   }
 
   /**
@@ -802,14 +802,14 @@ export class CarMechanics {
     this.plannedExits.forEach(plannedExit => {
       // Spawn preview when preview threshold is reached
       if (!plannedExit.previewSpawned && progress >= plannedExit.previewThreshold) {
-        console.log(`🎯 Spawning preview for Exit ${plannedExit.number} at progress ${progress}%`);
+        console.log(`Spawning preview for Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExitPreview(plannedExit);
         plannedExit.previewSpawned = true;
       }
       
       // Spawn actual exit when exit threshold is reached
       if (!plannedExit.exitSpawned && progress >= plannedExit.exitThreshold) {
-        console.log(`🚪 Spawning Exit ${plannedExit.number} at progress ${progress}%`);
+        console.log(`Spawning Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExit(plannedExit);
         plannedExit.exitSpawned = true;
       }
@@ -839,7 +839,7 @@ export class CarMechanics {
         }
       }
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
-        console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
+        console.log(`Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
         this.triggerCyoa(plannedCyoa);
         plannedCyoa.triggered = true;
       }
@@ -847,7 +847,7 @@ export class CarMechanics {
     
     // Check if planned story should be triggered
     if (this.plannedStory && !this.plannedStory.triggered && progress >= this.plannedStory.storyThreshold) {
-      console.log(`📖 Triggering story at progress ${progress}%${this.plannedStory.isExitRelated ? ` (exit-related)` : ''}`);
+      console.log(`Triggering story at progress ${progress}%${this.plannedStory.isExitRelated ? ` (exit-related)` : ''}`);
       this.triggerStory(this.plannedStory);
       this.plannedStory.triggered = true;
     }
@@ -1041,7 +1041,7 @@ export class CarMechanics {
       console.warn(`🎭 Guard: Attempted to trigger 'after' exit CYOA ${plannedCyoa.id} early; ignoring`);
       return;
     }
-    console.log(`🎭 Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber}, ${plannedCyoa.exitTiming || 'after'})` : ''}`);
+    console.log(`Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber}, ${plannedCyoa.exitTiming || 'after'})` : ''}`);
     
     // Pause driving
     this.pauseDriving();
@@ -1063,14 +1063,14 @@ export class CarMechanics {
    * Schedule an exit CYOA to trigger after a certain number of steps
    */
   public scheduleExitCyoa(exitNumber: number, stepsDelay: number): void {
-    console.log(`🎭 scheduleExitCyoa: Scheduling CYOA for Exit ${exitNumber} in ${stepsDelay} steps`);
+    console.log(`scheduleExitCyoa: Scheduling CYOA for Exit ${exitNumber} in ${stepsDelay} steps`);
     
     // Get current step from GameScene
     const gameScene = this.scene.scene.get('GameScene') as any;
     const currentStep = gameScene?.gameState?.getState()?.step || 0;
     const triggerStep = currentStep + stepsDelay;
     
-    console.log(`🎭 scheduleExitCyoa: Current step ${currentStep}, CYOA will trigger at step ${triggerStep}`);
+    console.log(`scheduleExitCyoa: Current step ${currentStep}, CYOA will trigger at step ${triggerStep}`);
     
     // Store the scheduled CYOA
     // If an existing schedule is present for a different exit or earlier step, replace it
@@ -1082,7 +1082,7 @@ export class CarMechanics {
       };
     }
     
-    console.log(`🎭 scheduleExitCyoa: Scheduled CYOA stored - exitNumber: ${exitNumber}, triggerStep: ${triggerStep}`);
+    console.log(`scheduleExitCyoa: Scheduled CYOA stored - exitNumber: ${exitNumber}, triggerStep: ${triggerStep}`);
   }
 
   /**
@@ -1092,8 +1092,8 @@ export class CarMechanics {
     if (!this.scheduledExitCyoa) return;
     
     const exitNumber = this.scheduledExitCyoa.exitNumber;
-    console.log(`🎭 triggerScheduledExitCyoa: Looking for bundled CYOA for Exit ${exitNumber}`);
-    console.log(`🎭 Available planned CYOAs:`, this.plannedCyoa.map(cyoa => 
+    console.log(`triggerScheduledExitCyoa: Looking for bundled CYOA for Exit ${exitNumber}`);
+    console.log(`Available planned CYOAs:`, this.plannedCyoa.map(cyoa => 
       `CYOA ${cyoa.id}: ${cyoa.isExitRelated ? `exit-related (Exit ${cyoa.exitNumber})` : 'regular'} at ${cyoa.cyoaThreshold}% (triggered: ${cyoa.triggered})`
     ));
     
@@ -1103,7 +1103,7 @@ export class CarMechanics {
     );
     
     if (bundledCyoa) {
-      console.log(`🎭 Triggering scheduled bundled CYOA for Exit ${exitNumber}`);
+      console.log(`Triggering scheduled bundled CYOA for Exit ${exitNumber}`);
       this.triggerCyoa(bundledCyoa, { allowAfter: true });
       bundledCyoa.triggered = true;
       
@@ -1114,10 +1114,10 @@ export class CarMechanics {
         const plannedCyoa = this.getPlannedCyoa();
         const plannedStory = this.getPlannedStory();
         gameScene.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
-        console.log(`🎭 UI updated after CYOA triggered - triangle should disappear`);
+        console.log(`UI updated after CYOA triggered - triangle should disappear`);
       }
     } else {
-      console.log(`🎭 No bundled CYOA found for Exit ${exitNumber} - CYOA will be skipped`);
+      console.log(`No bundled CYOA found for Exit ${exitNumber} - CYOA will be skipped`);
     }
   }
 
@@ -1250,7 +1250,7 @@ export class CarMechanics {
     if (this.speedProgressionStartStep <= 0) {
       this.speedProgressionStartStep = currentStep;
       this.baseSpeed = this.config.carMaxSpeed; // Use max speed as base
-      console.log(`🚀 Starting automatic speed progression at step ${currentStep}`);
+      console.log(`Starting automatic speed progression at step ${currentStep}`);
     }
   }
 
@@ -1275,7 +1275,7 @@ export class CarMechanics {
     // Check for scheduled exit CYOA
     if (this.scheduledExitCyoa && !this.scheduledExitCyoa.triggered) {
       if (currentStep >= this.scheduledExitCyoa.triggerStep) {
-        console.log(`🎭 onStepEvent: Triggering scheduled CYOA for Exit ${this.scheduledExitCyoa.exitNumber} at step ${currentStep}`);
+        console.log(`onStepEvent: Triggering scheduled CYOA for Exit ${this.scheduledExitCyoa.exitNumber} at step ${currentStep}`);
         this.triggerScheduledExitCyoa();
         this.scheduledExitCyoa.triggered = true;
       }
@@ -1345,7 +1345,7 @@ export class CarMechanics {
     if (elapsedSteps > 0 && elapsedSteps % 30 === 0) {
       const currentPercent = Math.round((this.carSpeed / this.baseSpeed) * 100);
       const incrementThisStep = Math.round(incrementPercent * 100 * 100) / 100; // Show as percentage
-      console.log(`🚀 Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
+      console.log(`Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
     }
   }
 
@@ -1383,7 +1383,7 @@ export class CarMechanics {
     
     // Debug logging every 30 steps to show gravity changes
     if (this.scene.time.now % 500 < 16) { // Roughly every 500ms
-      console.log(`🌍 Gravity: ${speedPercentage}% speed → ${gravityMultiplier.toFixed(2)}x multiplier → Y: ${newGravityY.toFixed(2)}`);
+      console.log(`Gravity: ${speedPercentage}% speed -> ${gravityMultiplier.toFixed(2)}x multiplier -> Y: ${newGravityY.toFixed(2)}`);
     }
   }
 
@@ -1951,9 +1951,9 @@ export class CarMechanics {
                           carBounds.top > visualBounds.bottom);
         
         if (collision) {
-          console.log(`💥 COLLISION DETECTED! Car: (${carBounds.left.toFixed(1)}, ${carBounds.top.toFixed(1)}) to (${carBounds.right.toFixed(1)}, ${carBounds.bottom.toFixed(1)})`);
-          console.log(`💥 Obstacle: (${visualBounds.left.toFixed(1)}, ${visualBounds.top.toFixed(1)}) to (${visualBounds.right.toFixed(1)}, ${visualBounds.bottom.toFixed(1)})`);
-          console.log(`💥 Car Visual Position: X=${carBounds.centerX.toFixed(1)}, Y=${carBounds.centerY.toFixed(1)}`);
+          console.log(`COLLISION DETECTED! Car: (${carBounds.left.toFixed(1)}, ${carBounds.top.toFixed(1)}) to (${carBounds.right.toFixed(1)}, ${carBounds.bottom.toFixed(1)})`);
+          console.log(`Obstacle: (${visualBounds.left.toFixed(1)}, ${visualBounds.top.toFixed(1)}) to (${visualBounds.right.toFixed(1)}, ${visualBounds.bottom.toFixed(1)})`);
+          console.log(`Car Visual Position: X=${carBounds.centerX.toFixed(1)}, Y=${carBounds.centerY.toFixed(1)}`);
           const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
           if (visualToDestroy) visualToDestroy.destroy();
           this.handleCollisionWithObstacle(obstacle);
@@ -2033,7 +2033,7 @@ export class CarMechanics {
         if (exitNumber != null) {
           const beforeCyoa = this.plannedCyoa.find(c => c.isExitRelated && c.exitNumber === exitNumber && c.exitTiming === 'before' && !c.triggered);
           if (beforeCyoa) {
-            console.log(`🎭 Triggering BEFORE CYOA ${beforeCyoa.id} for Exit ${exitNumber} prior to showing exit menu`);
+            console.log(`Triggering BEFORE CYOA ${beforeCyoa.id} for Exit ${exitNumber} prior to showing exit menu`);
             this.triggerCyoa(beforeCyoa); // normal guard allows 'before'
             beforeCyoa.triggered = true;
             // Defer exit menu until CYOA closes and gameplay resumes
