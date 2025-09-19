@@ -835,7 +835,9 @@ export class CarMechanics {
     } catch {}
     this.plannedCyoa.forEach(plannedCyoa => {
       // Exit-related CYOA are coordinated with exit interactions (before at collision, after on close)
-      if (plannedCyoa.isExitRelated && plannedCyoa.exitNumber) {
+      // Skip ALL exit-related CYOAs - they should never be triggered by progress
+      if (plannedCyoa.isExitRelated) {
+        console.log(`updateProgress: Skipping exit-related CYOA ${plannedCyoa.id} (${plannedCyoa.exitTiming || 'after'} Exit ${plannedCyoa.exitNumber}) - not triggered by progress`);
         return;
       }
       if (currentStepForSuppression <= this.suppressRegularCyoaUntilStep) {
@@ -850,7 +852,7 @@ export class CarMechanics {
         }
       }
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
-        console.log(`Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
+        console.log(`updateProgress: Triggering REGULAR CYOA ${plannedCyoa.id} at progress ${progress}%`);
         this.triggerCyoa(plannedCyoa);
         plannedCyoa.triggered = true;
       }
