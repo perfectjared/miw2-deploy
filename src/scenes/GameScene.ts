@@ -85,6 +85,7 @@ export class GameScene extends Phaser.Scene {
   private magneticTarget!: Phaser.GameObjects.Graphics;
   private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay for keys
   private hotdogSVG!: Phaser.GameObjects.Sprite; // SVG overlay for food item
+  private nightTimeOverlay?: Phaser.GameObjects.Rectangle; // Night time visual overlay
   private keysConstraint: any = null;
   
   // Game state flags
@@ -158,6 +159,9 @@ export class GameScene extends Phaser.Scene {
     
     // Initialize physics safety system
     this.initializePhysicsSafetySystem();
+    
+    // Add dev button for testing
+    this.addDevSequenceButton();
     
     // Create game content container
     this.createGameContentContainer();
@@ -691,6 +695,99 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Handle region selection from menu
+   */
+  public selectRegion(regionId: string) {
+    console.log(`🌍 Region selected: ${regionId}`);
+    
+    // Change region in game state
+    this.gameState.changeRegion(regionId);
+    
+    // Reset driving state and restart driving
+    this.stopMenuOpen = false;
+    this.carStarted = true; // Ensure car is started
+    this.gameState.updateState({ carStarted: true });
+    
+    // Restart driving mechanics
+    const currentStep = this.gameState.getState().step || 0;
+    this.carMechanics.startDriving(currentStep);
+    
+    // Resume game
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+      this.events.emit('gameResumed');
+    }
+    
+    console.log(`✅ Region changed to ${regionId} - driving restarted`);
+  }
+
+  /**
+   * Enable night time mode for final driving sequence
+   */
+  private enableNightTimeMode() {
+    console.log('🌙 Enabling night time mode');
+    // Add night time visual effects - create overlay instead of tinting container
+    if (!this.nightTimeOverlay) {
+      this.nightTimeOverlay = this.add.rectangle(
+        this.cameras.main.width / 2, 
+        this.cameras.main.height / 2, 
+        this.cameras.main.width, 
+        this.cameras.main.height, 
+        0x000000, 
+        0.3
+      );
+      this.nightTimeOverlay.setScrollFactor(0);
+      this.nightTimeOverlay.setDepth(20000); // Above driving but below UI
+    }
+    this.nightTimeOverlay.setVisible(true);
+    
+    // Update sky color to darker
+    if (this.carMechanics) {
+      this.carMechanics.setNightTimeMode(true);
+    }
+  }
+
+  /**
+   * Disable night time mode
+   */
+  private disableNightTimeMode() {
+    console.log('☀️ Disabling night time mode');
+    // Remove night time visual effects
+    if (this.nightTimeOverlay) {
+      this.nightTimeOverlay.setVisible(false);
+    }
+    
+    // Update sky color to normal
+    if (this.carMechanics) {
+      this.carMechanics.setNightTimeMode(false);
+    }
+  }
+
+  /**
+   * Dev button to change driving sequence to last one for testing
+   */
+  private addDevSequenceButton() {
+    // Add dev button for testing sequence changes
+    const devButton = this.add.text(10, 10, 'DEV: Last Sequence', {
+      fontSize: '14px',
+      color: '#ff0000',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    devButton.setScrollFactor(0);
+    devButton.setDepth(50000);
+    devButton.setInteractive();
+    
+    devButton.on('pointerdown', () => {
+      const totalSequences = this.gameState.getSequencesForCurrentRegion();
+      const lastSequence = totalSequences - 1; // 0-based index
+      this.gameState.updateState({ showsInCurrentRegion: lastSequence });
+      console.log(`🔧 DEV: Set sequence to ${lastSequence + 1}/${totalSequences}`);
+    });
+  }
+
+  /**
    * Generate a countdown value using bell curve probability (6-12)
    * Bell curve centered around 9, with 6 and 12 being least likely
    */
@@ -810,6 +907,18 @@ export class GameScene extends Phaser.Scene {
     this.gameState.setEventCallbacks({
       onStateChange: (state) => {
         this.gameUI.updateUI(state);
+        
+        // Update region info with total sequences
+        const totalSequences = this.gameState.getSequencesForCurrentRegion();
+        this.gameUI.updateRegionInfoWithTotal(state.currentRegion, state.showsInCurrentRegion, totalSequences);
+        
+        // Check if this is the final sequence for night time
+        if (this.gameState.isFinalSequenceForRegion()) {
+          this.enableNightTimeMode();
+        } else {
+          this.disableNightTimeMode();
+        }
+        
         // Update threshold indicators based on planned exits, CYOA, and story
         const plannedExits = this.carMechanics.getPlannedExits();
         const plannedCyoa = this.carMechanics.getPlannedCyoa();
@@ -1605,21 +1714,6 @@ export class GameScene extends Phaser.Scene {
     }
     this.events.emit('gameResumed');
     console.log('GameScene: Resumed after CYOA');
-  }
-
-  /** Handle region selection */
-  public selectRegion(regionId: string): void {
-    console.log(`GameScene: Region selected: ${regionId}`);
-    this.gameState.changeRegion(regionId);
-    
-    // Resume gameplay
-    const appScene = this.scene.get('AppScene');
-    if (appScene) {
-      (appScene as any).isPaused = false;
-    }
-    this.events.emit('gameResumed');
-    this.carMechanics.resumeDriving();
-    this.stopMenuOpen = false;
   }
 
   /**

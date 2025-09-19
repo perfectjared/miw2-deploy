@@ -1021,6 +1021,21 @@ export class CarMechanics {
   }
 
   /**
+   * Set night time mode for visual effects
+   */
+  public setNightTimeMode(enabled: boolean) {
+    if (enabled) {
+      // Darken the sky color for night time
+      this.config.skyColor = 0x202020; // Very dark grey
+      console.log('🌙 CarMechanics: Night time mode enabled');
+    } else {
+      // Restore normal sky color
+      this.config.skyColor = 0x000000; // Black (normal)
+      console.log('☀️ CarMechanics: Night time mode disabled');
+    }
+  }
+
+  /**
    * Get planned story for UI display
    */
   public getPlannedStory() {

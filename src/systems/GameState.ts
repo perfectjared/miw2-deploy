@@ -625,10 +625,10 @@ export class GameState {
     const oldRegion = this.state.currentRegion;
     this.updateState({
       currentRegion: newRegion,
-      showsInCurrentRegion: 0,
+      showsInCurrentRegion: 0, // Reset to 0 (will display as 1/3, 2/3, etc.)
       regionHistory: [...this.state.regionHistory, newRegion]
     });
-    console.log(`Region changed from ${oldRegion} to ${newRegion}`);
+    console.log(`Region changed from ${oldRegion} to ${newRegion} - sequence count reset to 0`);
   }
 
   /**
@@ -639,9 +639,41 @@ export class GameState {
   }
 
   /**
-   * Check if player should choose next region (after 3 shows)
+   * Get the number of driving sequences for the current region
+   * 2-3 sequences normally, 4 possible if region visited 3+ times
+   */
+  public getSequencesForCurrentRegion(): number {
+    const regionVisitCount = this.getRegionVisitCount(this.state.currentRegion);
+    
+    if (regionVisitCount >= 3) {
+      // Region visited 3+ times: 2-4 sequences (4 is unlikely)
+      return Math.random() < 0.15 ? 4 : Phaser.Math.Between(2, 3);
+    } else {
+      // Normal regions: 2-3 sequences
+      return Phaser.Math.Between(2, 3);
+    }
+  }
+
+  /**
+   * Get how many times a region has been visited
+   */
+  private getRegionVisitCount(region: string): number {
+    return this.state.regionHistory.filter(r => r === region).length;
+  }
+
+  /**
+   * Check if current sequence is the final one for this region
+   */
+  public isFinalSequenceForRegion(): boolean {
+    const totalSequences = this.getSequencesForCurrentRegion();
+    return this.state.showsInCurrentRegion >= totalSequences - 1;
+  }
+
+  /**
+   * Check if player should choose next region (after completing all sequences)
    */
   public shouldChooseNextRegion(): boolean {
-    return this.state.showsInCurrentRegion >= 3;
+    const totalSequences = this.getSequencesForCurrentRegion();
+    return this.state.showsInCurrentRegion >= totalSequences;
   }
 }

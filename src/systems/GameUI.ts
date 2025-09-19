@@ -1208,13 +1208,34 @@ export class GameUI {
   }
 
   /**
-   * Update region information display
+   * Update region information display with fractional sequence count
+   */
+  public updateRegionInfoWithTotal(regionName: string, showsInRegion: number, totalSequences: number) {
+    if (this.regionText) {
+      const currentSequence = showsInRegion + 1; // Shows are 0-based, display is 1-based
+      this.regionText.setText(`${regionName}-${currentSequence}/${totalSequences}`);
+    }
+  }
+
+  /**
+   * Update region information display with fractional sequence count
    */
   private updateRegionInfo(regionName: string, showsInRegion: number) {
     if (this.regionText) {
-      const iterationNumber = showsInRegion + 1; // Shows are 0-based, display is 1-based
-      this.regionText.setText(`${regionName}-${iterationNumber}`);
+      const currentSequence = showsInRegion + 1; // Shows are 0-based, display is 1-based
+      const totalSequences = this.getTotalSequencesForRegion(regionName);
+      this.regionText.setText(`${regionName}-${currentSequence}/${totalSequences}`);
     }
+  }
+
+  /**
+   * Get total sequences for a region (simplified version for UI)
+   * This is a simplified version - the real logic is in GameState
+   */
+  private getTotalSequencesForRegion(regionName: string): number {
+    // For UI purposes, we'll use a simple heuristic
+    // In a real implementation, this would call GameState.getSequencesForCurrentRegion()
+    return 3; // Default to 3, will be updated by GameScene
   }
 
   /**
