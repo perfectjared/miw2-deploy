@@ -763,7 +763,7 @@ export class MenuManager {
             if (isFirstSequence) finalExitNumber = 1;
           } catch {}
         }
-        try { console.log('🎭 Exit Close pressed: dialog=', dialogExitNumber, ' captured=', exitNumForMenu, ' persisted=', persistedExitNumber, ' stack=', stackExitNumber, ' final=', finalExitNumber); } catch {}
+        // Debug line intentionally minimized
         
         if (finalExitNumber) {
           console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 4 steps later`);

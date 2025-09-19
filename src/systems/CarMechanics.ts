@@ -1123,7 +1123,8 @@ export class CarMechanics {
       progressThreshold: cyoa.cyoaThreshold,
       triggered: cyoa.triggered,
       isExitRelated: cyoa.isExitRelated,
-      exitNumber: cyoa.exitNumber
+      exitNumber: cyoa.exitNumber,
+      exitTiming: cyoa.exitTiming
     }));
     
     return result;
@@ -1222,7 +1223,6 @@ export class CarMechanics {
     
     // Check for scheduled exit CYOA
     if (this.scheduledExitCyoa && !this.scheduledExitCyoa.triggered) {
-      console.log(`🎭 onStepEvent: Checking scheduled CYOA - current step: ${currentStep}, trigger step: ${this.scheduledExitCyoa.triggerStep}`);
       if (currentStep >= this.scheduledExitCyoa.triggerStep) {
         console.log(`🎭 onStepEvent: Triggering scheduled CYOA for Exit ${this.scheduledExitCyoa.exitNumber} at step ${currentStep}`);
         this.triggerScheduledExitCyoa();
