@@ -169,6 +169,15 @@ export class MenuManager {
     return null;
   }
 
+  private clearAllCyoaMenusFromStack() {
+    const initialLength = this.menuStack.length;
+    this.menuStack = this.menuStack.filter(menu => menu.type !== 'CYOA');
+    const removedCount = initialLength - this.menuStack.length;
+    if (removedCount > 0) {
+      console.log(`MenuManager: Cleared ${removedCount} CYOA menu(s) from stack. Stack now:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+    }
+  }
+
   // STORY OVERLAY -----------------------------------------------------------
   public showStoryOverlay(title: string, content: string) {
     // Non-blocking: don't use menu stack or overlay background
@@ -2289,6 +2298,9 @@ export class MenuManager {
     
     // Handle special resumption logic for certain menu types
     if (this.currentDisplayedMenuType === 'CYOA') {
+      // CYOA menus are one-time events - clear ALL CYOA menus from the stack
+      this.clearAllCyoaMenusFromStack();
+      
       // Resume the game when CYOA menu closes
       const appScene = this.scene.scene.get('AppScene');
       if (appScene) {
