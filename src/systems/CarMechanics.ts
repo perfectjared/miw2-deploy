@@ -1001,7 +1001,13 @@ export class CarMechanics {
    * Trigger a planned CYOA
    */
   private triggerCyoa(plannedCyoa: any) {
-    console.log(`🎭 Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber})` : ''}`);
+    // Defensive: prevent accidental early trigger of 'after' exit-related events
+    if (plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'after') {
+      // Only allow via scheduled trigger path
+      console.warn(`🎭 Guard: Attempted to trigger 'after' exit CYOA ${plannedCyoa.id} early; ignoring`);
+      return;
+    }
+    console.log(`🎭 Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber}, ${plannedCyoa.exitTiming || 'after'})` : ''}`);
     
     // Pause driving
     this.pauseDriving();

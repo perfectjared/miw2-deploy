@@ -321,7 +321,8 @@ export class GameUI {
             triangle.setScrollFactor(0);
             triangle.setDepth(10002);
             // Add B/A label above the triangle
-            const label = this.scene.add.text(triangleX, triangleY - 8, cyoa.exitTiming === 'before' ? 'B' : 'A', {
+            const labelChar = (!cyoa.exitTiming || cyoa.exitTiming === 'after') ? 'A' : 'B';
+            const label = this.scene.add.text(triangleX, triangleY - 8, labelChar, {
               fontSize: '10px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
             }).setOrigin(0.5);
             label.setScrollFactor(0);
