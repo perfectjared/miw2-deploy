@@ -52,7 +52,8 @@ export class MenuManager {
   
   // Ignition menu auto-completion tracking
   private ignitionMenuStepCount: number = 0
-  private ignitionMenuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null;
+  private ignitionMenuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null
+  private ignitionCountdownText: Phaser.GameObjects.Text | null = null;
   
   // Slider Parameters
   private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
@@ -151,7 +152,13 @@ export class MenuManager {
     // Only track steps when ignition menu is open
     if (this.currentDisplayedMenuType === 'TURN_KEY') {
       this.ignitionMenuStepCount++;
-      console.log(`Ignition menu step count: ${this.ignitionMenuStepCount}/16`);
+      const remainingSteps = 16 - this.ignitionMenuStepCount;
+      console.log(`Ignition menu step count: ${this.ignitionMenuStepCount}/16 (${remainingSteps} remaining)`);
+      
+      // Update countdown text
+      if (this.ignitionCountdownText) {
+        this.ignitionCountdownText.setText(`Auto-complete in: ${remainingSteps} steps`);
+      }
       
       // Auto-complete after 16 steps
       if (this.ignitionMenuStepCount >= 16) {
@@ -1042,6 +1049,9 @@ export class MenuManager {
     // Add drag dial after creating the dialog
     this.addTurnKeyDial();
     
+    // Add countdown text
+    this.addIgnitionCountdown();
+    
     // Emit event to notify GameScene that ignition menu is shown
     console.log('MenuManager: Emitting ignitionMenuShown event');
     this.scene.events.emit('ignitionMenuShown');
@@ -1327,6 +1337,28 @@ export class MenuManager {
     (this.currentDialog as any).turnKeyDial = { sliderTrack, handle };
     (this.currentDialog as any).dialLabel = { startLabel, turnKeyLabel };
     (this.currentDialog as any).startMeter = { meterBackground, meterFill, meterText };
+  }
+
+  private addIgnitionCountdown() {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Create countdown text positioned above the slider
+    this.ignitionCountdownText = this.scene.add.text(centerX, centerY - 100, 'Auto-complete in: 16 steps', {
+      fontSize: '16px',
+      color: '#ff6b6b',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    this.ignitionCountdownText.setOrigin(0.5);
+    this.ignitionCountdownText.setScrollFactor(0);
+    this.ignitionCountdownText.setDepth(1000); // High depth to appear above other elements
+    
+    // Store reference for cleanup
+    (this.currentDialog as any).countdownText = this.ignitionCountdownText;
   }
 
   public showObstacleMenu(obstacleType: string, damage: number, exitNumber?: number) {
@@ -2370,6 +2402,7 @@ export class MenuManager {
     // Reset ignition step counter if closing ignition menu
     if (this.currentDisplayedMenuType === 'TURN_KEY') {
       this.ignitionMenuStepCount = 0;
+      this.ignitionCountdownText = null; // Clear countdown text reference
     }
     
     // Mark the current menu as user dismissed to prevent its restoration
