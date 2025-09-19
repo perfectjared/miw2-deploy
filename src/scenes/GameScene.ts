@@ -1935,22 +1935,24 @@ export class GameScene extends Phaser.Scene {
             this.scene.bringToTop('MenuScene');
           }
         } else {
-          // Show regular destination menu
-          const menuScene = this.scene.get('MenuScene');
-          if (menuScene) {
-            menuScene.events.emit('showDestinationMenu', true);
-            this.scene.bringToTop('MenuScene');
-          }
+        // Show regular destination menu
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          console.log('Showing destination menu - pausing game');
+          menuScene.events.emit('showDestinationMenu', true);
+          this.scene.bringToTop('MenuScene');
         }
-        
-        // Reset progress and countdown
-        this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 8 });
-        this.countdownStepCounter = 0; // Reset countdown step counter
-        const appScene = this.scene.get('AppScene');
-        if (appScene) {
-          (appScene as any).isPaused = true;
-          this.events.emit('gamePaused');
-        }
+      }
+      
+      // Reset progress and countdown
+      this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 8 });
+      this.countdownStepCounter = 0; // Reset countdown step counter
+      const appScene = this.scene.get('AppScene');
+      if (appScene) {
+        console.log('Setting app paused and emitting gamePaused');
+        (appScene as any).isPaused = true;
+        this.events.emit('gamePaused');
+      }
       }
     }
 
@@ -2011,7 +2013,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onGamePaused() {
+    console.log('Game paused - calling pauseDriving()');
     this.carMechanics.pauseDriving();
+    console.log('Driving paused:', this.carMechanics.isDrivingPaused());
   }
 
   private onGameResumed() {
