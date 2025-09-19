@@ -251,27 +251,30 @@ export class MenuManager {
    * Add countdown text to current menu
    */
   private addMenuCountdown(menuType: string, unit: 'steps' | 'step-lengths') {
-    const gameWidth = this.scene.cameras.main.width;
-    const gameHeight = this.scene.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-    
-    // Create countdown text positioned above the menu content
-    this.menuCountdownText = this.scene.add.text(centerX, centerY - 100, `Auto-complete in: 12 ${unit}`, {
-      fontSize: '16px',
-      color: '#ff6b6b',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
+    // Add a small delay to ensure the dialog is fully created and positioned
+    this.scene.time.delayedCall(100, () => {
+      const gameWidth = this.scene.cameras.main.width;
+      const gameHeight = this.scene.cameras.main.height;
+      const centerX = gameWidth / 2;
+      const centerY = gameHeight / 2;
+      
+      // Create countdown text positioned above the menu content
+      this.menuCountdownText = this.scene.add.text(centerX, centerY - 100, `Auto-complete in: 12 ${unit}`, {
+        fontSize: '16px',
+        color: '#ff6b6b',
+        fontStyle: 'bold',
+        backgroundColor: '#000000',
+        padding: { x: 8, y: 4 }
+      });
+      this.menuCountdownText.setOrigin(0.5);
+      this.menuCountdownText.setScrollFactor(0);
+      this.menuCountdownText.setDepth(1000); // High depth to appear above other elements
+      
+      // Store reference for cleanup
+      if (this.currentDialog) {
+        (this.currentDialog as any).countdownText = this.menuCountdownText;
+      }
     });
-    this.menuCountdownText.setOrigin(0.5);
-    this.menuCountdownText.setScrollFactor(0);
-    this.menuCountdownText.setDepth(1000); // High depth to appear above other elements
-    
-    // Store reference for cleanup
-    if (this.currentDialog) {
-      (this.currentDialog as any).countdownText = this.menuCountdownText;
-    }
   }
 
   /**
@@ -2087,6 +2090,9 @@ export class MenuManager {
         showStep(0);
       });
     }
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('DESTINATION');
   }
 
   private createDialog(menuConfig: MenuConfig, menuType?: string) {
@@ -2400,9 +2406,6 @@ export class MenuManager {
         gameSceneForRestore.updateAllTutorialOverlays();
       }
     }
-    
-    // Start universal auto-completion
-    this.startMenuAutoComplete('DESTINATION');
   }
 
   /**
