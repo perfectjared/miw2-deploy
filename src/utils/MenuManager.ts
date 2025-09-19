@@ -414,6 +414,21 @@ export class MenuManager {
         this.popMenu();
         this.showGameOverMenu();
         break;
+      case 'EXIT':
+        // EXIT menus should trigger after CYOA when closed
+        // Pop the menu and trigger the after CYOA logic
+        console.log('MenuManager: EXIT menu found in stack - triggering after CYOA logic');
+        this.popMenu();
+        // Trigger after CYOA logic for the exit that was closed
+        const exitNumber = previousMenu.config?.exitNumber;
+        if (exitNumber) {
+          console.log(`🎭 MenuManager: Triggering after CYOA for restored Exit ${exitNumber}`);
+          const gameScene = this.scene.scene.get('GameScene');
+          if (gameScene && (gameScene as any).carMechanics) {
+            (gameScene as any).carMechanics.triggerAfterExitCyoa(exitNumber);
+          }
+        }
+        break;
       case 'CYOA':
         // CYOA menus are one-time events and should not be restored
         // Simply pop them from the stack to clean up
