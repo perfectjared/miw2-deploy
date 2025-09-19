@@ -595,46 +595,28 @@ export class CarMechanics {
       let exitNumber: number | undefined;
       let cyoaThreshold = threshold;
       
-      // If we have 3 CYOA, one should be exit-related and occur after leaving an exit
+      // If we have 3 CYOA, one should be exit-related and occur immediately after leaving an exit
       if (numCyoa === 3 && cyoaId === 3) {
         isExitRelated = true;
-        // Pick a random exit to be related to
-        exitNumber = Phaser.Math.Between(1, numExits);
-        
-        // Find the chosen exit and schedule CYOA to occur after leaving it
-        const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
-        if (chosenExit) {
-          // Schedule CYOA to occur 5-15% after the exit threshold
-          const postExitOffset = Phaser.Math.Between(5, 15);
-          cyoaThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
+        // Pick a random exit to be related to (only if exits exist)
+        if (numExits > 0) {
+          exitNumber = Phaser.Math.Between(1, numExits);
           
-          // Ensure this CYOA doesn't conflict with other CYOA events
-          const minSpacing = 12; // Minimum spacing between CYOA events
-          let attempts = 0;
-          const maxAttempts = 20;
-          
-          while (attempts < maxAttempts) {
-            let needsAdjustment = false;
-            
-            // Check spacing against other planned CYOA
-            for (const existingCyoa of this.plannedCyoa) {
-              if (Math.abs(existingCyoa.cyoaThreshold - cyoaThreshold) < minSpacing) {
-                needsAdjustment = true;
-                break;
-              }
-            }
-            
-            if (needsAdjustment) {
-              // Try a different offset
-              const newPostExitOffset = Phaser.Math.Between(5, 15);
-              cyoaThreshold = Math.min(100, chosenExit.exitThreshold + newPostExitOffset);
-              attempts++;
-            } else {
-              break;
-            }
+          // Find the chosen exit to validate it exists
+          const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+          if (chosenExit) {
+            // Don't schedule based on progress - this will be triggered immediately when exit is left
+            cyoaThreshold = 999; // Set to high value so it won't trigger via progress
+            console.log(`🎭 CYOA ${cyoaId} will trigger immediately after leaving Exit ${exitNumber} (exit at ${chosenExit.exitThreshold}%)`);
+          } else {
+            console.log(`🎭 CYOA ${cyoaId} - Exit ${exitNumber} not found, making it non-exit-related`);
+            isExitRelated = false;
+            exitNumber = undefined;
           }
-          
-          console.log(`🎭 CYOA ${cyoaId} scheduled after Exit ${exitNumber} at ${cyoaThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+        } else {
+          console.log(`🎭 CYOA ${cyoaId} - No exits available, making it non-exit-related`);
+          isExitRelated = false;
+          exitNumber = undefined;
         }
       }
       
@@ -944,6 +926,7 @@ export class CarMechanics {
     obstacle.setData('text', exitText); // Store text reference
     obstacle.setData('laneIndex', plannedExit.laneIndex);
     obstacle.setData('shopCount', plannedExit.shopCount); // Store shop count for menu
+    obstacle.setData('exitNumber', plannedExit.number); // Store exit number for CYOA
     
     // Add to obstacles array for collision detection
     this.obstacles.push(obstacle);
@@ -975,6 +958,24 @@ export class CarMechanics {
         exitNumber: plannedCyoa.exitNumber
       });
       this.scene.scene.bringToTop('MenuScene');
+    }
+  }
+
+  /**
+   * Trigger exit-related CYOA immediately after leaving an exit
+   */
+  public triggerExitCyoa(exitNumber: number): void {
+    // Find the planned exit-related CYOA for this exit
+    const exitCyoa = this.plannedCyoa.find(cyoa => 
+      cyoa.isExitRelated && cyoa.exitNumber === exitNumber && !cyoa.triggered
+    );
+    
+    if (exitCyoa) {
+      console.log(`🎭 Triggering exit CYOA immediately after leaving Exit ${exitNumber}`);
+      this.triggerCyoa(exitCyoa);
+      exitCyoa.triggered = true;
+    } else {
+      console.log(`🎭 No exit CYOA found for Exit ${exitNumber}`);
     }
   }
 
@@ -1834,7 +1835,8 @@ export class CarMechanics {
       const menuScene = this.scene.scene.get('MenuScene');
       if (menuScene) {
         const shopCount = obstacle.getData('shopCount') || 3; // Default to 3 if not set
-        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount);
+        const exitNumber = obstacle.getData('exitNumber') || 1; // Get exit number
+        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
         this.scene.scene.bringToTop('MenuScene');
       }
     }

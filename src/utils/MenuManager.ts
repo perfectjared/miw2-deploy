@@ -718,10 +718,10 @@ export class MenuManager {
     }
   }
 
-  public showExitMenu(shopCount: number = 3) {
+  public showExitMenu(shopCount: number = 3, exitNumber?: number) {
     if (!this.canShowMenu('EXIT')) return;
     this.clearCurrentDialog();
-    this.pushMenu('EXIT');
+    this.pushMenu('EXIT', { exitNumber }); // Store exit number for CYOA triggering
     
     // Generate shop names based on count
     const shopNames = this.generateShopNames(shopCount);
@@ -1175,12 +1175,12 @@ export class MenuManager {
     (this.currentDialog as any).startMeter = { meterBackground, meterFill, meterText };
   }
 
-  public showObstacleMenu(obstacleType: string, damage: number) {
+  public showObstacleMenu(obstacleType: string, damage: number, exitNumber?: number) {
     if (!this.canShowMenu('OBSTACLE')) return;
     
     // Special-case: obstacle type 'exit' should show the dedicated Exit menu
     if (obstacleType === 'exit') {
-      this.showExitMenu();
+      this.showExitMenu(damage, exitNumber);
       return;
     }
     
@@ -1985,6 +1985,19 @@ export class MenuManager {
       } else if (this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP') {
         console.log('MenuManager: Resuming game after exit/shop menu closed');
         this.resumeGameAfterDestinationMenu(false); // do NOT reset car/keys after exits
+        
+        // Trigger exit CYOA if this was an exit menu
+        if (this.currentDisplayedMenuType === 'EXIT') {
+          const currentMenu = this.menuStack[this.menuStack.length - 1];
+          const exitNumber = currentMenu?.config?.exitNumber;
+          if (exitNumber) {
+            console.log(`MenuManager: Triggering exit CYOA for Exit ${exitNumber}`);
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene && (gameScene as any).carMechanics) {
+              (gameScene as any).carMechanics.triggerExitCyoa(exitNumber);
+            }
+          }
+        }
       }
       
       // Clear the displayed menu type
