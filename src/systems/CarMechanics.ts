@@ -658,11 +658,12 @@ export class CarMechanics {
       if (isFirstSequence && cyoaId === 3) {
         isExitRelated = true;
         exitNumber = 1; // Always bundle with Exit 1 for testing
-        exitTiming = 'after'; // First one should be after exit
+        exitTiming = 'before'; // First one should be before exit for testing now
         const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
         if (chosenExit) {
-          cyoaThreshold = chosenExit.exitThreshold;
-          console.log(`🎭 First sequence CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% (testing)`);
+          const offset = Phaser.Math.Between(5, 10); // trigger a bit before the exit
+          cyoaThreshold = Math.max(1, chosenExit.exitThreshold - offset);
+          console.log(`🎭 First sequence CYOA ${cyoaId} bundled BEFORE Exit ${exitNumber} at ${cyoaThreshold}% (exit at ${chosenExit.exitThreshold}%)`);
         } else {
           console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
         }

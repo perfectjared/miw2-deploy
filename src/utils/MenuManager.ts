@@ -766,10 +766,10 @@ export class MenuManager {
         // Debug line intentionally minimized
         
         if (finalExitNumber) {
-          console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 4 steps later`);
+          console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 1 step later`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
-            const delay = 8; // Slightly longer to ensure post-close steps elapse
+            const delay = 1; // trigger on the very next step
             console.log(`🎭 MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, ${delay})`);
             (gameScene as any).carMechanics.scheduleExitCyoa(finalExitNumber, delay);
             console.log(`🎭 MenuManager: scheduleExitCyoa call completed`);
