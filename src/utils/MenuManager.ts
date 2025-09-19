@@ -50,11 +50,12 @@ export class MenuManager {
   // Text display callbacks for cleanup
   private textDisplayCallbacks: Phaser.Time.TimerEvent[] = []
   
-  // Ignition menu auto-completion tracking
-  private ignitionMenuStepCount: number = 0
-  private ignitionMenuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null
-  private ignitionCountdownText: Phaser.GameObjects.Text | null = null
-  private ignitionCountdownTimer: Phaser.Time.TimerEvent | null = null;
+  // Universal menu auto-completion tracking
+  private menuAutoCompleteStepCount: number = 0
+  private menuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null
+  private menuCountdownText: Phaser.GameObjects.Text | null = null
+  private menuCountdownTimer: Phaser.Time.TimerEvent | null = null
+  private currentMenuAutoCompleteType: string | null = null;
   
   // Slider Parameters
   private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
@@ -142,35 +143,103 @@ export class MenuManager {
     this.scene.events.on('step', this.onGlobalStep, this);
     // Listen for CYOA menu events
     this.scene.events.on('showCyoaMenu', this.showCyoaMenu, this);
+    // Listen for step events for universal menu auto-completion
+    this.scene.events.on('step', this.onStepEvent, this);
   }
 
   /**
-   * Start ignition countdown timer
+   * Start universal menu auto-completion
    */
-  private startIgnitionCountdown() {
-    let countdown = 10; // Start with 10 step-lengths (10 seconds)
+  private startMenuAutoComplete(menuType: string) {
+    // Skip auto-completion for start menu
+    if (menuType === 'START') return;
     
-    // Update countdown text immediately
-    if (this.ignitionCountdownText) {
-      this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} step-lengths`);
+    this.currentMenuAutoCompleteType = menuType;
+    this.menuAutoCompleteStepCount = 0;
+    
+    // Check if steps are being counted (game is running)
+    const appScene = this.scene.scene.get('AppScene');
+    const isGameRunning = appScene && !(appScene as any).isPaused && (appScene as any).gameStarted;
+    
+    if (isGameRunning) {
+      // Use step-based counting
+      console.log(`Starting step-based auto-completion for ${menuType} menu`);
+      this.addMenuCountdown(menuType, 'steps');
+    } else {
+      // Use timer-based counting (step-lengths)
+      console.log(`Starting timer-based auto-completion for ${menuType} menu`);
+      this.startMenuCountdownTimer(menuType);
+    }
+  }
+
+  /**
+   * Stop universal menu auto-completion
+   */
+  private stopMenuAutoComplete() {
+    this.currentMenuAutoCompleteType = null;
+    this.menuAutoCompleteStepCount = 0;
+    
+    // Stop timer if running
+    if (this.menuCountdownTimer) {
+      this.menuCountdownTimer.destroy();
+      this.menuCountdownTimer = null;
     }
     
+    // Clear countdown text
+    if (this.menuCountdownText) {
+      this.menuCountdownText.destroy();
+      this.menuCountdownText = null;
+    }
+  }
+
+  /**
+   * Step event handler for universal menu auto-completion
+   */
+  private onStepEvent(step: number) {
+    // Only track steps when a menu with auto-completion is open
+    if (this.currentMenuAutoCompleteType && this.currentMenuAutoCompleteType !== 'START') {
+      this.menuAutoCompleteStepCount++;
+      const remainingSteps = 10 - this.menuAutoCompleteStepCount;
+      console.log(`Menu ${this.currentMenuAutoCompleteType} step count: ${this.menuAutoCompleteStepCount}/10 (${remainingSteps} remaining)`);
+      
+      // Update countdown text
+      if (this.menuCountdownText) {
+        this.menuCountdownText.setText(`Auto-complete in: ${remainingSteps} steps`);
+      }
+      
+      // Auto-complete after 10 steps
+      if (this.menuAutoCompleteStepCount >= 10) {
+        console.log(`Menu ${this.currentMenuAutoCompleteType} auto-completing after 10 steps`);
+        this.autoCompleteCurrentMenu();
+      }
+    }
+  }
+
+  /**
+   * Start timer-based countdown for menus
+   */
+  private startMenuCountdownTimer(menuType: string) {
+    let countdown = 10; // Start with 10 step-lengths (10 seconds)
+    
+    // Add countdown text
+    this.addMenuCountdown(menuType, 'step-lengths');
+    
     // Create timer that updates every step-length (1000ms = 1 second)
-    this.ignitionCountdownTimer = this.scene.time.addEvent({
+    this.menuCountdownTimer = this.scene.time.addEvent({
       delay: 1000, // 1 step-length = 1000ms
       callback: () => {
         countdown--;
-        console.log(`Ignition countdown: ${countdown} step-lengths remaining`);
+        console.log(`Menu ${menuType} countdown: ${countdown} step-lengths remaining`);
         
         // Update countdown text
-        if (this.ignitionCountdownText) {
-          this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} step-lengths`);
+        if (this.menuCountdownText) {
+          this.menuCountdownText.setText(`Auto-complete in: ${countdown} step-lengths`);
         }
         
         // Auto-complete when countdown reaches 0
         if (countdown <= 0) {
-          console.log('Ignition menu auto-completing after 10 step-lengths');
-          this.autoCompleteIgnitionMenu();
+          console.log(`Menu ${menuType} auto-completing after 10 step-lengths`);
+          this.autoCompleteCurrentMenu();
         }
       },
       loop: true,
@@ -179,37 +248,70 @@ export class MenuManager {
   }
 
   /**
-   * Stop ignition countdown timer
+   * Add countdown text to current menu
    */
-  private stopIgnitionCountdown() {
-    if (this.ignitionCountdownTimer) {
-      this.ignitionCountdownTimer.destroy();
-      this.ignitionCountdownTimer = null;
+  private addMenuCountdown(menuType: string, unit: 'steps' | 'step-lengths') {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const centerX = gameWidth / 2;
+    const centerY = gameHeight / 2;
+    
+    // Create countdown text positioned above the menu content
+    this.menuCountdownText = this.scene.add.text(centerX, centerY - 100, `Auto-complete in: 10 ${unit}`, {
+      fontSize: '16px',
+      color: '#ff6b6b',
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    this.menuCountdownText.setOrigin(0.5);
+    this.menuCountdownText.setScrollFactor(0);
+    this.menuCountdownText.setDepth(1000); // High depth to appear above other elements
+    
+    // Store reference for cleanup
+    if (this.currentDialog) {
+      (this.currentDialog as any).countdownText = this.menuCountdownText;
     }
   }
 
   /**
-   * Auto-complete the ignition menu
+   * Auto-complete the current menu
    */
-  private autoCompleteIgnitionMenu() {
-    if (this.currentDisplayedMenuType !== 'TURN_KEY') return;
+  private autoCompleteCurrentMenu() {
+    if (!this.currentMenuAutoCompleteType) return;
     
-    console.log('Auto-completing ignition menu');
+    console.log(`Auto-completing ${this.currentMenuAutoCompleteType} menu`);
     
-    // Stop the countdown timer
-    this.stopIgnitionCountdown();
+    // Stop auto-completion tracking
+    this.stopMenuAutoComplete();
     
-    // Clear the dialog
-    this.closeDialog();
-    
-    // Emit turnKey event to start the car
-    const gameScene = this.scene.scene.get('GameScene');
-    if (gameScene) {
-      gameScene.events.emit('turnKey');
+    // Handle different menu types
+    switch (this.currentMenuAutoCompleteType) {
+      case 'TURN_KEY':
+        // For ignition menu, emit turnKey event
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          gameScene.events.emit('turnKey');
+        }
+        break;
+      case 'CYOA':
+        // For CYOA menus, just close and resume
+        this.closeDialog();
+        break;
+      case 'EXIT':
+      case 'SHOP':
+        // For exit/shop menus, close and resume
+        this.closeDialog();
+        break;
+      case 'PAUSE':
+        // For pause menu, resume game
+        this.closeDialog();
+        break;
+      default:
+        // For other menus, just close
+        this.closeDialog();
+        break;
     }
-    
-    // Clear countdown text reference
-    this.ignitionCountdownText = null;
   }
 
   /**
@@ -681,6 +783,9 @@ export class MenuManager {
     };
 
     this.createDialog(menuConfig, 'PAUSE');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('PAUSE');
   }
 
   public showSaveMenu() {
@@ -928,6 +1033,9 @@ export class MenuManager {
     this.createDialog(menuConfig, 'EXIT');
     // Attach exit number to the dialog instance as a definitive source
     try { (this.currentDialog as any).exitNumber = exitNumForMenu; console.log('showExitMenu: attached dialog exitNumber=', exitNumForMenu); } catch {}
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('EXIT');
   }
 
   /**
@@ -1015,6 +1123,9 @@ export class MenuManager {
     };
     
     this.createDialog(menuConfig, 'SHOP');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('SHOP');
   }
 
   private handleShopPurchase(itemName: string, cost: number) {
@@ -1069,11 +1180,8 @@ export class MenuManager {
     // Add drag dial after creating the dialog
     this.addTurnKeyDial();
     
-    // Add countdown text
-    this.addIgnitionCountdown();
-    
-    // Start countdown timer
-    this.startIgnitionCountdown();
+    // Start universal auto-completion
+    this.startMenuAutoComplete('TURN_KEY');
     
     // Emit event to notify GameScene that ignition menu is shown
     console.log('MenuManager: Emitting ignitionMenuShown event');
@@ -1362,28 +1470,6 @@ export class MenuManager {
     (this.currentDialog as any).startMeter = { meterBackground, meterFill, meterText };
   }
 
-  private addIgnitionCountdown() {
-    const gameWidth = this.scene.cameras.main.width;
-    const gameHeight = this.scene.cameras.main.height;
-    const centerX = gameWidth / 2;
-    const centerY = gameHeight / 2;
-    
-    // Create countdown text positioned above the slider
-    this.ignitionCountdownText = this.scene.add.text(centerX, centerY - 100, 'Auto-complete in: 10 step-lengths', {
-      fontSize: '16px',
-      color: '#ff6b6b',
-      fontStyle: 'bold',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    this.ignitionCountdownText.setOrigin(0.5);
-    this.ignitionCountdownText.setScrollFactor(0);
-    this.ignitionCountdownText.setDepth(1000); // High depth to appear above other elements
-    
-    // Store reference for cleanup
-    (this.currentDialog as any).countdownText = this.ignitionCountdownText;
-  }
-
   public showObstacleMenu(obstacleType: string, damage: number, exitNumber?: number) {
     if (!this.canShowMenu('OBSTACLE')) return;
     
@@ -1482,6 +1568,9 @@ export class MenuManager {
 
     // Create dialog directly without complex menu management
     this.createDialog(menuConfig, 'CYOA');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('CYOA');
     
     // Pause game immediately
     this.pauseGame();
@@ -2422,11 +2511,8 @@ export class MenuManager {
   }
 
   private closeDialog() {
-    // Stop ignition countdown timer if closing ignition menu
-    if (this.currentDisplayedMenuType === 'TURN_KEY') {
-      this.stopIgnitionCountdown();
-      this.ignitionCountdownText = null; // Clear countdown text reference
-    }
+    // Stop universal menu auto-completion
+    this.stopMenuAutoComplete();
     
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
