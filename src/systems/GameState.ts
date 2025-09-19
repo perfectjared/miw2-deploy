@@ -666,23 +666,12 @@ export class GameState {
 
   /**
    * Calculate the number of driving sequences for a region (deterministic)
-   * First visit: always 2 sequences
-   * Subsequent visits: 2-3 sequences normally, 4 possible if region visited 3+ times
+   * All regions: 2-3 sequences (randomized but deterministic)
    */
   private calculateSequencesForRegion(region: string, visitCount: number): number {
-    if (visitCount === 1) {
-      // First visit to any region: always 2 sequences
-      return 2;
-    } else if (visitCount >= 3) {
-      // Region visited 3+ times: 2-4 sequences (4 is unlikely)
-      // Use a deterministic seed based on region name and visit count
-      const seed = this.hashString(`${region}-${visitCount}`);
-      return (seed % 100) < 15 ? 4 : ((seed % 2) + 2); // 15% chance of 4, otherwise 2 or 3
-    } else {
-      // Second visit: 2-3 sequences
-      const seed = this.hashString(`${region}-${visitCount}`);
-      return (seed % 2) + 2; // Either 2 or 3
-    }
+    // Use a deterministic seed based on region name and visit count
+    const seed = this.hashString(`${region}-${visitCount}`);
+    return (seed % 2) + 2; // Either 2 or 3 sequences
   }
 
   /**

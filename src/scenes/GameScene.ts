@@ -738,6 +738,13 @@ export class GameScene extends Phaser.Scene {
       this.events.emit('gameResumed');
     }
     
+    // Check if night mode should be enabled for this region's final sequence
+    if (this.gameState.isFinalSequenceForRegion()) {
+      this.enableNightTimeMode();
+    } else {
+      this.disableNightTimeMode();
+    }
+    
     console.log(`✅ Region changed to ${regionId} - driving restarted`);
   }
 
