@@ -52,7 +52,6 @@ export interface MenuConfig {
  * 
  * MENUS WITH AUTO-COMPLETION:
  * - TURN_KEY (ignition) - Prevents game from getting stuck
- * - EXIT - Prevents game from getting stuck
  * - SHOP - Prevents game from getting stuck
  * - PAUSE - Prevents game from getting stuck
  * - STORY - Prevents game from getting stuck
@@ -61,6 +60,7 @@ export interface MenuConfig {
  * - START - Initial menu, player chooses when to start
  * - CYOA - Interactive story content that players should engage with
  * - DESTINATION - Interactive planning content that players should engage with
+ * - EXIT - Interactive shop selection that players should engage with
  * 
  * MENU CATEGORIES:
  * - PERSISTENT: Can be restored (PAUSE, SAVE, LOAD)
@@ -178,7 +178,7 @@ export class MenuManager {
    */
   private startMenuAutoComplete(menuType: string) {
     // Skip auto-completion for interactive menus that players should engage with
-    if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION') {
+    if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION' || menuType === 'EXIT') {
       return;
     }
     
@@ -1065,8 +1065,7 @@ export class MenuManager {
     // Attach exit number to the dialog instance as a definitive source
     try { (this.currentDialog as any).exitNumber = exitNumForMenu; console.log('showExitMenu: attached dialog exitNumber=', exitNumForMenu); } catch {}
     
-    // Start universal auto-completion
-    this.startMenuAutoComplete('EXIT');
+    // Exit menus are exempt from auto-completion (interactive content)
   }
 
   /**
