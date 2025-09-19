@@ -42,6 +42,32 @@ export interface MenuConfig {
   height?: number;
 }
 
+/**
+ * MenuManager - Handles all game menus with universal auto-completion system
+ * 
+ * AUTO-COMPLETION SYSTEM:
+ * - Prevents game from getting stuck on functional menus
+ * - Uses step-based counting when game is running, timer-based when paused
+ * - 12-step countdown for all functional menus
+ * 
+ * MENUS WITH AUTO-COMPLETION:
+ * - TURN_KEY (ignition) - Prevents game from getting stuck
+ * - EXIT - Prevents game from getting stuck
+ * - SHOP - Prevents game from getting stuck
+ * - PAUSE - Prevents game from getting stuck
+ * - STORY - Prevents game from getting stuck
+ * 
+ * MENUS WITHOUT AUTO-COMPLETION:
+ * - START - Initial menu, player chooses when to start
+ * - CYOA - Interactive story content that players should engage with
+ * - DESTINATION - Interactive planning content that players should engage with
+ * 
+ * MENU CATEGORIES:
+ * - PERSISTENT: Can be restored (PAUSE, SAVE, LOAD)
+ * - TEMPORARY: Single use, not restored (TURN_KEY, EXIT, SHOP, CYOA, STORY, DESTINATION)
+ * - ONE_TIME: Cleaned up completely (GAME_OVER)
+ * - OVERLAY: Ephemeral, auto-hide (tutorial overlays)
+ */
 export class MenuManager {
   // ============================================================================
   // MENU PARAMETERS - Using centralized configuration
@@ -153,7 +179,6 @@ export class MenuManager {
   private startMenuAutoComplete(menuType: string) {
     // Skip auto-completion for interactive menus that players should engage with
     if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION') {
-      console.log(`Skipping auto-completion for ${menuType} menu (interactive content)`);
       return;
     }
     
@@ -164,20 +189,11 @@ export class MenuManager {
     const appScene = this.scene.scene.get('AppScene');
     const isGameRunning = appScene && !(appScene as any).isPaused && (appScene as any).gameStarted;
     
-    console.log(`Auto-completion debug for ${menuType}:`, {
-      appScene: !!appScene,
-      isPaused: appScene ? (appScene as any).isPaused : 'N/A',
-      gameStarted: appScene ? (appScene as any).gameStarted : 'N/A',
-      isGameRunning
-    });
-    
     if (isGameRunning) {
       // Use step-based counting
-      console.log(`Starting step-based auto-completion for ${menuType} menu`);
       this.addMenuCountdown(menuType, 'steps');
     } else {
       // Use timer-based counting (step-lengths)
-      console.log(`Starting timer-based auto-completion for ${menuType} menu`);
       this.startMenuCountdownTimer(menuType);
     }
   }
@@ -206,12 +222,10 @@ export class MenuManager {
    * Step event handler for universal menu auto-completion
    */
   private onStepEvent(step: number) {
-    console.log(`onStepEvent called: step=${step}, currentMenuAutoCompleteType=${this.currentMenuAutoCompleteType}`);
     // Only track steps when a menu with auto-completion is open
     if (this.currentMenuAutoCompleteType && this.currentMenuAutoCompleteType !== 'START') {
       this.menuAutoCompleteStepCount++;
       const remainingSteps = 12 - this.menuAutoCompleteStepCount;
-      console.log(`Menu ${this.currentMenuAutoCompleteType} step count: ${this.menuAutoCompleteStepCount}/12 (${remainingSteps} remaining)`);
       
       // Update countdown text
       if (this.menuCountdownText) {
@@ -220,7 +234,6 @@ export class MenuManager {
       
       // Auto-complete after 12 steps
       if (this.menuAutoCompleteStepCount >= 12) {
-        console.log(`Menu ${this.currentMenuAutoCompleteType} auto-completing after 12 steps`);
         this.autoCompleteCurrentMenu();
       }
     }
@@ -240,7 +253,6 @@ export class MenuManager {
       delay: 1000, // 1 step-length = 1000ms
       callback: () => {
         countdown--;
-        console.log(`Menu ${menuType} countdown: ${countdown} step-lengths remaining`);
         
         // Update countdown text
         if (this.menuCountdownText) {
@@ -249,7 +261,6 @@ export class MenuManager {
         
         // Auto-complete when countdown reaches 0
         if (countdown <= 0) {
-          console.log(`Menu ${menuType} auto-completing after 12 step-lengths`);
           this.autoCompleteCurrentMenu();
         }
       },
@@ -292,13 +303,9 @@ export class MenuManager {
    * Auto-complete the current menu
    */
   private autoCompleteCurrentMenu() {
-    console.log(`autoCompleteCurrentMenu called - currentMenuAutoCompleteType: ${this.currentMenuAutoCompleteType}`);
     if (!this.currentMenuAutoCompleteType) {
-      console.log('autoCompleteCurrentMenu: No currentMenuAutoCompleteType, returning early');
       return;
     }
-    
-    console.log(`Auto-completing ${this.currentMenuAutoCompleteType} menu`);
     
     // Store the menu type before stopping auto-completion tracking
     const menuType = this.currentMenuAutoCompleteType;
@@ -307,20 +314,14 @@ export class MenuManager {
     this.stopMenuAutoComplete();
     
     // Handle different menu types using the stored menu type
-    console.log(`autoCompleteCurrentMenu: Entering switch statement for ${menuType}`);
     switch (menuType) {
       case 'TURN_KEY':
         // For ignition menu, add delay before closing and emitting turnKey event (matches manual completion)
-        console.log('Auto-completion: Scheduling turnKey event in 500ms');
         this.scene.time.delayedCall(500, () => {
-          console.log('Auto-completion: Executing delayed turnKey event');
           this.closeDialog();
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene) {
-            console.log('Auto-completion: Emitting turnKey event to GameScene');
             gameScene.events.emit('turnKey');
-          } else {
-            console.error('Auto-completion: GameScene not found for turnKey event');
           }
         });
         break;
