@@ -165,9 +165,6 @@ export class CarMechanics {
   // Night mode state tracking
   private nightModeEnabled: boolean = false;
   // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
-  private suppressRegularCyoaUntilStep: number = 0;
-  // Also guard a window BEFORE upcoming exits to avoid regular CYOA right before an exit
-  private preExitCyoaGuardPercent: number = 15; // percent progress window before any upcoming exit
 
   
   private currentSequenceProgress: number = 0;
@@ -851,25 +848,8 @@ export class CarMechanics {
       }
     });
     
-    // Check if any planned CYOA should be triggered by progress
-    // Suppress near exit-collision windows to avoid duplicate/overlapping triggers
-    let currentStepForSuppression = 0;
-    try {
-      const gameScene: any = this.scene.scene.get('GameScene');
-      currentStepForSuppression = gameScene?.gameState?.getState()?.step || 0;
-    } catch {}
+    // SIMPLE CYOA TRIGGERING: Just trigger when progress threshold is reached
     this.plannedCyoa.forEach(plannedCyoa => {
-      if (currentStepForSuppression <= this.suppressRegularCyoaUntilStep) {
-        return; // Skip CYOA during suppression window
-      }
-      // Pre-exit guard: if an exit is imminent within N% progress, skip CYOA
-      const upcomingExit = this.plannedExits.find(e => !e.exitSpawned && progress < e.exitThreshold);
-      if (upcomingExit) {
-        const delta = upcomingExit.exitThreshold - progress;
-        if (delta <= this.preExitCyoaGuardPercent) {
-          return; // Skip CYOA if exit is too close
-        }
-      }
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
         console.log(`updateProgress: Triggering CYOA ${plannedCyoa.id} at progress ${progress.toFixed(1)}%`);
         this.triggerCyoa(plannedCyoa);
@@ -1970,13 +1950,6 @@ export class CarMechanics {
           exitNumber = this.activeExits[this.activeExits.length - 1].exitNumber;
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
-
-        // Set suppression window for CYOAs to avoid accidental co-trigger at the same time
-        try {
-          const gs: any = this.scene.scene.get('GameScene');
-          const stepNow = gs?.gameState?.getState()?.step || 0;
-          this.suppressRegularCyoaUntilStep = stepNow + 2; // allow after two steps
-        } catch {}
 
         // Show the exit menu immediately (no more exit-related CYOAs)
         if (exitNumber != null) {
