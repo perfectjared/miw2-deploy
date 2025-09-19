@@ -165,6 +165,8 @@ export class CarMechanics {
   
   // Scheduled Exit CYOA System - REMOVED (now using direct triggering)
 
+  // Night mode state tracking
+  private nightModeEnabled: boolean = false;
   // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
   private suppressRegularCyoaUntilStep: number = 0;
   // Also guard a window BEFORE upcoming exits to avoid regular CYOA right before an exit
@@ -706,7 +708,9 @@ export class CarMechanics {
     // Final spacing check for all CYOA events
     this.ensureCyoaSpacing();
     
-    console.log('Planned CYOA:', this.plannedCyoa.map(c => `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (exit-related)` : ''}`));
+    console.log('Planned CYOA:', this.plannedCyoa.map(c => 
+      `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (${c.exitTiming || 'after'} Exit ${c.exitNumber})` : ' (regular)'}`
+    ));
     console.log('Total planned CYOA:', this.plannedCyoa.length);
     
     // Plan one story event for this driving sequence
@@ -1168,9 +1172,10 @@ export class CarMechanics {
    * Set night time mode for visual effects
    */
   public setNightTimeMode(enabled: boolean) {
-    if (enabled) {
+    if (enabled && !this.nightModeEnabled) {
       // Darken the sky color for night time
       this.config.skyColor = 0x202020; // Very dark grey
+      this.nightModeEnabled = true;
       
       // Check if any menu is currently open - suppress logs during menus
       const menuScene = this.scene.scene.get('MenuScene');
@@ -1179,9 +1184,10 @@ export class CarMechanics {
       if (!hasOpenMenu) {
         console.log('🌙 CarMechanics: Night time mode enabled');
       }
-    } else {
+    } else if (!enabled && this.nightModeEnabled) {
       // Restore normal sky color
       this.config.skyColor = 0x000000; // Black (normal)
+      this.nightModeEnabled = false;
     }
   }
 

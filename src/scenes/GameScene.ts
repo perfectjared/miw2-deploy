@@ -86,6 +86,7 @@ export class GameScene extends Phaser.Scene {
   private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay for keys
   private hotdogSVG!: Phaser.GameObjects.Sprite; // SVG overlay for food item
   private nightTimeOverlay?: Phaser.GameObjects.Rectangle; // Night time visual overlay
+  private nightModeEnabled: boolean = false;
   private keysConstraint: any = null;
   
   // Game state flags
@@ -743,6 +744,10 @@ export class GameScene extends Phaser.Scene {
    * Enable night time mode for final driving sequence
    */
   private enableNightTimeMode() {
+    if (this.nightModeEnabled) return; // Already enabled, skip
+    
+    this.nightModeEnabled = true;
+    
     // Check if any menu is currently open - suppress logs during menus
     const menuScene = this.scene.get('MenuScene');
     const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
