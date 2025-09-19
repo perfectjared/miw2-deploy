@@ -289,11 +289,16 @@ export class MenuManager {
     switch (this.currentMenuAutoCompleteType) {
       case 'TURN_KEY':
         // For ignition menu, add delay before closing and emitting turnKey event (matches manual completion)
+        console.log('Auto-completion: Scheduling turnKey event in 500ms');
         this.scene.time.delayedCall(500, () => {
+          console.log('Auto-completion: Executing delayed turnKey event');
           this.closeDialog();
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene) {
+            console.log('Auto-completion: Emitting turnKey event to GameScene');
             gameScene.events.emit('turnKey');
+          } else {
+            console.error('Auto-completion: GameScene not found for turnKey event');
           }
         });
         break;

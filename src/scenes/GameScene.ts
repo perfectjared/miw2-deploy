@@ -1458,12 +1458,15 @@ export class GameScene extends Phaser.Scene {
    * Handle turn key event
    */
   private onTurnKey() {
+    console.log('GameScene: onTurnKey called - carStarted:', this.carStarted);
+    
     // Prevent multiple calls - if car is already started, ignore
     if (this.carStarted) {
       console.log('Turn Key ignored: car already started');
       return;
     }
 
+    console.log('GameScene: Starting car - setting carStarted to true');
     // Car is now started
     this.carStarted = true;
     this.gameState.updateState({ carStarted: true });
@@ -1471,9 +1474,12 @@ export class GameScene extends Phaser.Scene {
     // Start driving mode when car is started
     if (!this.carMechanics.isDriving()) {
       const currentStep = this.gameState.getState().step || 0;
+      console.log('GameScene: Starting driving mechanics at step:', currentStep);
       this.carMechanics.startDriving(currentStep);
+      console.log('GameScene: Driving mechanics started');
       // Driving mode started with car ignition
     } else {
+      console.log('GameScene: CarMechanics was already driving');
       // CarMechanics was already driving
     }
     
