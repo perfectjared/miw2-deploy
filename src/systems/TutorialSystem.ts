@@ -141,6 +141,16 @@ export class TutorialSystem {
       } catch {}
     }
     
+    // Update tutorial text based on state
+    if (this.blinkText) {
+      if (tutorialState === 'keys-and-ignition') {
+        this.blinkText.setText('Place keys in ignition');
+        this.blinkText.setVisible(true);
+      } else {
+        this.blinkText.setVisible(false);
+      }
+    }
+    
     // Update tutorial mask if needed
     if (tutorialState !== 'none') {
       this.updateTutorialMask(tutorialState);

@@ -386,7 +386,7 @@ export class Keys implements PhysicsObject {
     const radius = itemSize.width / 2; // Convert width to radius
     
     this.gameObject = this.scene.add.circle(
-      200, // x position
+      800, // x position - moved to right side of screen
       300, // y position
       radius,  // radius from config
       0x0000ff // color (blue)
