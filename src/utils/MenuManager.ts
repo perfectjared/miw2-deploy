@@ -161,6 +161,13 @@ export class MenuManager {
     const appScene = this.scene.scene.get('AppScene');
     const isGameRunning = appScene && !(appScene as any).isPaused && (appScene as any).gameStarted;
     
+    console.log(`Auto-completion debug for ${menuType}:`, {
+      appScene: !!appScene,
+      isPaused: appScene ? (appScene as any).isPaused : 'N/A',
+      gameStarted: appScene ? (appScene as any).gameStarted : 'N/A',
+      isGameRunning
+    });
+    
     if (isGameRunning) {
       // Use step-based counting
       console.log(`Starting step-based auto-completion for ${menuType} menu`);
@@ -196,6 +203,7 @@ export class MenuManager {
    * Step event handler for universal menu auto-completion
    */
   private onStepEvent(step: number) {
+    console.log(`onStepEvent called: step=${step}, currentMenuAutoCompleteType=${this.currentMenuAutoCompleteType}`);
     // Only track steps when a menu with auto-completion is open
     if (this.currentMenuAutoCompleteType && this.currentMenuAutoCompleteType !== 'START') {
       this.menuAutoCompleteStepCount++;
