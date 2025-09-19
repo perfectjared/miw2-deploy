@@ -199,17 +199,17 @@ export class MenuManager {
     // Only track steps when a menu with auto-completion is open
     if (this.currentMenuAutoCompleteType && this.currentMenuAutoCompleteType !== 'START') {
       this.menuAutoCompleteStepCount++;
-      const remainingSteps = 10 - this.menuAutoCompleteStepCount;
-      console.log(`Menu ${this.currentMenuAutoCompleteType} step count: ${this.menuAutoCompleteStepCount}/10 (${remainingSteps} remaining)`);
+      const remainingSteps = 12 - this.menuAutoCompleteStepCount;
+      console.log(`Menu ${this.currentMenuAutoCompleteType} step count: ${this.menuAutoCompleteStepCount}/12 (${remainingSteps} remaining)`);
       
       // Update countdown text
       if (this.menuCountdownText) {
         this.menuCountdownText.setText(`Auto-complete in: ${remainingSteps} steps`);
       }
       
-      // Auto-complete after 10 steps
-      if (this.menuAutoCompleteStepCount >= 10) {
-        console.log(`Menu ${this.currentMenuAutoCompleteType} auto-completing after 10 steps`);
+      // Auto-complete after 12 steps
+      if (this.menuAutoCompleteStepCount >= 12) {
+        console.log(`Menu ${this.currentMenuAutoCompleteType} auto-completing after 12 steps`);
         this.autoCompleteCurrentMenu();
       }
     }
@@ -219,7 +219,7 @@ export class MenuManager {
    * Start timer-based countdown for menus
    */
   private startMenuCountdownTimer(menuType: string) {
-    let countdown = 10; // Start with 10 step-lengths (10 seconds)
+    let countdown = 12; // Start with 12 step-lengths (12 seconds)
     
     // Add countdown text
     this.addMenuCountdown(menuType, 'step-lengths');
@@ -238,12 +238,12 @@ export class MenuManager {
         
         // Auto-complete when countdown reaches 0
         if (countdown <= 0) {
-          console.log(`Menu ${menuType} auto-completing after 10 step-lengths`);
+          console.log(`Menu ${menuType} auto-completing after 12 step-lengths`);
           this.autoCompleteCurrentMenu();
         }
       },
       loop: true,
-      repeat: 9 // Repeat 9 times (10 total step-lengths)
+      repeat: 11 // Repeat 11 times (12 total step-lengths)
     });
   }
 
@@ -257,7 +257,7 @@ export class MenuManager {
     const centerY = gameHeight / 2;
     
     // Create countdown text positioned above the menu content
-    this.menuCountdownText = this.scene.add.text(centerX, centerY - 100, `Auto-complete in: 10 ${unit}`, {
+    this.menuCountdownText = this.scene.add.text(centerX, centerY - 100, `Auto-complete in: 12 ${unit}`, {
       fontSize: '16px',
       color: '#ff6b6b',
       fontStyle: 'bold',
