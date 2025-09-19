@@ -1102,7 +1102,7 @@ export class CarMechanics {
    */
   public triggerAfterExitCyoa(exitNumber: number): void {
     console.log(`triggerAfterExitCyoa: Looking for after CYOA for Exit ${exitNumber}`);
-    console.log(`triggerAfterExitCyoa: Call stack:`, new Error().stack?.split('\n').slice(1, 4));
+    console.log(`triggerAfterExitCyoa: FULL Call stack:`, new Error().stack?.split('\n').slice(1, 10));
     
     // Find the after CYOA for this exit
     const afterCyoa = this.plannedCyoa.find(cyoa => 
