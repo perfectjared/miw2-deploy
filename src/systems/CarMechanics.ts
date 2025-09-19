@@ -212,11 +212,11 @@ export class CarMechanics {
     
     // Listen for step changes to update obstacle visuals
     this.scene.events.on('step', this.onStepChanged, this);
-    console.log('CarMechanics: Registered step event listener');
+    // Registered step event listener
 
     // Add 'E' key handler for testing exit spawning
     this.scene.input.keyboard?.on('keydown-E', () => {
-      console.log('E key pressed - test exit spawning disabled');
+      // E key pressed - test exit spawning disabled
     });
   }
 
@@ -315,9 +315,7 @@ export class CarMechanics {
       cyoa.push(0); // Placeholder - will be replaced with actual post-exit threshold
     }
     
-    console.log(`🎯 Generated ${exits.length} exits and ${cyoa.length} CYOA with improved spacing`);
-    console.log(`🎯 Exit thresholds: [${exits.join(', ')}]`);
-    console.log(`🎯 CYOA thresholds: [${cyoa.join(', ')}]`);
+    // Generated exits and CYOA with improved spacing
     
     return { exits, cyoa };
   }
@@ -371,9 +369,9 @@ export class CarMechanics {
     }
     
     if (attempts >= maxAttempts) {
-      console.warn('⚠️ Could not achieve proper CYOA spacing after maximum attempts');
+      console.warn('Could not achieve proper CYOA spacing after maximum attempts');
     } else {
-      console.log('✅ CYOA spacing verified');
+      // CYOA spacing verified
     }
   }
 
@@ -452,7 +450,7 @@ export class CarMechanics {
    */
   public enableTutorialMode() {
     this.tutorialMode = true;
-    console.log('🎓 Tutorial mode enabled - no obstacles, no progress, no speed increase');
+    // Tutorial mode enabled - no obstacles, no progress, no speed increase
   }
   
   /**
@@ -460,7 +458,7 @@ export class CarMechanics {
    */
   public disableTutorialMode() {
     this.tutorialMode = false;
-    console.log('🎓 Tutorial mode disabled - normal gameplay resumed');
+    // Tutorial mode disabled - normal gameplay resumed
   }
   
   /**
@@ -486,7 +484,7 @@ export class CarMechanics {
     // Keep visual car fixed; do not set X here
     
     // Plan exits for this driving sequence
-    console.log('🚗 Starting driving - planning exits...');
+    // Starting driving - planning exits
     this.planExitsForSequence();
     
     // Start automatic speed progression
@@ -515,7 +513,7 @@ export class CarMechanics {
     
     // Plan 2-3 exits per sequence
     const numExits = Phaser.Math.Between(2, 3);
-    console.log(`Planning ${numExits} numbered exits for this driving sequence`);
+    // Planning numbered exits for this driving sequence
     
     const gameWidth = this.scene.cameras.main.width;
     const roadWidthPx = gameWidth;
@@ -528,7 +526,7 @@ export class CarMechanics {
     
     // Plan 1-3 CYOA per sequence
     const numCyoa = Phaser.Math.Between(1, 3);
-    console.log(`Planning ${numCyoa} CYOA for this driving sequence`);
+    // Planning CYOA for this driving sequence
     
     // Generate all thresholds together with improved spacing
     const allThresholds = this.generateSpacedThresholds(numExits, numCyoa);
