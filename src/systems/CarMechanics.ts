@@ -623,33 +623,62 @@ export class CarMechanics {
     // Create planned CYOA - SMART SCHEDULING: 1-2 CYOAs with smart positioning
     this.plannedCyoa = [];
     
+    // Special case: First two sequences in midwest-1 region start with CYOA
+    const isFirstTwoSequencesInMidwest = isFirstSequence || (this.scene.scene.get('GameScene') as any)?.gameState?.getState()?.showsInCurrentRegion === 1;
+    
     if (numCyoa === 1) {
-      // Single CYOA: random progress point
-      const randomThreshold = Phaser.Math.Between(20, 80);
-      this.plannedCyoa.push({
-        id: 1,
-        cyoaThreshold: randomThreshold,
-        triggered: false
-      });
+      if (isFirstTwoSequencesInMidwest) {
+        // First two sequences in midwest-1: start with CYOA
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: 2, // Start CYOA
+          triggered: false
+        });
+        console.log(`🎭 First sequence CYOA: Starting with CYOA at 2% (midwest-1 special)`);
+      } else {
+        // Regular single CYOA: random progress point
+        const randomThreshold = Phaser.Math.Between(20, 80);
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: randomThreshold,
+          triggered: false
+        });
+      }
     } else if (numCyoa === 2) {
-      // Two CYOAs: one random + one at start OR end
-      const randomThreshold = Phaser.Math.Between(20, 80);
-      const useStartPosition = Math.random() < 0.5; // 50% chance for start vs end
-      
-      this.plannedCyoa.push({
-        id: 1,
-        cyoaThreshold: randomThreshold,
-        triggered: false
-      });
-      
-      this.plannedCyoa.push({
-        id: 2,
-        cyoaThreshold: useStartPosition ? 2 : 98, // Start (2%) or End (98%)
-        triggered: false
-      });
-      
-      // Sort by threshold to ensure proper order
-      this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+      if (isFirstTwoSequencesInMidwest) {
+        // First two sequences in midwest-1: start CYOA + random CYOA
+        const randomThreshold = Phaser.Math.Between(20, 80);
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: 2, // Start CYOA
+          triggered: false
+        });
+        this.plannedCyoa.push({
+          id: 2,
+          cyoaThreshold: randomThreshold, // Random CYOA
+          triggered: false
+        });
+        console.log(`🎭 First sequence CYOAs: Start CYOA at 2% + random CYOA at ${randomThreshold}% (midwest-1 special)`);
+      } else {
+        // Regular two CYOAs: one random + one at start OR end
+        const randomThreshold = Phaser.Math.Between(20, 80);
+        const useStartPosition = Math.random() < 0.5; // 50% chance for start vs end
+        
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: randomThreshold,
+          triggered: false
+        });
+        
+        this.plannedCyoa.push({
+          id: 2,
+          cyoaThreshold: useStartPosition ? 2 : 98, // Start (2%) or End (98%)
+          triggered: false
+        });
+        
+        // Sort by threshold to ensure proper order
+        this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+      }
     }
     
     console.log('Planned CYOA:', this.plannedCyoa.map(c => 
