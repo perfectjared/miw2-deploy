@@ -125,12 +125,8 @@ export class GameScene extends Phaser.Scene {
    */
   async create() {
     try {
-      console.log('🎯 === GAMESCENE CREATE CALLED ===');
-      console.log('GameScene: Initializing modular systems...');
-      
       // Load game elements configuration first
       await gameElements.loadConfig();
-      console.log('🎯 Game elements config loaded');
       
       // Favor topmost hit-test only to reduce pointerover processing cost
       this.input.topOnly = true;
@@ -138,26 +134,19 @@ export class GameScene extends Phaser.Scene {
       // Debug key for spawning potholes
       this.input.keyboard?.on('keydown-P', () => {
         if (this.carMechanics && this.carMechanics.isDriving()) {
-          console.log('🐛 DEBUG: Spawning pothole manually');
           this.carMechanics.spawnDebugPothole();
-        } else {
-          console.log('🐛 DEBUG: Cannot spawn pothole - car not driving');
         }
       });
       
       // Navigation UI will be initialized when needed
       
       // Initialize game state
-      console.log('🎯 About to initialize game state');
       this.initializeGameState();
-      console.log('🎯 Game state initialized');
       
       // Initialize all system modules
-      console.log('🎯 About to initialize systems');
       this.initializeSystems();
-      console.log('🎯 Systems initialized');
     } catch (error) {
-      console.error('🎯 ERROR in GameScene.create():', error);
+      console.error('ERROR in GameScene.create():', error);
     }
     
     // Create physics objects
@@ -174,14 +163,10 @@ export class GameScene extends Phaser.Scene {
     
     // Initialize UI
     try {
-      console.log('🎯 About to call gameUI.initialize()');
-      console.log('🎯 GameUI object exists:', !!this.gameUI);
       this.gameUI.initialize();
-      console.log('🎯 GameUI.initialize() completed successfully');
     } catch (error) {
       const err = error as any;
-      console.error('🎯 ERROR calling gameUI.initialize():', err);
-      try { console.error('🎯 Error stack:', err?.stack); } catch {}
+      console.error('ERROR calling gameUI.initialize():', err);
     }
     
     // Initialize tutorial system
@@ -515,7 +500,6 @@ export class GameScene extends Phaser.Scene {
     // Set up event listeners
     this.setupEventListeners();
     
-    console.log('GameScene: All systems initialized successfully');
   }
 
   /**
@@ -550,15 +534,7 @@ export class GameScene extends Phaser.Scene {
     
     // Tutorial System Configuration - using centralized config
     const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
-    console.log('Creating TutorialSystem with config:', tutorialConfig);
     this.tutorialSystem = new TutorialSystem(this, tutorialConfig);
-    console.log('TutorialSystem created:', this.tutorialSystem);
-    
-    // Test tutorial system after a delay
-    this.time.delayedCall(5000, () => {
-      console.log('Testing tutorial system after 5 seconds...');
-      // console.log('isPlayerInExitCollisionPath result:', this.isPlayerInExitCollisionPath());
-    });
     
     // Game UI Configuration - using centralized config
     const uiConfig: GameUIConfig = {
@@ -566,7 +542,6 @@ export class GameScene extends Phaser.Scene {
       speedCrankSnapPositions: [...UI_CONFIG.speedCrankSnapPositions] // Convert readonly to mutable
     };
     this.gameUI = new GameUI(this, uiConfig);
-    console.log('🎯 GameUI created in GameScene');
     
     // Input Handlers Configuration
     const inputConfig: InputHandlersConfig = {
@@ -703,8 +678,6 @@ export class GameScene extends Phaser.Scene {
     const floorVisual = this.add.rectangle(gameWidth/2, raisedFloorHeight, gameWidth, 4, 0x333333);
     floorVisual.setDepth(999);
     floorVisual.setAlpha(0.8);
-    
-    console.log(`Created raised floor at height: ${raisedFloorHeight}, screen height: ${gameHeight}`);
   }
 
   /**
@@ -724,10 +697,9 @@ export class GameScene extends Phaser.Scene {
         this.scheduleTutorialUpdate(0);
       },
       onSaveComplete: (success) => {
-        console.log('Save completed:', success);
+        // Save completed
       },
       onLoadComplete: (success, state) => {
-        console.log('Load completed:', success);
         if (success && state) {
           this.gameUI.updateUI(state);
         }
@@ -758,8 +730,6 @@ export class GameScene extends Phaser.Scene {
       // Apply large bump effect and screen shake for pothole collision
       this.applyLargeBumpEffectToAllMatterObjects();
       this.applyScreenShake(15, 300); // Strong shake for pothole impact
-      
-      console.log('💥 Pothole collision detected - applied bump effect and screen shake!');
     });
 
     // Scene events
@@ -839,14 +809,11 @@ export class GameScene extends Phaser.Scene {
    * Schedule a tutorial update with simple debouncing to avoid floods/loops
    */
   private scheduleTutorialUpdate(delayMs: number = 0) {
-    // console.log('scheduleTutorialUpdate called with delay:', delayMs);
     if (this.tutorialUpdateScheduled) {
-      // console.log('Tutorial update already scheduled, skipping');
       return;
     }
     this.tutorialUpdateScheduled = true;
     this.time.delayedCall(delayMs, () => {
-      // console.log('Tutorial update delayed call executing');
       this.tutorialUpdateScheduled = false;
       this.updateTutorialSystem();
     });
@@ -863,7 +830,6 @@ export class GameScene extends Phaser.Scene {
    * Scene pause handler
    */
   pause() {
-    console.log('GameScene: Scene paused by Phaser');
     this.carMechanics.pauseDriving();
     this.inputHandlers.resetInputState();
   }
@@ -872,7 +838,6 @@ export class GameScene extends Phaser.Scene {
    * Scene resume handler
    */
   resume() {
-    console.log('GameScene: Scene resumed by Phaser');
     if (this.shouldAutoRestartDriving && this.drivingMode) {
       this.carMechanics.resumeDriving();
     }
@@ -884,7 +849,6 @@ export class GameScene extends Phaser.Scene {
   update() {
     // Safety check: ensure gameState is initialized
     if (!this.gameState) {
-      console.warn('GameScene.update(): gameState not initialized yet, skipping update');
       return;
     }
     
