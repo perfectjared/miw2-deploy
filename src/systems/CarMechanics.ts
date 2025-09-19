@@ -159,6 +159,12 @@ export class CarMechanics {
     exitNumber?: number; // Which exit this story is related to (if isExitRelated)
     triggered: boolean; // Whether story has been triggered
   } | null = null;
+
+  // Pending destination menu - stored when story is skipped
+  private pendingDestinationMenu: {
+    shopCount: number;
+    exitNumber: number;
+  } | null = null;
   
   // Scheduled Exit CYOA System - REMOVED (now using direct triggering)
 
@@ -729,66 +735,78 @@ export class CarMechanics {
    * Plan one story event for the current driving sequence
    */
   private planStoryForSequence(numExits: number) {
-    // Decide if story should be exit-related (30% chance)
-    const isExitRelated = Math.random() < 0.3;
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    
     let storyThreshold: number;
+    let isExitRelated: boolean = false;
     let exitNumber: number | undefined;
     
-    if (isExitRelated && numExits > 0) {
-      // Story is related to a random exit - occurs after leaving that exit
-      exitNumber = Phaser.Math.Between(1, numExits);
-      const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
-      
-      if (chosenExit) {
-        // Schedule story to occur 8-20% after the exit threshold
-        const postExitOffset = Phaser.Math.Between(8, 20);
-        storyThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
-        
-        console.log(`Story scheduled after Exit ${exitNumber} at ${storyThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
-      } else {
-        // Fallback: random threshold if exit not found
-        storyThreshold = Phaser.Math.Between(20, 80);
-        console.log(`Story scheduled at random threshold ${storyThreshold}% (exit-related fallback)`);
-      }
+    if (isFirstSequence) {
+      // First driving sequence: always schedule fauxchella-1 at 10%
+      storyThreshold = 10;
+      isExitRelated = false;
+      console.log(`First sequence: Story scheduled at 10% (fauxchella-1)`);
     } else {
-      // Story is independent - occurs at a random threshold
-      storyThreshold = Phaser.Math.Between(15, 85);
-      console.log(`Story scheduled at independent threshold ${storyThreshold}%`);
-    }
-    
-    // Ensure story doesn't conflict with CYOA events or exits (minimum 10% spacing)
-    const minSpacing = 10;
-    let attempts = 0;
-    const maxAttempts = 20;
-    
-    while (attempts < maxAttempts) {
-      let needsAdjustment = false;
+      // Regular sequence: decide if story should be exit-related (30% chance)
+      isExitRelated = Math.random() < 0.3;
       
-      // Check spacing against planned CYOA
-      for (const cyoa of this.plannedCyoa) {
-        if (Math.abs(cyoa.cyoaThreshold - storyThreshold) < minSpacing) {
-          needsAdjustment = true;
-          break;
+      if (isExitRelated && numExits > 0) {
+        // Story is related to a random exit - occurs after leaving that exit
+        exitNumber = Phaser.Math.Between(1, numExits);
+        const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+        
+        if (chosenExit) {
+          // Schedule story to occur 8-20% after the exit threshold
+          const postExitOffset = Phaser.Math.Between(8, 20);
+          storyThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
+          
+          console.log(`Story scheduled after Exit ${exitNumber} at ${storyThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+        } else {
+          // Fallback: random threshold if exit not found
+          storyThreshold = Phaser.Math.Between(20, 80);
+          console.log(`Story scheduled at random threshold ${storyThreshold}% (exit-related fallback)`);
         }
+      } else {
+        // Story is independent - occurs at a random threshold
+        storyThreshold = Phaser.Math.Between(15, 85);
+        console.log(`Story scheduled at independent threshold ${storyThreshold}%`);
       }
       
-      // Check spacing against planned exits (both preview and exit thresholds)
-      if (!needsAdjustment) {
-        for (const exit of this.plannedExits) {
-          if (Math.abs(exit.previewThreshold - storyThreshold) < minSpacing ||
-              Math.abs(exit.exitThreshold - storyThreshold) < minSpacing) {
+      // Ensure story doesn't conflict with CYOA events or exits (minimum 10% spacing)
+      const minSpacing = 10;
+      let attempts = 0;
+      const maxAttempts = 20;
+      
+      while (attempts < maxAttempts) {
+        let needsAdjustment = false;
+        
+        // Check spacing against planned CYOA
+        for (const cyoa of this.plannedCyoa) {
+          if (Math.abs(cyoa.cyoaThreshold - storyThreshold) < minSpacing) {
             needsAdjustment = true;
             break;
           }
         }
-      }
-      
-      if (needsAdjustment) {
-        // Try a different threshold
-        storyThreshold = Phaser.Math.Between(15, 85);
-        attempts++;
-      } else {
-        break;
+        
+        // Check spacing against planned exits (both preview and exit thresholds)
+        if (!needsAdjustment) {
+          for (const exit of this.plannedExits) {
+            if (Math.abs(exit.previewThreshold - storyThreshold) < minSpacing ||
+                Math.abs(exit.exitThreshold - storyThreshold) < minSpacing) {
+              needsAdjustment = true;
+              break;
+            }
+          }
+        }
+        
+        if (needsAdjustment) {
+          // Try a different threshold
+          storyThreshold = Phaser.Math.Between(15, 85);
+          attempts++;
+        } else {
+          break;
+        }
       }
     }
     
@@ -838,6 +856,14 @@ export class CarMechanics {
       }
     });
     
+    // Check if planned story should be triggered FIRST (stories take priority over CYOA)
+    if (this.plannedStory && !this.plannedStory.triggered && progress >= this.plannedStory.storyThreshold) {
+      console.log(`Triggering story at progress ${progress}%${this.plannedStory.isExitRelated ? ` (exit-related)` : ''}`);
+      this.triggerStory(this.plannedStory);
+      this.plannedStory.triggered = true;
+      return; // Don't trigger CYOA events if story is triggered
+    }
+    
     // SIMPLE CYOA TRIGGERING: Just trigger when progress threshold is reached
     this.plannedCyoa.forEach(plannedCyoa => {
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
@@ -846,13 +872,6 @@ export class CarMechanics {
         plannedCyoa.triggered = true;
       }
     });
-    
-    // Check if planned story should be triggered
-    if (this.plannedStory && !this.plannedStory.triggered && progress >= this.plannedStory.storyThreshold) {
-      console.log(`Triggering story at progress ${progress}%${this.plannedStory.isExitRelated ? ` (exit-related)` : ''}`);
-      this.triggerStory(this.plannedStory);
-      this.plannedStory.triggered = true;
-    }
   }
 
   /**
@@ -1071,15 +1090,144 @@ export class CarMechanics {
     // Pause driving
     this.pauseDriving();
     
-    // Show story menu
+    // Get available storylines and pick a random one
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene && (gameScene as any).storyManager) {
+      const storyManager = (gameScene as any).storyManager;
+      const gameState = (gameScene as any).gameState;
+      
+      // Check if this is the first story of the playthrough
+      const isFirstStory = gameState && gameState.getState().stops === 0;
+      
+      // Check if we should trigger a fauxchella story based on monthly listeners
+      const shouldTriggerFauxchella = this.shouldTriggerFauxchellaStory(gameState);
+      
+      let selectedStoryline: string;
+      
+      if (isFirstStory) {
+        // First story: always use fauxchella-1
+        selectedStoryline = 'fauxchella';
+        console.log(`📖 First story: Starting fauxchella-1`);
+      } else if (shouldTriggerFauxchella) {
+        // Monthly listener threshold: use next fauxchella story
+        selectedStoryline = 'fauxchella';
+        console.log(`📖 Monthly listener threshold: Starting next fauxchella story`);
+      } else {
+        // Regular story: pick random storyline (excluding fauxchella)
+        const storylines = storyManager.getAvailableStorylines();
+        const nonFauxchellaStorylines = storylines.filter(s => s !== 'fauxchella');
+        selectedStoryline = nonFauxchellaStorylines[Math.floor(Math.random() * nonFauxchellaStorylines.length)];
+        console.log(`📖 Starting storyline: ${selectedStoryline}`);
+      }
+      
+      // Start the story
+      storyManager.startStory(selectedStoryline, 1);
+      
+      // Show story menu
+      const menuScene = this.scene.scene.get('MenuScene');
+      if (menuScene) {
+        this.scene.scene.bringToTop('MenuScene');
+      }
+    } else {
+      // Fallback to old story system
+      const menuScene = this.scene.scene.get('MenuScene');
+      if (menuScene) {
+        (menuScene as any).events.emit('showStoryMenu', {
+          isExitRelated: plannedStory.isExitRelated,
+          exitNumber: plannedStory.exitNumber
+        });
+        this.scene.scene.bringToTop('MenuScene');
+      }
+    }
+  }
+
+  /**
+   * Check if we should trigger a fauxchella story based on monthly listeners
+   */
+  private shouldTriggerFauxchellaStory(gameState: any): boolean {
+    if (!gameState) return false;
+    
+    const state = gameState.getState();
+    const monthlyListeners = state.monthlyListeners || 0;
+    
+    // Define monthly listener thresholds for fauxchella stories
+    const fauxchellaThresholds = [
+      5000,   // fauxchella-2
+      10000,  // fauxchella-3  
+      20000   // fauxchella-4
+    ];
+    
+    // Check if we've crossed any threshold
+    for (const threshold of fauxchellaThresholds) {
+      if (monthlyListeners >= threshold) {
+        // Check if we've already triggered this threshold's story
+        const thresholdKey = `fauxchella_${threshold}`;
+        const hasTriggered = state[thresholdKey] || false;
+        
+        if (!hasTriggered) {
+          // Mark this threshold as triggered
+          gameState.updateState({ [thresholdKey]: true });
+          console.log(`📖 Fauxchella threshold reached: ${monthlyListeners} listeners (threshold: ${threshold})`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if there's a skipped story that should be shown
+   */
+  private hasSkippedStory(): boolean {
+    // Only check for actual story events, not CYOA events
+    return this.plannedStory && !this.plannedStory.triggered;
+  }
+
+  /**
+   * Trigger a skipped story before showing destination menu
+   */
+  private triggerSkippedStory(): void {
+    if (!this.plannedStory || this.plannedStory.triggered) {
+      return;
+    }
+
+    console.log(`📖 CarMechanics: Triggering skipped story at ${this.plannedStory.storyThreshold}%`);
+    
+    // Mark the story as triggered
+    this.plannedStory.triggered = true;
+    
+    // Trigger the story using the existing logic
+    this.triggerStory(this.plannedStory);
+  }
+
+  /**
+   * Check if there's a pending destination menu to show after story completion
+   */
+  public hasPendingDestinationMenu(): boolean {
+    return this.pendingDestinationMenu !== null;
+  }
+
+  /**
+   * Show the pending destination menu after story completion
+   */
+  public showPendingDestinationMenu(): void {
+    if (!this.pendingDestinationMenu) {
+      return;
+    }
+
+    const { shopCount, exitNumber } = this.pendingDestinationMenu;
+    
+    console.log(`🎭 CarMechanics: Showing pending destination menu for exit ${exitNumber}`);
+    
     const menuScene = this.scene.scene.get('MenuScene');
-    if (menuScene) {
-      (menuScene as any).events.emit('showStoryMenu', {
-        isExitRelated: plannedStory.isExitRelated,
-        exitNumber: plannedStory.exitNumber
-      });
+    if (menuScene && exitNumber != null) {
+      (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
       this.scene.scene.bringToTop('MenuScene');
     }
+    
+    // Clear the pending menu
+    this.pendingDestinationMenu = null;
   }
 
   /**
@@ -1941,14 +2089,22 @@ export class CarMechanics {
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
 
-        // Show the exit menu immediately (no more exit-related CYOAs)
-        if (exitNumber != null) {
-          console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
-          console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
-          console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
-          (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
-          console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
-          this.scene.scene.bringToTop('MenuScene');
+        // Check for skipped stories before showing destination menu
+        if (this.hasSkippedStory()) {
+          console.log(`📖 CarMechanics: Skipped story detected, storing destination menu and showing story first`);
+          // Store the destination menu data to show after story completion
+          this.pendingDestinationMenu = { shopCount, exitNumber };
+          this.triggerSkippedStory();
+        } else {
+          // Show the exit menu immediately (no more exit-related CYOAs)
+          if (exitNumber != null) {
+            console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
+            console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
+            console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
+            (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+            console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
+            this.scene.scene.bringToTop('MenuScene');
+          }
         }
       }
     }

@@ -1073,9 +1073,8 @@ export class MenuManager {
    */
   private generateShopNames(count: number): string[] {
     const shopTypes = [
-      'Gas Station', 'Convenience Store', 'Rest Stop', 'Truck Stop',
-      'Roadside Diner', 'Motel Shop', 'Service Center', 'Market',
-      'General Store', 'Trading Post', 'Outpost', 'Depot'
+      'Regional Gas Station', 'Gas Station', 'Motel', 'Restaurant',
+      'Weed Store', 'Car Store', 'Healer', 'Psychic'
     ];
     
     const names: string[] = [];
@@ -1650,6 +1649,94 @@ export class MenuManager {
     
     // Start universal auto-completion
     this.startMenuAutoComplete('STORY');
+  }
+
+  public showNovelStory(storyData: { 
+    storyline: string; 
+    event: number; 
+    eventData: any; 
+    storylineData: any 
+  }) {
+    console.log('MenuManager: showNovelStory called with:', storyData);
+    console.log('MenuManager: canShowMenu check:', this.canShowMenu('NOVEL_STORY'));
+    if (!this.canShowMenu('NOVEL_STORY')) {
+      console.log('MenuManager: Cannot show novel story menu - blocked');
+      return;
+    }
+    
+    this.clearCurrentDialog();
+    this.pushMenu('NOVEL_STORY', storyData);
+    
+    // Pause the game when story menu opens
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused for novel story menu');
+    }
+    
+    const title = `${storyData.storyline}-${storyData.event}`;
+    const content = storyData.eventData.text;
+    
+    const menuConfig: MenuConfig = {
+      title: title,
+      content: content,
+      buttons: storyData.eventData.choices.map((choice: any, index: number) => ({
+        text: choice.text,
+        onClick: () => {
+          // Show outcome first, then make choice
+          this.showStoryOutcome(storyData.storylineData, choice.outcome, () => {
+            // Check if we're in debug mode or real story mode
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene && (gameScene as any).storyManager) {
+              const storyManager = (gameScene as any).storyManager;
+              
+              // If we're in debug mode, just close the dialog
+              if (storyManager.isDebugStoryActive()) {
+                console.log(`Debug Story: Choice made - ${choice.outcome}`);
+                this.closeDialog();
+              } else {
+                // Real story mode - make choice in story manager
+                storyManager.makeChoice(choice.outcome);
+                this.closeDialog();
+              }
+            } else {
+              this.closeDialog();
+            }
+          });
+        },
+        style: { fontSize: '16px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+      }))
+    };
+
+    this.createDialog(menuConfig, 'NOVEL_STORY');
+    
+    // No auto-completion for story windows
+  }
+
+  public showStoryOutcome(storylineData: any, outcome: string, onContinue: () => void) {
+    if (!this.canShowMenu('STORY_OUTCOME')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('STORY_OUTCOME');
+    
+    const outcomeText = storylineData.outcomes[outcome] || storylineData.outcomes['a'];
+    const title = 'Outcome';
+    
+    const menuConfig: MenuConfig = {
+      title: title,
+      content: outcomeText,
+      buttons: [
+        {
+          text: 'Continue',
+          onClick: onContinue,
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+
+    this.createDialog(menuConfig, 'STORY_OUTCOME');
+    
+    // No auto-completion for story outcome windows
   }
 
   public showGameOverMenu() {

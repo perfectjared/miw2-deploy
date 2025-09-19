@@ -47,6 +47,7 @@ export class MenuScene extends Phaser.Scene {
     // this.events.on('showCYOA', this.showCYOA, this); // REMOVED: Old event listener causing double-triggering
     this.events.on('showCyoaMenu', this.showCyoaMenu, this);
     this.events.on('showStoryMenu', this.showStoryMenu, this);
+    this.events.on('showNovelStory', this.showNovelStory, this);
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
     this.events.on('showMoralDecision', this.showMoralDecision, this);
     this.events.on('showPetStoryUI', this.showPetStoryUI, this);
@@ -133,6 +134,18 @@ export class MenuScene extends Phaser.Scene {
 
   private showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
     this.menuManager.showStoryMenu(storyData);
+  }
+
+  private showNovelStory(storyData: { 
+    storyline: string; 
+    event: number; 
+    eventData: any; 
+    storylineData: any 
+  }) {
+    console.log('MenuScene: showNovelStory called with data:', storyData);
+    console.log('MenuScene: Calling menuManager.showNovelStory');
+    this.menuManager.showNovelStory(storyData);
+    console.log('MenuScene: showNovelStory completed');
   }
 
   private showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {

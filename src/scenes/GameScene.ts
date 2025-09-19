@@ -25,6 +25,7 @@ import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
 import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
+import { StoryManager } from '../systems/StoryManager';
 import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG, REGION_CONFIG, gameElements } from '../config/GameConfig';
 
 // Tunable scene constants (for quick tweaking)
@@ -54,6 +55,7 @@ export class GameScene extends Phaser.Scene {
   private gameUI!: GameUI;
   private inputHandlers!: InputHandlers;
   private gameState!: GameState;
+  private storyManager!: StoryManager;
   private virtualPets: VirtualPet[] = [];
   private petLabels: Phaser.GameObjects.Text[] = [];
   private dragOverlay?: Phaser.GameObjects.Container;
@@ -545,6 +547,10 @@ export class GameScene extends Phaser.Scene {
     
     this.carMechanics = new CarMechanics(this, carConfig);
     
+    // Story Manager Configuration
+    this.storyManager = new StoryManager(this);
+    this.storyManager.initialize();
+    
     // Tutorial System Configuration - using centralized config
     const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
     this.tutorialSystem = new TutorialSystem(this, tutorialConfig);
@@ -1013,6 +1019,9 @@ export class GameScene extends Phaser.Scene {
     this.events.on('steeringInput', this.onSteeringInput, this);
     // Speed crank removed - using automatic speed progression
     this.events.on('cameraAngleChanged', this.onCameraAngleChanged, this);
+    
+    // Story events
+    this.events.on('storyCompleted', this.onStoryCompleted, this);
     
     // Handle window blur (game loses focus) - show pause menu
     this.game.events.on('hidden', () => {
@@ -2355,6 +2364,19 @@ export class GameScene extends Phaser.Scene {
     
     // Send steering directly to car mechanics for immediate response
     this.carMechanics.handleSteering(value);
+  }
+
+  private onStoryCompleted(storyData: { storyline: string; outcome: string; choices: string[] }) {
+    console.log(`📖 Story completed: ${storyData.storyline} with outcome: ${storyData.outcome}`);
+    
+    // Check if there's a pending destination menu to show
+    if (this.carMechanics.hasPendingDestinationMenu()) {
+      console.log(`📖 Story completed, now showing pending destination menu`);
+      this.carMechanics.showPendingDestinationMenu();
+    } else {
+      // Resume driving after story completion
+      this.resumeAfterCyoa();
+    }
   }
 
   // Speed crank input handler removed - using automatic speed progression
