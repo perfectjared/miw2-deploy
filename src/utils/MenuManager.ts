@@ -1285,6 +1285,13 @@ export class MenuManager {
       console.log('MenuManager: Game paused for CYOA menu');
     }
     
+    // Emit gamePaused event to ensure CarMechanics is properly paused
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene) {
+      gameScene.events.emit('gamePaused');
+      console.log('MenuManager: Emitted gamePaused event for CYOA menu');
+    }
+    
     const cyoaDescription = cyoaData.isExitRelated 
       ? `Something happened ${cyoaData.exitTiming === 'before' ? 'before' : 'after'} Exit ${cyoaData.exitNumber}!`
       : 'Something happened!';
@@ -1297,11 +1304,7 @@ export class MenuManager {
           text: 'OK',
           onClick: () => {
             this.closeDialog();
-            // Resume driving after CYOA
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).resumeAfterCyoa();
-            }
+            // closeDialog() now handles game resumption automatically
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
@@ -1309,11 +1312,7 @@ export class MenuManager {
           text: 'No',
           onClick: () => {
             this.closeDialog();
-            // Resume driving after CYOA (same as OK for now)
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).resumeAfterCyoa();
-            }
+            // closeDialog() now handles game resumption automatically
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#666666', padding: { x: 10, y: 5 } }
         }
@@ -2053,7 +2052,7 @@ export class MenuManager {
       this.currentDialog.destroy();
       this.currentDialog = null;
       
-      // Only emit ignitionMenuHidden if the current menu was actually an ignition menu
+      // Handle special menu types
       if (this.currentDisplayedMenuType === 'TURN_KEY') {
         console.log('MenuManager: Emitting ignitionMenuHidden event');
         this.scene.events.emit('ignitionMenuHidden');
@@ -2063,6 +2062,20 @@ export class MenuManager {
         if (gameScene) {
           console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
           gameScene.events.emit('ignitionMenuHidden');
+        }
+      } else if (this.currentDisplayedMenuType === 'CYOA') {
+        console.log('MenuManager: CYOA menu closed - resuming game');
+        // Resume AppScene step counting
+        const appScene = this.scene.scene.get('AppScene');
+        if (appScene) {
+          (appScene as any).isPaused = false;
+        }
+        
+        // Emit gameResumed event
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          gameScene.events.emit('gameResumed');
+          console.log('MenuManager: Emitted gameResumed event for CYOA menu close');
         }
       }
       // Restore input if we disabled it for this dialog
