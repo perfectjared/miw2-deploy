@@ -48,7 +48,11 @@ export class MenuManager {
   // ============================================================================
   
   // Text display callbacks for cleanup
-  private textDisplayCallbacks: Phaser.Time.TimerEvent[] = [];
+  private textDisplayCallbacks: Phaser.Time.TimerEvent[] = []
+  
+  // Ignition menu auto-completion tracking
+  private ignitionMenuStepCount: number = 0
+  private ignitionMenuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null;
   
   // Slider Parameters
   private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
@@ -136,6 +140,46 @@ export class MenuManager {
     this.scene.events.on('step', this.onGlobalStep, this);
     // Listen for CYOA menu events
     this.scene.events.on('showCyoaMenu', this.showCyoaMenu, this);
+    // Listen for step events to track ignition menu timeout
+    this.scene.events.on('step', this.onStepEvent, this);
+  }
+
+  /**
+   * Step event handler for ignition menu auto-completion
+   */
+  private onStepEvent(step: number) {
+    // Only track steps when ignition menu is open
+    if (this.currentDisplayedMenuType === 'TURN_KEY') {
+      this.ignitionMenuStepCount++;
+      console.log(`Ignition menu step count: ${this.ignitionMenuStepCount}/16`);
+      
+      // Auto-complete after 16 steps
+      if (this.ignitionMenuStepCount >= 16) {
+        console.log('Ignition menu auto-completing after 16 steps');
+        this.autoCompleteIgnitionMenu();
+      }
+    }
+  }
+
+  /**
+   * Auto-complete the ignition menu
+   */
+  private autoCompleteIgnitionMenu() {
+    if (this.currentDisplayedMenuType !== 'TURN_KEY') return;
+    
+    console.log('Auto-completing ignition menu');
+    
+    // Clear the dialog
+    this.closeDialog();
+    
+    // Emit turnKey event to start the car
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene) {
+      gameScene.events.emit('turnKey');
+    }
+    
+    // Reset step counter
+    this.ignitionMenuStepCount = 0;
   }
 
   /**
@@ -977,6 +1021,9 @@ export class MenuManager {
     console.log('MenuManager: Current stack before showTurnKeyMenu:', this.menuStack.map(m => `${m.type}(${m.priority})`));
     console.log('MenuManager: Current dialog exists:', !!this.currentDialog);
     console.log('MenuManager: Current displayed menu type:', this.currentDisplayedMenuType);
+    
+    // Reset step counter for ignition menu
+    this.ignitionMenuStepCount = 0;
     
     // Always rebuild the ignition menu when keys are in ignition and car not started
     console.log('MenuManager: Showing ignition menu');
@@ -2320,6 +2367,11 @@ export class MenuManager {
   }
 
   private closeDialog() {
+    // Reset ignition step counter if closing ignition menu
+    if (this.currentDisplayedMenuType === 'TURN_KEY') {
+      this.ignitionMenuStepCount = 0;
+    }
+    
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
     
