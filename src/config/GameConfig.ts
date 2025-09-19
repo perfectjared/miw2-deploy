@@ -76,7 +76,7 @@ export const CAR_CONFIG = {
   potholeMinPos: 0.45,
   potholeMaxPos: 0.55,
   potholeSpawnY: 0.2,
-  potholeColor: GREYSCALE_PALETTE.mediumGray,
+  potholeColor: GREYSCALE_PALETTE.black,
   potholeSpeed: 1.2,
   
   // Exit Settings
