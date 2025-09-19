@@ -40,6 +40,16 @@ export class WindowShapes {
   private activeSpeechBubbles = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number }>();
   private activeAnimatedShapes = new Map<string, { graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number }>();
   private activeSteeringWheels = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, currentRotation: number }>();
+  
+  // Narrative window management
+  private activeNarrativeWindow: Phaser.GameObjects.Container | null = null;
+  private narrativeWindowQueue: Array<{
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    backgroundImageKey?: string
+  }> = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -178,6 +188,93 @@ export class WindowShapes {
   }
 
   /**
+   * Create an animated organic black rectangle specifically for narrative text - NO SHADOWS, PURE BLACK
+   */
+  private createNarrativeBackground(config: WindowShapeConfig, enableAnimation: boolean = false): Phaser.GameObjects.Graphics {
+    const graphics = this.scene.add.graphics();
+    
+    // Force pure black styling for narrative backgrounds
+    const strokeWidth = 2;
+    const strokeColor = 0x000000; // Black stroke
+    const fillColor = 0x000000;  // Pure black fill
+    const fillAlpha = 1.0;       // Fully opaque
+    
+    // Create polygon points WITHIN the rectangle bounds - ONLY 4 CORNER POINTS
+    const polygonPoints = [];
+    
+    // Only use the 4 corners with jaunty randomization (no extra edge points) - ROUND TO INTEGERS FOR SHARP CORNERS
+    const topLeftCorner = { 
+      x: Math.round(config.x + Phaser.Math.Between(0, 5)), // Round to integer pixels
+      y: Math.round(config.y + Phaser.Math.Between(0, 3))  // Round to integer pixels
+    };
+    const topRightCorner = { 
+      x: Math.round(config.x + config.width + Phaser.Math.Between(-5, 0)), // Round to integer pixels
+      y: Math.round(config.y + Phaser.Math.Between(0, 3))  // Round to integer pixels
+    };
+    const bottomRightCorner = { 
+      x: Math.round(config.x + config.width + Phaser.Math.Between(-5, 0)), // Round to integer pixels
+      y: Math.round(config.y + config.height + Phaser.Math.Between(-3, 0)) // Round to integer pixels
+    };
+    const bottomLeftCorner = { 
+      x: Math.round(config.x + Phaser.Math.Between(0, 5)), // Round to integer pixels
+      y: Math.round(config.y + config.height + Phaser.Math.Between(-3, 0)) // Round to integer pixels
+    };
+    
+    // Add corners in clockwise order (no extra points, just the 4 corners)
+    polygonPoints.push(topLeftCorner);
+    polygonPoints.push(topRightCorner);
+    polygonPoints.push(bottomRightCorner);
+    polygonPoints.push(bottomLeftCorner);
+    
+    // NO DROP SHADOW for narrative backgrounds - start directly with main polygon
+    graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Fully opaque stroke
+    graphics.fillStyle(fillColor, fillAlpha); // Pure black fill
+    
+    // Disable anti-aliasing for sharp corners
+    graphics.setDefaultStyles({
+      lineStyle: {
+        width: strokeWidth,
+        color: strokeColor,
+        alpha: 1.0
+      },
+      fillStyle: {
+        color: fillColor,
+        alpha: fillAlpha
+      }
+    });
+    
+    graphics.beginPath();
+    graphics.moveTo(polygonPoints[0].x, polygonPoints[0].y);
+    for (let i = 1; i < polygonPoints.length; i++) {
+      graphics.lineTo(polygonPoints[i].x, polygonPoints[i].y);
+    }
+    graphics.closePath();
+    graphics.fillPath(); // Fill the polygon with black
+    graphics.strokePath(); // Then stroke the black outline with sharp edges
+    
+    // DO NOT draw the filled rectangle on top - let the polygon be the only shape
+    
+    // Register for animation if enabled
+    if (enableAnimation) {
+      const shapeId = `animated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      this.registerAnimatedShape(shapeId, graphics, 'narrativeBackground', config.x, config.y, config.width, config.height);
+      
+      // Store the ID for cleanup
+      (graphics as any).animationId = shapeId;
+      
+      // Add cleanup when graphics is destroyed
+      graphics.on('destroy', () => {
+        this.unregisterAnimatedShape(shapeId);
+      });
+    }
+    
+    // Ensure narrative backgrounds are always rendered above the transparent window
+    graphics.setDepth(12); // Higher than text (11) and window (-1)
+    
+    return graphics;
+  }
+
+  /**
    * Create a speech bubble shape with organic jagged borders and a tail (flipped upside down)
    */
   createCollageSpeechBubble(x: number, y: number, width: number, height: number): Phaser.GameObjects.Graphics {
@@ -266,7 +363,8 @@ export class WindowShapes {
       'menu',
       'panel',
       'messageBox',
-      'speechBubble'
+      'speechBubble',
+      'storyDialog'
     ];
     
     const randomComposition = Phaser.Utils.Array.GetRandom(compositions);
@@ -292,6 +390,22 @@ export class WindowShapes {
       case 'speechBubble':
         return this.createSpeechBubbleComposition(x, y, width, height);
         
+      case 'storyDialog':
+        // Story dialogs are taller and more vertical
+        const storyHeight = Math.max(height, 400); // Minimum 400px height
+        const storyWidth = Math.max(width, 300);   // Minimum 300px width
+        const storyDialog = this.createStoryDialogComposition(x, y, storyWidth, storyHeight);
+        
+        // Return a placeholder container if dialog was queued (returned null)
+        if (!storyDialog) {
+          console.log('Story dialog queued - creating placeholder');
+          const placeholder = this.scene.add.container(x, y);
+          placeholder.setSize(storyWidth, storyHeight);
+          return placeholder;
+        }
+        
+        return storyDialog;
+        
       default:
         return this.createDialogComposition(x, y, width, height);
     }
@@ -315,6 +429,70 @@ export class WindowShapes {
       x, y, width, height, 
       fillColor: 0xd0d0d0 // Darker grey for panels
     });
+  }
+
+  /**
+   * Create narrative text with tight black background - reusable component
+   */
+  createNarrativeText(x: number, y: number, text: string, maxWidth: number, container: Phaser.GameObjects.Container): { textElement: Phaser.GameObjects.Text, background: Phaser.GameObjects.Graphics } {
+    // Add subtle visual variation for more organic feel
+    const rotationVariation = (Math.random() - 0.5) * 0.8; // ±0.4 degrees
+    const xVariation = (Math.random() - 0.5) * 10; // ±5 pixels
+    
+    // Create the narrative text element with bigger font - KEEP TEXT STATIONARY AND LEFT-ALIGNED
+    const narrativeTextStyle = {
+      fontSize: '20px', // Bigger font for narrative text
+      color: '#ffffff',
+      align: 'left', // Explicitly left-aligned
+      fontFamily: 'Arial', // Ensure consistent font
+      padding: { x: 8, y: 6 } // Add some internal padding
+    };
+    
+    // Create text element WITHOUT position/rotation variations (keep text still)
+    const textElement = this.scene.add.text(x, y, text, narrativeTextStyle);
+    textElement.setOrigin(0, 0); // Ensure left-top origin for proper left justification
+    textElement.setWordWrapWidth(maxWidth);
+    textElement.setAlign('left'); // Extra assurance of left alignment
+    textElement.setDepth(11); // High depth for visibility
+    
+    // Enable smooth text rendering
+    textElement.setStyle({ ...narrativeTextStyle, smoothed: true });
+    if (textElement.canvas) {
+      const context = textElement.canvas.getContext('2d');
+      if (context) {
+        context.textBaseline = 'top';
+        context.imageSmoothingEnabled = true; // Enable smoothing for text
+      }
+    }
+    
+    // Get the actual text bounds for the background size
+    const textBounds = textElement.getBounds();
+    
+    // Create an ANIMATED ORGANIC BLACK RECTANGLE like other collage elements
+    // Add some padding around the text bounds
+    const bgPadding = 8;
+    const backgroundConfig = {
+      x: textBounds.x - bgPadding,
+      y: textBounds.y - bgPadding,
+      width: textBounds.width + (bgPadding * 2),
+      height: textBounds.height + (bgPadding * 2),
+      fillColor: 0x000000, // Pure black
+      fillAlpha: 1.0,
+      strokeColor: 0x000000, // Black stroke too
+      strokeWidth: 2
+    };
+    
+    // Use the specialized NARRATIVE BACKGROUND method (no shadows, pure black)
+    const background = this.createNarrativeBackground(backgroundConfig, true);
+    // Depth is set inside createNarrativeBackground method (depth 12 - above transparent windows)
+    
+    // Add to container if provided
+    if (container) {
+      container.add(background);
+      container.add(textElement);
+    }
+    
+    return { textElement, background };
   }
 
   /**
@@ -618,75 +796,112 @@ export class WindowShapes {
     const strokeWidth = 2;
     const strokeColor = 0x000000; // Black
     
-    // Determine fill color based on shape type
+    // Determine fill color based on shape type and container state
     let fillColor = 0xffffff; // Default white
+    let fillAlpha = 1.0; // Default fully opaque
+    let skipShadow = false; // Flag to skip shadow for narrative backgrounds
+    
     if (shapeType === 'window') {
-      fillColor = 0xd0d0d0; // Darker grey for main windows
+      // Check if this window is part of a story dialog with buttons
+      let parentContainer = graphics.parentContainer;
+      if (parentContainer && (parentContainer as any).isComplete) {
+        // This is a story dialog with buttons - use transparent grey
+        fillColor = 0xcccccc; // Light grey color
+        fillAlpha = 0.85; // 85% opacity (15% transparent)
+      } else {
+        fillColor = 0xffffff; // White for main windows
+      }
     } else if (shapeType === 'button') {
       fillColor = 0xffffff; // White for buttons
+    } else if (shapeType === 'narrativeBackground') {
+      fillColor = 0x000000; // Pure black for narrative backgrounds
+      skipShadow = true; // No shadows for narrative backgrounds
     }
-    const fillAlpha = 1.0;
     
-    // Create polygon points with extra random points along edges - SAME LOGIC
-    const offset = 5; // Make polygon 5 pixels larger on each side
+    // Create polygon points - different approach for narrative backgrounds vs others
     const polygonPoints = [];
-    
-    // Add random extra points (same range as original)
     const extraPointCount = Phaser.Math.Between(2, 5);
-    
-    // Create arrays for points along each edge - SAME STRUCTURE
     const topEdgePoints = [];
     const rightEdgePoints = [];
     const bottomEdgePoints = [];
     const leftEdgePoints = [];
     
-    // Always include corners with random movement - SAME LOGIC
-    topEdgePoints.push({ 
-      x: x - offset + Phaser.Math.Between(-5, -2),
-      y: y - offset + Phaser.Math.Between(-5, -2)
-    }); // Top-left corner
-    rightEdgePoints.push({ 
-      x: x + width + offset + Phaser.Math.Between(2, 5),
-      y: y - offset + Phaser.Math.Between(-5, -2)
-    }); // Top-right corner
-    bottomEdgePoints.push({ 
-      x: x + width + offset + Phaser.Math.Between(2, 5),
-      y: y + height + offset + Phaser.Math.Between(2, 5)
-    }); // Bottom-right corner
-    leftEdgePoints.push({ 
-      x: x - offset + Phaser.Math.Between(-5, -2),
-      y: y + height + offset + Phaser.Math.Between(2, 5)
-    }); // Bottom-left corner
-    
-    // Add random extra points to edges - SAME LOGIC
-    for (let i = 0; i < extraPointCount; i++) {
-      const edgeIndex = Phaser.Math.Between(0, 3);
+    if (shapeType === 'narrativeBackground') {
+      // ONLY 4 CORNER POINTS for narrative backgrounds (jaunty but simple) - ROUND FOR SHARP CORNERS
+      const topLeftCorner = { 
+        x: Math.round(x + Phaser.Math.Between(0, 5)), // Round to integer pixels
+        y: Math.round(y + Phaser.Math.Between(0, 3))  // Round to integer pixels
+      };
+      const topRightCorner = { 
+        x: Math.round(x + width + Phaser.Math.Between(-5, 0)), // Round to integer pixels
+        y: Math.round(y + Phaser.Math.Between(0, 3))  // Round to integer pixels
+      };
+      const bottomRightCorner = { 
+        x: Math.round(x + width + Phaser.Math.Between(-5, 0)), // Round to integer pixels
+        y: Math.round(y + height + Phaser.Math.Between(-3, 0)) // Round to integer pixels
+      };
+      const bottomLeftCorner = { 
+        x: Math.round(x + Phaser.Math.Between(0, 5)), // Round to integer pixels
+        y: Math.round(y + height + Phaser.Math.Between(-3, 0)) // Round to integer pixels
+      };
       
-      switch (edgeIndex) {
-        case 0: // Top edge
-          topEdgePoints.push({
-            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-4, 4),
-            y: y - offset + Phaser.Math.Between(-8, -2)
-          });
-          break;
-        case 1: // Right edge
-          rightEdgePoints.push({
-            x: x + width + offset + Phaser.Math.Between(2, 8),
-            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-4, 4)
-          });
-          break;
-        case 2: // Bottom edge
-          bottomEdgePoints.push({
-            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-4, 4),
-            y: y + height + offset + Phaser.Math.Between(2, 8)
-          });
-          break;
-        case 3: // Left edge
-          leftEdgePoints.push({
-            x: x - offset + Phaser.Math.Between(-8, -2),
-            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-4, 4)
-          });
-          break;
+      // Add corners in clockwise order (no extra points, just the 4 corners)
+      polygonPoints.push(topLeftCorner);
+      polygonPoints.push(topRightCorner);
+      polygonPoints.push(bottomRightCorner);
+      polygonPoints.push(bottomLeftCorner);
+    } else {
+      // ORGANIC EXTENDING POLYGONS for other collage elements (original behavior)
+      const offset = 5; // Make polygon 5 pixels larger on each side
+      
+      // Always include corners with random movement - SAME LOGIC as original
+      topEdgePoints.push({ 
+        x: x - offset + Phaser.Math.Between(-5, -2),
+        y: y - offset + Phaser.Math.Between(-5, -2)
+      }); // Top-left corner
+      rightEdgePoints.push({ 
+        x: x + width + offset + Phaser.Math.Between(2, 5),
+        y: y - offset + Phaser.Math.Between(-5, -2)
+      }); // Top-right corner
+      bottomEdgePoints.push({ 
+        x: x + width + offset + Phaser.Math.Between(2, 5),
+        y: y + height + offset + Phaser.Math.Between(2, 5)
+      }); // Bottom-right corner
+      leftEdgePoints.push({ 
+        x: x - offset + Phaser.Math.Between(-5, -2),
+        y: y + height + offset + Phaser.Math.Between(2, 5)
+      }); // Bottom-left corner
+      
+      // Add random extra points to edges - SAME LOGIC as original
+      for (let i = 0; i < extraPointCount; i++) {
+        const edgeIndex = Phaser.Math.Between(0, 3);
+        
+        switch (edgeIndex) {
+          case 0: // Top edge
+            topEdgePoints.push({
+              x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-4, 4),
+              y: y - offset + Phaser.Math.Between(-8, -2)
+            });
+            break;
+          case 1: // Right edge
+            rightEdgePoints.push({
+              x: x + width + offset + Phaser.Math.Between(2, 8),
+              y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-4, 4)
+            });
+            break;
+          case 2: // Bottom edge
+            bottomEdgePoints.push({
+              x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-4, 4),
+              y: y + height + offset + Phaser.Math.Between(2, 8)
+            });
+            break;
+          case 3: // Left edge
+            leftEdgePoints.push({
+              x: x - offset + Phaser.Math.Between(-8, -2),
+              y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-4, 4)
+            });
+            break;
+        }
       }
     }
     
@@ -702,19 +917,39 @@ export class WindowShapes {
     polygonPoints.push(...bottomEdgePoints);
     polygonPoints.push(...leftEdgePoints);
     
-    // Draw shadow first - SAME SHADOW
-    const shadowOffset = 6;
-    graphics.fillStyle(0x222222, 1.0);
-    graphics.beginPath();
-    graphics.moveTo(polygonPoints[0].x + shadowOffset, polygonPoints[0].y + shadowOffset);
-    for (let i = 1; i < polygonPoints.length; i++) {
-      graphics.lineTo(polygonPoints[i].x + shadowOffset, polygonPoints[i].y + shadowOffset);
+    // Draw shadow first - SKIP for narrative backgrounds
+    if (!skipShadow) {
+      const shadowOffset = 6;
+      graphics.fillStyle(0x222222, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(polygonPoints[0].x + shadowOffset, polygonPoints[0].y + shadowOffset);
+      for (let i = 1; i < polygonPoints.length; i++) {
+        graphics.lineTo(polygonPoints[i].x + shadowOffset, polygonPoints[i].y + shadowOffset);
+      }
+      graphics.closePath();
+      graphics.fillPath();
     }
-    graphics.closePath();
-    graphics.fillPath();
     
-    // Draw main polygon border - SAME BORDER
-    graphics.lineStyle(strokeWidth, strokeColor);
+    // Draw main polygon border - use sharp corners for narrative backgrounds
+    if (shapeType === 'narrativeBackground') {
+      // Sharp corners for narrative text backgrounds
+      graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Fully opaque stroke
+      graphics.setDefaultStyles({
+        lineStyle: {
+          width: strokeWidth,
+          color: strokeColor,
+          alpha: 1.0
+        },
+        fillStyle: {
+          color: fillColor,
+          alpha: fillAlpha
+        }
+      });
+    } else {
+      // Normal rendering for other shapes
+      graphics.lineStyle(strokeWidth, strokeColor);
+    }
+    
     graphics.fillStyle(fillColor, fillAlpha);
     graphics.beginPath();
     graphics.moveTo(polygonPoints[0].x, polygonPoints[0].y);
@@ -725,9 +960,11 @@ export class WindowShapes {
     graphics.fillPath();
     graphics.strokePath();
     
-    // Draw clean rectangle on top - SAME RECTANGLE
-    graphics.fillStyle(fillColor, fillAlpha);
-    graphics.fillRect(x, y, width, height);
+    // Draw clean rectangle on top - SKIP for narrative backgrounds (they use only the polygon)
+    if (shapeType !== 'narrativeBackground') {
+      graphics.fillStyle(fillColor, fillAlpha);
+      graphics.fillRect(x, y, width, height);
+    }
   }
 
   /**
@@ -1046,5 +1283,543 @@ export class WindowShapes {
     // No button - just the clean white bubble as requested
     
     return container;
+  }
+
+  /**
+   * Create a Story Dialog composition - tall modal with background image and sequential text reveals
+   * If another narrative window is active, this will be queued for later display
+   */
+  createStoryDialogComposition(x: number, y: number, width: number, height: number, backgroundImageKey: string = 'default-bg'): Phaser.GameObjects.Container | null {
+    // Debug: Check if activeNarrativeWindow exists but is invalid
+    if (this.activeNarrativeWindow && (!this.activeNarrativeWindow.scene || this.activeNarrativeWindow.scene !== this.scene)) {
+      console.log('🔧 Clearing stale activeNarrativeWindow reference');
+      this.activeNarrativeWindow = null;
+    }
+    
+    // Check if there's already an active narrative window
+    if (this.activeNarrativeWindow && this.activeNarrativeWindow.scene) {
+      // Queue this request for later
+      console.log('Narrative window already active, queuing new request...');
+      console.log('📊 Active window:', this.activeNarrativeWindow);
+      this.narrativeWindowQueue.push({ x, y, width, height, backgroundImageKey });
+      return null; // Return null to indicate it was queued
+    }
+    
+    console.log('✅ Creating new narrative window immediately');
+    const container = this.scene.add.container(x, y);
+    
+    // Set high depth for the entire container (like R key debug windows do)
+    container.setDepth(2000);
+    console.log(`📦 Container created at position: ${x}, ${y} with depth 2000`);
+    
+    // Main story window - white background with animation
+    const mainWindow = this.createCollageRect({ 
+      x: 0, y: 0, width, height,
+      fillColor: 0xffffff // White background
+    }, true, 'window'); // Enable animation for main window
+    console.log(`🏠 Main window created: ${width}x${height} at 0,0 relative to container`);
+    container.add(mainWindow);
+    console.log('✅ Main window added to container');
+    
+    // Set the main window to a higher depth so it captures pointer events properly
+    mainWindow.setDepth(10);  // Changed from -1 to 10
+    console.log('📦 Main window depth set to 10');
+    
+    // Make the main window (polygon background) interactive for clicking to advance
+    mainWindow.setInteractive();
+    console.log(`🖱️ Main window made interactive: ${width}x${height}`);
+    
+    mainWindow.on('pointerdown', () => {
+      console.log('🖱️ Main window (polygon) clicked!');
+      // Only advance if dialog isn't complete (buttons not yet shown)
+      if (!(container as any).isComplete) {
+        console.log('➡️ Advancing story dialog');
+        this.advanceStoryDialog(container as any);
+      } else {
+        console.log('⏹️ Dialog already complete, not advancing');
+      }
+    });
+    
+    // Add hover debugging
+    mainWindow.on('pointerover', () => console.log('🖱️ Mouse over polygon'));
+    mainWindow.on('pointerout', () => console.log('🖱️ Mouse left polygon'));
+    
+    // Remove the old background placeholder
+    // Instead of a single text object, we'll create individual text elements with backgrounds
+    // Text display area will be created dynamically as we add each line
+    
+    // Story texts to reveal
+    const storyTexts = [
+      "The ancient door creaks open...",
+      "Strange shadows dance in the flickering light.", 
+      "Do you dare to enter the mysterious chamber?"
+    ];
+    
+    // Add interactive properties for story progression
+    (container as any).storyTexts = storyTexts;
+    (container as any).currentTextIndex = 0;
+    (container as any).textElements = []; // Array to hold individual text elements
+    (container as any).textBackgrounds = []; // Array to hold text background graphics
+    (container as any).containerWidth = width; // Store dimensions for calculations
+    (container as any).containerHeight = height;
+    (container as any).isComplete = false;
+    
+    // Start the first text reveal
+    this.revealNextStoryText(container as any);
+    
+    // Add proper cleanup when container is destroyed
+    container.on('destroy', () => {
+      console.log('🗑️ Container destroy event triggered');
+      
+      // Clean up any running timers
+      if ((container as any).autoAdvanceTimer) {
+        (container as any).autoAdvanceTimer.remove();
+        (container as any).autoAdvanceTimer = null;
+      }
+      
+      // Clean up standalone buttons (not part of container)
+      if ((container as any).storyButtons) {
+        console.log('🧹 Cleaning up standalone story buttons');
+        (container as any).storyButtons.forEach((button: any) => {
+          if (button && button.destroy) {
+            button.destroy();
+          }
+        });
+        (container as any).storyButtons = null;
+      }
+      
+      // Clear this as the active narrative window and process queue
+      if (this.activeNarrativeWindow === container) {
+        console.log('🔄 Clearing active narrative window and processing queue');
+        this.activeNarrativeWindow = null;
+        this.processNarrativeQueue();
+      }
+    });
+    
+    // Track this as the active narrative window
+    this.activeNarrativeWindow = container;
+    
+    // Debug: Add a semi-transparent overlay to visualize the clickable area
+    const debugOverlay = this.scene.add.rectangle(width/2, height/2, width, height, 0xff0000, 0.3);  // Made more visible
+    debugOverlay.setStrokeStyle(4, 0x00ff00, 1.0);  // Thick green border
+    debugOverlay.setDepth(20);  // Even higher depth
+    debugOverlay.setName('debugOverlay');  // Give it a name so we can find it later
+    container.add(debugOverlay);
+    console.log(`🔍 Debug overlay added to show clickable area: ${width}x${height}`);
+    
+    // Make the debug overlay ALSO interactive as a test
+    debugOverlay.setInteractive();
+    debugOverlay.on('pointerdown', () => console.log('🎯 DEBUG OVERLAY CLICKED!'));
+    debugOverlay.on('pointerover', () => console.log('🎯 Mouse over DEBUG OVERLAY'));
+    debugOverlay.on('pointerout', () => console.log('🎯 Mouse left DEBUG OVERLAY'));
+    
+    // Make clicking the debug overlay advance the story on pointerup
+    debugOverlay.on('pointerup', () => {
+      console.log('🎯 DEBUG OVERLAY RELEASED - checking if should advance story');
+      // Only advance if dialog isn't complete (buttons not yet shown)
+      if (!(container as any).isComplete) {
+        console.log('➡️ Advancing story dialog from debug overlay');
+        this.advanceStoryDialog(container as any);
+      } else {
+        console.log('⏹️ Dialog complete - buttons should handle interactions now');
+      }
+    });
+    
+    return container;
+  }
+  
+  /**
+   * Reveal the next text in the story sequence
+   */
+  private revealNextStoryText(container: any): void {
+    // Safety check: make sure container still exists
+    if (!container || !container.scene) {
+      return;
+    }
+    
+    if (container.currentTextIndex >= container.storyTexts.length) {
+      this.showStoryButtons(container);
+      return;
+    }
+    
+    const currentText = container.storyTexts[container.currentTextIndex];
+    const totalTexts = container.storyTexts.length;
+    
+    // Use stored dimensions for reliable calculations
+    const containerWidth = container.containerWidth;
+    const containerHeight = container.containerHeight;
+    
+    // Calculate vertical spacing to distribute text evenly from top to bottom
+    const topMargin = 30;
+    const bottomMargin = 120; // Leave space for buttons
+    const availableHeight = containerHeight - topMargin - bottomMargin;
+    const textSpacing = availableHeight / totalTexts;
+    
+    // Position this text element
+    const textY = topMargin + (container.currentTextIndex * textSpacing);
+    const textX = 20;
+    const textWidth = containerWidth - 40; // Leave side margins
+    const textHeight = Math.min(textSpacing - 10, 60); // Max height per text, with spacing
+    
+    console.log(`Creating text ${container.currentTextIndex}: x=${textX}, y=${textY}, w=${textWidth}, h=${textHeight}`);
+    
+    try {
+      // Use the new narrative text creation method
+      const narrativeResult = this.createNarrativeText(textX, textY, currentText, textWidth, container);
+      
+      // Store references for cleanup
+      container.textElements.push(narrativeResult.textElement);
+      container.textBackgrounds.push(narrativeResult.background);
+      
+    } catch (error) {
+      console.warn('Could not create narrative text element:', error);
+      return;
+    }
+    
+    container.currentTextIndex++;
+    
+    // Auto-advance after 2 seconds (can be interrupted by clicks)
+    container.autoAdvanceTimer = this.scene.time.delayedCall(2000, () => {
+      this.advanceStoryDialog(container);
+    });
+  }
+  
+  /**
+   * Advance the story dialog (either by click or timer)
+   */
+  private advanceStoryDialog(container: any): void {
+    // Safety check: make sure container still exists
+    if (!container || !container.scene || container.isComplete) return;
+    
+    // Cancel any existing timer
+    if (container.autoAdvanceTimer) {
+      container.autoAdvanceTimer.remove();
+      container.autoAdvanceTimer = null;
+    }
+    
+    if (container.currentTextIndex < container.storyTexts.length) {
+      this.revealNextStoryText(container);
+    } else {
+      this.showStoryButtons(container);
+    }
+  }
+  
+  /**
+   * Show Yes/No buttons after all story text is revealed
+   */
+  private showStoryButtons(container: any): void {
+    console.log('🔘 showStoryButtons called - creating buttons');
+    
+    // Safety check: make sure container still exists
+    if (!container || !container.scene) {
+      console.log('❌ Container check failed in showStoryButtons');
+      return;
+    }
+    
+    container.isComplete = true;
+    console.log('✅ Container marked as complete, creating buttons');
+    
+    // Hide the debug overlay when buttons appear to avoid interference
+    const debugOverlay = container.getByName('debugOverlay');
+    if (debugOverlay) {
+      debugOverlay.setVisible(false);
+      debugOverlay.setInteractive(false);  // Also disable interaction
+      console.log('🔍 Debug overlay hidden AND disabled - buttons should be fully interactive now');
+    } else {
+      console.log('❌ Could not find debug overlay to hide');
+    }
+    
+    // Change main window to transparent grey when buttons appear
+    const mainWindow = container.getFirst(); // The main window should be the first child
+    if (mainWindow) {
+      // Clear and redraw the main window with transparent grey
+      mainWindow.clear();
+      
+      // Recreate the window with new styling - transparent grey
+      const windowConfig = {
+        x: 0, 
+        y: 0, 
+        width: container.containerWidth, 
+        height: container.containerHeight,
+        fillColor: 0xcccccc, // Light grey color
+        fillAlpha: 0.85 // 85% opacity (15% transparent)
+      };
+      
+      // Use the same organic rectangle creation but with new color/transparency
+      const graphics = mainWindow; // Reuse the existing graphics object
+      const strokeWidth = 2;
+      const strokeColor = 0x000000; // Black stroke
+      
+      // Recreate the polygon with new styling (using same logic as createCollageRect)
+      const offset = 5;
+      const polygonPoints = [];
+      const extraPointCount = Phaser.Math.Between(2, 5);
+      
+      const topEdgePoints = [];
+      const rightEdgePoints = [];
+      const bottomEdgePoints = [];
+      const leftEdgePoints = [];
+      
+      // Generate same organic polygon structure but with transparent grey
+      topEdgePoints.push({ 
+        x: windowConfig.x - offset + Phaser.Math.Between(-5, -2),
+        y: windowConfig.y - offset + Phaser.Math.Between(-5, -2)
+      });
+      rightEdgePoints.push({ 
+        x: windowConfig.x + windowConfig.width + offset + Phaser.Math.Between(2, 5),
+        y: windowConfig.y - offset + Phaser.Math.Between(-5, -2)
+      });
+      bottomEdgePoints.push({ 
+        x: windowConfig.x + windowConfig.width + offset + Phaser.Math.Between(2, 5),
+        y: windowConfig.y + windowConfig.height + offset + Phaser.Math.Between(2, 5)
+      });
+      leftEdgePoints.push({ 
+        x: windowConfig.x - offset + Phaser.Math.Between(-5, -2),
+        y: windowConfig.y + windowConfig.height + offset + Phaser.Math.Between(2, 5)
+      });
+      
+      for (let i = 0; i < extraPointCount; i++) {
+        const edgeIndex = Phaser.Math.Between(0, 3);
+        
+        switch (edgeIndex) {
+          case 0: // Top edge
+            topEdgePoints.push({
+              x: Phaser.Math.Between(windowConfig.x - offset + 10, windowConfig.x + windowConfig.width + offset - 10) + Phaser.Math.Between(-4, 4),
+              y: windowConfig.y - offset + Phaser.Math.Between(-8, -2)
+            });
+            break;
+          case 1: // Right edge
+            rightEdgePoints.push({
+              x: windowConfig.x + windowConfig.width + offset + Phaser.Math.Between(2, 8),
+              y: Phaser.Math.Between(windowConfig.y - offset + 10, windowConfig.y + windowConfig.height + offset - 10) + Phaser.Math.Between(-4, 4)
+            });
+            break;
+          case 2: // Bottom edge
+            bottomEdgePoints.push({
+              x: Phaser.Math.Between(windowConfig.x - offset + 10, windowConfig.x + windowConfig.width + offset - 10) + Phaser.Math.Between(-4, 4),
+              y: windowConfig.y + windowConfig.height + offset + Phaser.Math.Between(2, 8)
+            });
+            break;
+          case 3: // Left edge
+            leftEdgePoints.push({
+              x: windowConfig.x - offset + Phaser.Math.Between(-8, -2),
+              y: Phaser.Math.Between(windowConfig.y - offset + 10, windowConfig.y + windowConfig.height + offset - 10) + Phaser.Math.Between(-4, 4)
+            });
+            break;
+        }
+      }
+      
+      // Sort and combine points
+      topEdgePoints.sort((a, b) => a.x - b.x);
+      rightEdgePoints.sort((a, b) => a.y - b.y);
+      bottomEdgePoints.sort((a, b) => b.x - a.x);
+      leftEdgePoints.sort((a, b) => b.y - a.y);
+      
+      polygonPoints.push(...topEdgePoints);
+      polygonPoints.push(...rightEdgePoints);
+      polygonPoints.push(...bottomEdgePoints);
+      polygonPoints.push(...leftEdgePoints);
+      
+      // Draw shadow
+      const shadowOffset = 6;
+      graphics.fillStyle(0x222222, 1.0);
+      graphics.beginPath();
+      graphics.moveTo(polygonPoints[0].x + shadowOffset, polygonPoints[0].y + shadowOffset);
+      for (let i = 1; i < polygonPoints.length; i++) {
+        graphics.lineTo(polygonPoints[i].x + shadowOffset, polygonPoints[i].y + shadowOffset);
+      }
+      graphics.closePath();
+      graphics.fillPath();
+      
+      // Draw main polygon with transparent grey
+      graphics.lineStyle(strokeWidth, strokeColor);
+      graphics.fillStyle(windowConfig.fillColor, windowConfig.fillAlpha);
+      graphics.beginPath();
+      graphics.moveTo(polygonPoints[0].x, polygonPoints[0].y);
+      for (let i = 1; i < polygonPoints.length; i++) {
+        graphics.lineTo(polygonPoints[i].x, polygonPoints[i].y);
+      }
+      graphics.closePath();
+      graphics.fillPath();
+      graphics.strokePath();
+      
+      // Draw the clean rectangle on top
+      graphics.fillStyle(windowConfig.fillColor, windowConfig.fillAlpha);
+      graphics.fillRect(windowConfig.x, windowConfig.y, windowConfig.width, windowConfig.height);
+    }
+    
+    // Use actual rectangle dimensions instead of container bounds
+    const width = container.containerWidth;
+    const height = container.containerHeight;
+    
+    // Get container's world position for absolute button positioning
+    const containerX = container.x;
+    const containerY = container.y;
+    
+    // Create Yes, Maybe, and No buttons in bottom right, stacked vertically with proper spacing
+    const buttonWidth = 80;
+    const buttonHeight = 30;
+    const buttonSpacing = 35; // Increased vertical spacing to prevent overlap
+    const marginFromEdge = 15; // Small margin from the actual rectangle edges
+    
+    // Position three buttons in bottom right corner using ABSOLUTE world coordinates
+    const buttonX = containerX + width - buttonWidth - marginFromEdge;
+    const noButtonY = containerY + height - buttonHeight - marginFromEdge;
+    const maybeButtonY = noButtonY - buttonHeight - buttonSpacing;
+    const yesButtonY = maybeButtonY - buttonHeight - buttonSpacing;
+    
+    // Create buttons at absolute world positions (NOT added to container) - SIMPLE RECTANGLES FOR TESTING
+    const yesButton = this.scene.add.rectangle(buttonX + buttonWidth/2, yesButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xcccccc); // Light grey
+    const maybeButton = this.scene.add.rectangle(buttonX + buttonWidth/2, maybeButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xcccccc);
+    const noButton = this.scene.add.rectangle(buttonX + buttonWidth/2, noButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xcccccc);
+    
+    // Make buttons visible with high depth - SET DEPTH IMMEDIATELY
+    yesButton.setVisible(true);
+    maybeButton.setVisible(true);
+    noButton.setVisible(true);
+    yesButton.setDepth(5000);    // Much higher than container (depth 2000)
+    maybeButton.setDepth(5000);
+    noButton.setDepth(5000);
+    
+    // TEMP: Add bright colored rectangles as debug overlays to see where buttons are
+    const yesDebug = this.scene.add.rectangle(buttonX + buttonWidth/2, yesButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xff0000, 0.8);
+    const maybeDebug = this.scene.add.rectangle(buttonX + buttonWidth/2, maybeButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0x00ff00, 0.8);
+    const noDebug = this.scene.add.rectangle(buttonX + buttonWidth/2, noButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0x0000ff, 0.8);
+    yesDebug.setDepth(5000);    // Much higher
+    maybeDebug.setDepth(5000);
+    noDebug.setDepth(5000);
+    
+    // EXTREME TEST: Add rectangles at top-left corner of screen that should DEFINITELY be visible
+    const topLeftTest = this.scene.add.rectangle(50, 50, 100, 100, 0xff00ff, 1.0); // Bright magenta
+    topLeftTest.setDepth(999); // Extremely high depth
+    console.log(`🚨 EXTREME TEST: Created bright magenta rectangle at (50,50) with depth 999`);
+    
+    // EXTREME TEST: Add text at known visible location
+    const topLeftText = this.scene.add.text(50, 200, 'TEST VISIBLE TEXT', { fontSize: '24px', color: '#ffff00', backgroundColor: '#000000' });
+    topLeftText.setDepth(999);
+    console.log(`🚨 EXTREME TEST: Created yellow text at (50,200) with depth 999`);
+    
+    // Debug logging
+    console.log(`🎨 Scene name: ${this.scene.scene.key}`);
+    console.log(`🎨 Debug rectangles created on scene: ${this.scene.scene.key}`);
+    console.log(`🎨 Yes debug visible: ${yesDebug.visible}, depth: ${yesDebug.depth}`);
+    console.log(`🎨 Yes button visible: ${yesButton.visible}, depth: ${yesButton.depth}`);
+    
+    console.log(`🔘 Buttons created at absolute positions: Yes(${buttonX},${yesButtonY}), Maybe(${buttonX},${maybeButtonY}), No(${buttonX},${noButtonY})`);
+    
+    // Add button labels at absolute positions (NOT added to container)
+    const yesLabel = this.scene.add.text(buttonX + buttonWidth/2, yesButtonY + buttonHeight/2, 'Yes', { fontSize: '14px', color: '#000000' });
+    yesLabel.setOrigin(0.5, 0.5);
+    yesLabel.setDepth(5001);    // Higher than everything
+    const maybeLabel = this.scene.add.text(buttonX + buttonWidth/2, maybeButtonY + buttonHeight/2, 'Maybe', { fontSize: '14px', color: '#000000' });
+    maybeLabel.setOrigin(0.5, 0.5);
+    maybeLabel.setDepth(5001);
+    const noLabel = this.scene.add.text(buttonX + buttonWidth/2, noButtonY + buttonHeight/2, 'No', { fontSize: '14px', color: '#000000' });
+    noLabel.setOrigin(0.5, 0.5);
+    noLabel.setDepth(5001);
+    
+    // Store button references on container for cleanup (including debug overlays and test elements)
+    (container as any).storyButtons = [yesButton, maybeButton, noButton, yesLabel, maybeLabel, noLabel, yesDebug, maybeDebug, noDebug, topLeftTest, topLeftText];
+    console.log('🔘 Buttons created at absolute world positions (not in container)');
+    
+    // Labels already have depth set to 301, buttons have depth 200
+    // Make buttons interactive with explicit hit areas and global coordinates
+    const yesButtonBounds = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
+    const maybeButtonBounds = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
+    const noButtonBounds = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
+    
+    yesButton.setInteractive(yesButtonBounds, Phaser.Geom.Rectangle.Contains);
+    maybeButton.setInteractive(maybeButtonBounds, Phaser.Geom.Rectangle.Contains);
+    noButton.setInteractive(noButtonBounds, Phaser.Geom.Rectangle.Contains);
+    console.log('🖱️ Buttons made interactive with explicit hit areas and depths set to 200+');
+    
+    // Add hover events to buttons for debugging
+    yesButton.on('pointerover', () => console.log('🖱️ Hovering over Yes button'));
+    yesButton.on('pointerout', () => console.log('🖱️ Left Yes button'));
+    maybeButton.on('pointerover', () => console.log('🖱️ Hovering over Maybe button'));
+    maybeButton.on('pointerout', () => console.log('🖱️ Left Maybe button'));
+    noButton.on('pointerover', () => console.log('🖱️ Hovering over No button'));
+    noButton.on('pointerout', () => console.log('🖱️ Left No button'));
+    
+    yesButton.on('pointerdown', () => {
+      console.log('User selected: Yes - destroying container...');
+      // Close the dialog - this will trigger the destroy event and process the queue
+      container.destroy();
+    });
+    
+    maybeButton.on('pointerdown', () => {
+      console.log('User selected: Maybe - destroying container...');
+      // Close the dialog - this will trigger the destroy event and process the queue
+      container.destroy();
+    });
+    
+    noButton.on('pointerdown', () => {
+      console.log('User selected: No - destroying container...');  
+      // Close the dialog - this will trigger the destroy event and process the queue
+      container.destroy();
+    });
+  }
+  
+  /**
+   * Process the next queued narrative window if one exists
+   */
+  private processNarrativeQueue(): void {
+    console.log(`📋 Processing queue - ${this.narrativeWindowQueue.length} items waiting`);
+    if (this.narrativeWindowQueue.length > 0) {
+      const nextRequest = this.narrativeWindowQueue.shift();
+      if (nextRequest) {
+        console.log('🎭 Processing queued narrative window...');
+        // Small delay to ensure cleanup is complete
+        this.scene.time.delayedCall(100, () => {
+          this.createStoryDialogComposition(
+            nextRequest.x, 
+            nextRequest.y, 
+            nextRequest.width, 
+            nextRequest.height, 
+            nextRequest.backgroundImageKey
+          );
+        });
+      }
+    } else {
+      console.log('📋 Queue is empty - no more narrative windows to process');
+    }
+  }
+  
+  /**
+   * Manually close the active narrative window and process the queue
+   */
+  closeActiveNarrativeWindow(): void {
+    if (this.activeNarrativeWindow && this.activeNarrativeWindow.scene) {
+      this.activeNarrativeWindow.destroy();
+      // The destroy event will handle clearing activeNarrativeWindow and processing queue
+    }
+  }
+  
+  /**
+   * Get the number of queued narrative windows
+   */
+  getQueuedNarrativeCount(): number {
+    return this.narrativeWindowQueue.length;
+  }
+  
+  /**
+   * Clear all queued narrative windows
+   */
+  clearNarrativeQueue(): void {
+    this.narrativeWindowQueue.length = 0;
+  }
+  
+  /**
+   * Force clear the active narrative window (for debugging)
+   */
+  forceResetNarrativeSystem(): void {
+    console.log('🔧 Force resetting narrative system...');
+    if (this.activeNarrativeWindow) {
+      console.log('🗑️ Destroying active narrative window');
+      this.activeNarrativeWindow.destroy();
+    }
+    this.activeNarrativeWindow = null;
+    this.narrativeWindowQueue.length = 0;
+    console.log('✅ Narrative system reset complete');
   }
 }

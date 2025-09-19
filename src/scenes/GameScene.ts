@@ -252,13 +252,25 @@ export class GameScene extends Phaser.Scene {
         this.createDebugSpeechBubble();
       });
 
-      // Debug: Add 'T' key to manually trigger speech bubble regeneration
+      // Debug: Add 'T' key to create story dialog (with queue support)
       const keyT = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.T, true, false);
       keyT?.on('down', () => {
-        console.log('🔄 Manual speech bubble regeneration triggered');
-        if (this.windowShapes) {
-          this.windowShapes.onStep();
-        }
+        console.log('🎭 Creating story dialog with queue support');
+        this.createStoryDialogWithQueue();
+      });
+
+      // Debug: Add 'H' key to generate story dialog specifically (with queue support)
+      const keyH = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.H, true, false);
+      keyH?.on('down', () => {
+        console.log('🎭 Creating story dialog with queue support (H key)');
+        this.createStoryDialogWithQueue();
+      });
+      
+      // Debug: Add 'X' key to reset narrative system (force clear)
+      const keyX = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X, true, false);
+      keyX?.on('down', () => {
+        console.log('🔧 Force resetting narrative system...');
+        this.windowShapes.forceResetNarrativeSystem();
       });
 
       // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability
@@ -2325,5 +2337,69 @@ export class GameScene extends Phaser.Scene {
     });
 
     console.log('Debug speech bubble created! Press S again to generate a new one.');
+  }
+
+  /**
+   * Create a debug story dialog window for testing 'H' key
+   */
+  private createDebugStoryDialog() {
+    // Clear previous debug windows
+    this.debugWindows.forEach(window => window.destroy());
+    this.debugWindows = [];
+
+    // Create a new story dialog composition
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Story dialogs use 95% width and 80% height, centered
+    const width = Math.floor(gameWidth * 0.95);   // 95% of game width
+    const height = Math.floor(gameHeight * 0.80);  // 80% of game height
+    const x = Math.floor((gameWidth - width) / 2);   // Center horizontally
+    const y = Math.floor((gameHeight - height) / 2); // Center vertically
+    
+    const newWindow = this.windowShapes.createStoryDialogComposition(x, y, width, height);
+    this.debugWindows.push(newWindow);
+
+    // Set high depth so it appears on top
+    newWindow.setDepth(2000);
+
+    // Auto-remove after 10 seconds (longer for story dialogs)
+    this.time.delayedCall(10000, () => {
+      if (newWindow && !newWindow.scene) return; // Already destroyed
+      newWindow.destroy();
+      const index = this.debugWindows.indexOf(newWindow);
+      if (index > -1) {
+        this.debugWindows.splice(index, 1);
+      }
+    });
+
+    console.log('Debug story dialog created! Click to advance the story, or press H again to generate a new one.');
+  }
+  
+  /**
+   * Create a story dialog that respects the queue system
+   */
+  private createStoryDialogWithQueue() {
+    // Calculate story dialog dimensions
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Story dialogs use 95% width and 80% height, centered
+    const width = Math.floor(gameWidth * 0.95);   // 95% of game width
+    const height = Math.floor(gameHeight * 0.80);  // 80% of game height
+    const x = Math.floor((gameWidth - width) / 2);   // Center horizontally
+    const y = Math.floor((gameHeight - height) / 2); // Center vertically
+    
+    // Use the queue-aware method from WindowShapes
+    const newWindow = this.windowShapes.createStoryDialogComposition(x, y, width, height);
+    
+    if (newWindow) {
+      // Set very high depth so it appears above all other UI elements
+      newWindow.setDepth(5000);  // Increased from 2000 to 5000
+      console.log('Story dialog created and displayed immediately');
+    } else {
+      console.log('Story dialog queued (another dialog is active)');
+      console.log(`Queue length: ${this.windowShapes.getQueuedNarrativeCount()}`);
+    }
   }
 }

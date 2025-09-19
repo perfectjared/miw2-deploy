@@ -41,6 +41,13 @@ const config: Phaser.Types.Core.GameConfig = {
   parent: 'game',
   backgroundColor: '#facade',
   scene: [PreloadScene, BackgroundScene, AppScene, MenuScene, StoryScene, GameScene],
+  // Sharp rendering for graphics but smooth text
+  render: {
+    antialias: false,      // Disable anti-aliasing for graphics/shapes
+    pixelArt: false,       // Allow smooth text rendering (don't force pixel art mode)
+    roundPixels: true,     // Still round pixels to avoid sub-pixel positioning
+    antialiasGL: false     // Disable WebGL anti-aliasing for shapes
+  },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
