@@ -385,6 +385,14 @@ export class MenuManager {
       return false;
     }
     
+    // If there are any CYOA menus in the stack, don't restore anything
+    // This prevents complex restoration chains when CYOA menus are involved
+    const hasCyoaInStack = this.menuStack.some(menu => menu.type === 'CYOA');
+    if (hasCyoaInStack) {
+      console.log('MenuManager: shouldRestorePreviousMenu - CYOA menu found in stack, not restoring anything');
+      return false;
+    }
+    
     const shouldRestore = menuToRestore.type !== this.userDismissedMenuType;
     
     console.log('MenuManager: shouldRestorePreviousMenu - stack length:', this.menuStack.length, 'currentDialog:', !!this.currentDialog, 'menuToRestore:', menuToRestore.type, 'userDismissed:', this.userDismissedMenuType, 'shouldRestore:', shouldRestore);
