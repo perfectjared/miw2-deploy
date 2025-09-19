@@ -156,6 +156,9 @@ export interface GameUIState {
   // Region data
   currentRegion: string;
   showsInCurrentRegion: number;
+  // Monthly Listeners System
+  monthlyListeners: number;
+  buzz: number;
 }
 
 export class GameUI {
@@ -178,6 +181,10 @@ export class GameUI {
   // New UI Elements
   private regionText!: Phaser.GameObjects.Text;
   private stopsCounterText!: Phaser.GameObjects.Text;
+  
+  // Monthly Listeners UI Elements
+  private monthlyListenersText!: Phaser.GameObjects.Text;
+  private buzzText!: Phaser.GameObjects.Text;
   
   // Speed Crank Elements
   private speedCrankTrack!: Phaser.GameObjects.Graphics;
@@ -237,6 +244,7 @@ export class GameUI {
     // Speed crank removed - using automatic speed progression
     this.createSpeedDisplay();
     this.createFrontseatDragDial();
+    this.createMonthlyListenersDisplay();
   }
 
   /**
@@ -250,6 +258,8 @@ export class GameUI {
     this.updateManagerValues(state); // This now includes stops
     this.updateRegionInfo(state.currentRegion, state.showsInCurrentRegion);
     // updateStopsCounter removed - stopsCounterText now shows sequence fraction
+    this.updateMonthlyListeners(state.monthlyListeners);
+    this.updateBuzz(state.buzz);
     // Speed crank removed - using automatic speed progression
   }
 
@@ -1236,6 +1246,76 @@ export class GameUI {
     
     // Update sequence fraction display
     this.updateSequenceFraction(showsInRegion, totalSequences);
+  }
+
+  /**
+   * Create monthly listeners display (to the right of steering wheel)
+   */
+  private createMonthlyListenersDisplay() {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Position to the right of steering wheel
+    const steeringConfig = gameElements.getSteeringWheel();
+    const steeringX = gameWidth * steeringConfig.position.x;
+    const listenersX = steeringX + 200; // 200px to the right of steering wheel
+    const listenersY = gameHeight * 0.7; // Same Y as steering wheel
+    
+    // Monthly listeners text
+    this.monthlyListenersText = this.scene.add.text(listenersX, listenersY - 20, '2,000', {
+      fontSize: '16px',
+      color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5);
+    
+    this.monthlyListenersText.setScrollFactor(0);
+    this.monthlyListenersText.setDepth(10000);
+    
+    // Buzz text (below listeners)
+    this.buzzText = this.scene.add.text(listenersX, listenersY + 20, 'Buzz: 0', {
+      fontSize: '14px',
+      color: `#${GREYSCALE_PALETTE.lightGray.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
+      padding: { x: 6, y: 3 }
+    }).setOrigin(0.5);
+    
+    this.buzzText.setScrollFactor(0);
+    this.buzzText.setDepth(10000);
+  }
+
+  /**
+   * Update monthly listeners display
+   */
+  private updateMonthlyListeners(listeners: number) {
+    if (this.monthlyListenersText) {
+      // Format with commas for readability
+      const formattedListeners = listeners.toLocaleString();
+      this.monthlyListenersText.setText(formattedListeners);
+    }
+  }
+
+  /**
+   * Update buzz display
+   */
+  private updateBuzz(buzz: number) {
+    if (this.buzzText) {
+      this.buzzText.setText(`Buzz: ${buzz}`);
+      
+      // Change color based on buzz value
+      let buzzColorHex: string;
+      if (buzz > 0) {
+        buzzColorHex = `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`; // Positive buzz = white
+      } else if (buzz < 0) {
+        buzzColorHex = `#${GREYSCALE_PALETTE.mediumGray.toString(16).padStart(6, '0')}`; // Negative buzz = darker
+      } else {
+        buzzColorHex = `#${GREYSCALE_PALETTE.lightGray.toString(16).padStart(6, '0')}`; // Neutral buzz = light gray
+      }
+      
+      this.buzzText.setStyle({ color: buzzColorHex });
+    }
   }
 
   /**

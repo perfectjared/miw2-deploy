@@ -35,6 +35,10 @@ export interface GameStateData {
   difficulty: number;
   momentum: number;
   
+  // Monthly Listeners System
+  monthlyListeners: number;
+  buzz: number;
+  
   // Plot Progress
   plotA: number;
   plotB: number;
@@ -84,6 +88,14 @@ export interface GameStateConfig {
   initialKnobValue: number;
   initialPosition: number;
   initialRegion: string;
+  
+  // Monthly Listeners System
+  initialMonthlyListeners: number;
+  initialBuzz: number;
+  minBuzz: number;
+  maxBuzz: number;
+  minMonthlyListeners: number;
+  maxMonthlyListeners: number;
   
   // Validation
   minMoney: number;
@@ -479,6 +491,10 @@ export class GameState {
       difficulty: this.config.initialDifficulty,
       momentum: this.config.initialMomentum,
       
+      // Monthly Listeners System
+      monthlyListeners: this.config.initialMonthlyListeners,
+      buzz: this.config.initialBuzz,
+      
       // Plot Progress
       plotA: this.config.initialPlotA,
       plotB: this.config.initialPlotB,
@@ -536,6 +552,10 @@ export class GameState {
         return Phaser.Math.Clamp(value, this.config.minPlot, this.config.maxPlot);
       case 'knobValue':
         return Phaser.Math.Clamp(value, this.config.minKnobValue, this.config.maxKnobValue);
+      case 'monthlyListeners':
+        return Phaser.Math.Clamp(value, this.config.minMonthlyListeners, this.config.maxMonthlyListeners);
+      case 'buzz':
+        return Phaser.Math.Clamp(value, this.config.minBuzz, this.config.maxBuzz);
       case 'currentPosition':
         return ['frontseat', 'backseat'].includes(value) ? value : 'frontseat';
       case 'currentView':
@@ -698,6 +718,40 @@ export class GameState {
   public isFinalSequenceForRegion(): boolean {
     const totalSequences = this.getSequencesForCurrentRegion();
     return this.state.showsInCurrentRegion >= totalSequences - 1;
+  }
+
+  /**
+   * Update buzz value
+   */
+  public updateBuzz(buzzChange: number): void {
+    const newBuzz = this.state.buzz + buzzChange;
+    this.updateState({ buzz: newBuzz });
+  }
+
+  /**
+   * Update monthly listeners based on buzz during countdown
+   */
+  public updateListenersOnCountdown(): void {
+    const buzzMultiplier = this.state.buzz;
+    const listenerChange = Math.floor(buzzMultiplier * 10); // Buzz affects listeners by 10x
+    const newListeners = this.state.monthlyListeners + listenerChange;
+    this.updateState({ monthlyListeners: newListeners });
+    
+    console.log(`📻 Buzz: ${this.state.buzz}, Listener change: ${listenerChange}, New total: ${newListeners}`);
+  }
+
+  /**
+   * Get current monthly listeners
+   */
+  public getMonthlyListeners(): number {
+    return this.state.monthlyListeners;
+  }
+
+  /**
+   * Get current buzz value
+   */
+  public getBuzz(): number {
+    return this.state.buzz;
   }
 
   /**

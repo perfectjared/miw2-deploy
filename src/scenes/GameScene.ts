@@ -2125,6 +2125,9 @@ export class GameScene extends Phaser.Scene {
           keysInIgnition: state.keysInIgnition,
           // Speed crank removed - using automatic speed progression
         });
+        
+        // Update monthly listeners based on buzz
+        this.gameState.updateListenersOnCountdown();
       }
     }
 

@@ -443,6 +443,14 @@ export const GAME_STATE_CONFIG = {
   initialPosition: 0,
   initialRegion: 'midwest',
   
+  // Monthly Listeners System
+  initialMonthlyListeners: 2000,
+  initialBuzz: 0,
+  minBuzz: -3,
+  maxBuzz: 3,
+  minMonthlyListeners: 0,
+  maxMonthlyListeners: 100000,
+  
   // Validation Ranges
   minMoney: 0,
   maxMoney: 9999,
