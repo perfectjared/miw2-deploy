@@ -1231,8 +1231,8 @@ export class CarMechanics {
     
     // Draw sky
     const horizonY = gameHeight * 0.3; // moved horizon further up
-    this.drivingBackground.fillStyle(this.config.skyColor);
-    this.drivingBackground.fillRect(0, 0, gameWidth, horizonY);
+    //this.drivingBackground.fillStyle(this.config.skyColor);
+    //this.drivingBackground.fillRect(0, 0, gameWidth, horizonY);
     
     // Draw road
     this.drivingBackground.fillStyle(this.config.roadColor);
