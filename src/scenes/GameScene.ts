@@ -2153,12 +2153,12 @@ export class GameScene extends Phaser.Scene {
     if ((this.tutorialSystem as any).handleStep) {
       (this.tutorialSystem as any).handleStep(step);
     }
-    // Step-based countdown: only when game and car have both started, and every fourth step
+    // Step-based countdown: only when game and car have both started, and every sixteenth step
     const state = this.gameState.getState();
     if (state.gameStarted && carOn && state.gameTime > 0) {
       this.countdownStepCounter++;
-      // Only decrement countdown every eighth step (changed from every fourth)
-      if (this.countdownStepCounter >= 8) {
+      // Only decrement countdown every sixteenth step (changed from every eighth)
+      if (this.countdownStepCounter >= 16) {
         this.countdownStepCounter = 0; // Reset counter
         const newTime = state.gameTime - 1;
         this.gameState.updateState({ gameTime: newTime });
