@@ -743,7 +743,14 @@ export class GameScene extends Phaser.Scene {
    * Enable night time mode for final driving sequence
    */
   private enableNightTimeMode() {
-    console.log('🌙 Enabling night time mode');
+    // Check if any menu is currently open - suppress logs during menus
+    const menuScene = this.scene.get('MenuScene');
+    const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+    
+    if (!hasOpenMenu) {
+      console.log('🌙 Enabling night time mode');
+    }
+    
     // Add night time visual effects - create overlay instead of tinting container
     if (!this.nightTimeOverlay) {
       this.nightTimeOverlay = this.add.rectangle(
@@ -1300,6 +1307,22 @@ export class GameScene extends Phaser.Scene {
       this.keysInIgnition = true;
       this.gameState.updateState({ keysInIgnition: true });
       console.log('Keys snapped to ignition');
+      
+      // Immediately pause game and show ignition menu
+      const appScene = this.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = true;
+        this.events.emit('gamePaused');
+      }
+      
+      // Emit showTurnKeyMenu event and bring MenuScene to top
+      this.events.emit('showTurnKeyMenu');
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.scene.bringToTop();
+      }
+      
+      console.log('✅ Turn key menu event emitted and MenuScene brought to top');
       
       // Advance tutorial if we're in keys_placement phase
       if (this.gameState.getTutorialPhase() === 'keys_placement') {
@@ -2365,8 +2388,13 @@ export class GameScene extends Phaser.Scene {
       
       const carInRightmostArea = carX >= rightmostThreshold;
       
-      // Debug logging for position detection
-      console.log('Position detection - Internal carX:', carX, 'Car bounds X (visual):', carBounds.x, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
+      // Debug logging for position detection (suppressed during menus)
+      const menuScene = this.scene.get('MenuScene');
+      const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+      
+      if (!hasOpenMenu) {
+        console.log('Position detection - Internal carX:', carX, 'Car bounds X (visual):', carBounds.x, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
+      }
       
       // Also check if car is horizontally aligned with the exit
       // Use internal car position for alignment since visual car is always centered

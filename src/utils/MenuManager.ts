@@ -97,7 +97,8 @@ export class MenuManager {
   
   // Menu Hierarchy System
   private readonly MENU_PRIORITIES = {
-    START: 100,      // Highest priority - start menu
+    TURN_KEY: 110,    // Highest priority - turn key menu (must always show)
+    START: 100,       // High priority - start menu
     PAUSE: 80,        // High priority - pause menu
     GAME_OVER: 70,    // High priority - game over menu
     OBSTACLE: 60,     // Medium priority - obstacle collision menu
@@ -111,7 +112,7 @@ export class MenuManager {
     VIRTUAL_PET: 50,  // Medium priority -  menu
     MORAL_DECISION: 50, // Medium priority - moral decision menu
     PET_STORY: 40,    // Low priority - pet story UI
-    TURN_KEY: 30      // Lowest priority - ignition menu
+    TUTORIAL: 20      // Lowest priority - tutorial overlay
   };
   
   private scene: Phaser.Scene;
@@ -917,14 +918,7 @@ export class MenuManager {
     console.log('MenuManager: Current dialog exists:', !!this.currentDialog);
     console.log('MenuManager: Current displayed menu type:', this.currentDisplayedMenuType);
     
-    if (!this.canShowMenu('TURN_KEY')) {
-      console.log('MenuManager: Ignition menu blocked by higher priority menu - will show when hierarchy allows');
-      // Still push to stack so it can be restored when the blocking menu closes
-      this.pushMenu('TURN_KEY');
-      console.log('MenuManager: Pushed TURN_KEY to stack. Stack now:', this.menuStack.map(m => `${m.type}(${m.priority})`));
-      return; // Don't show the menu, but the tutorial overlay will still be controlled by keysInIgnition
-    }
-    
+    // Always rebuild the ignition menu when keys are in ignition and car not started
     console.log('MenuManager: Showing ignition menu');
     this.clearCurrentDialog();
     this.pushMenu('TURN_KEY');
