@@ -148,33 +148,33 @@ export class MenuManager {
    * Start ignition countdown timer
    */
   private startIgnitionCountdown() {
-    let countdown = 16; // Start with 16 seconds
+    let countdown = 10; // Start with 10 step-lengths (10 seconds)
     
     // Update countdown text immediately
     if (this.ignitionCountdownText) {
-      this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} seconds`);
+      this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} step-lengths`);
     }
     
-    // Create timer that updates every second
+    // Create timer that updates every step-length (1000ms = 1 second)
     this.ignitionCountdownTimer = this.scene.time.addEvent({
-      delay: 1000, // 1 second
+      delay: 1000, // 1 step-length = 1000ms
       callback: () => {
         countdown--;
-        console.log(`Ignition countdown: ${countdown} seconds remaining`);
+        console.log(`Ignition countdown: ${countdown} step-lengths remaining`);
         
         // Update countdown text
         if (this.ignitionCountdownText) {
-          this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} seconds`);
+          this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} step-lengths`);
         }
         
         // Auto-complete when countdown reaches 0
         if (countdown <= 0) {
-          console.log('Ignition menu auto-completing after 16 seconds');
+          console.log('Ignition menu auto-completing after 10 step-lengths');
           this.autoCompleteIgnitionMenu();
         }
       },
       loop: true,
-      repeat: 15 // Repeat 15 times (16 total seconds)
+      repeat: 9 // Repeat 9 times (10 total step-lengths)
     });
   }
 
@@ -1369,7 +1369,7 @@ export class MenuManager {
     const centerY = gameHeight / 2;
     
     // Create countdown text positioned above the slider
-    this.ignitionCountdownText = this.scene.add.text(centerX, centerY - 100, 'Auto-complete in: 16 seconds', {
+    this.ignitionCountdownText = this.scene.add.text(centerX, centerY - 100, 'Auto-complete in: 10 step-lengths', {
       fontSize: '16px',
       color: '#ff6b6b',
       fontStyle: 'bold',
