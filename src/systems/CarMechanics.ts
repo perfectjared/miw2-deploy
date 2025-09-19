@@ -1018,7 +1018,8 @@ export class CarMechanics {
       (menuScene as any).events.emit('showCyoaMenu', {
         cyoaId: plannedCyoa.id,
         isExitRelated: plannedCyoa.isExitRelated,
-        exitNumber: plannedCyoa.exitNumber
+        exitNumber: plannedCyoa.exitNumber,
+        exitTiming: plannedCyoa.exitTiming
       });
       this.scene.scene.bringToTop('MenuScene');
     }

@@ -1277,7 +1277,7 @@ export class MenuManager {
     this.createDialog(menuConfig, 'OBSTACLE');
   }
 
-  public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number }) {
+  public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
     if (!this.canShowMenu('CYOA')) return;
     
     this.clearCurrentDialog();
@@ -1291,7 +1291,7 @@ export class MenuManager {
     }
     
     const cyoaDescription = cyoaData.isExitRelated 
-      ? `Something happened after taking Exit ${cyoaData.exitNumber}!`
+      ? `Something happened ${cyoaData.exitTiming === 'before' ? 'before' : 'after'} Exit ${cyoaData.exitNumber}!`
       : 'Something happened!';
     
     const menuConfig: MenuConfig = {

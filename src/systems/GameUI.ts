@@ -321,15 +321,17 @@ export class GameUI {
             triangle.setScrollFactor(0);
             triangle.setDepth(10002);
             // Add B/A label above the triangle
-            const labelChar = (!cyoa.exitTiming || cyoa.exitTiming === 'after') ? 'A' : 'B';
-            const label = this.scene.add.text(triangleX, triangleY - 8, labelChar, {
+            const labelChar = (cyoa.exitTiming === 'before' || cyoa.exitTiming === 'after') ? (cyoa.exitTiming === 'before' ? 'B' : 'A') : '';
+            if (labelChar) {
+              const label = this.scene.add.text(triangleX, triangleY - 8, labelChar, {
               fontSize: '10px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
-            }).setOrigin(0.5);
-            label.setScrollFactor(0);
-            label.setDepth(10003);
+              }).setOrigin(0.5);
+              label.setScrollFactor(0);
+              label.setDepth(10003);
+              this.progressThresholdIndicators.push(label as any);
+            }
             
             this.progressThresholdIndicators.push(triangle);
-            this.progressThresholdIndicators.push(label as any);
           }
           return; // Skip regular CYOA processing for bundled ones
         }
