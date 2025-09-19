@@ -1634,6 +1634,9 @@ export class MenuManager {
     };
 
     this.createDialog(menuConfig, 'STORY');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('STORY');
   }
 
   public showGameOverMenu() {
@@ -2397,6 +2400,9 @@ export class MenuManager {
         gameSceneForRestore.updateAllTutorialOverlays();
       }
     }
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('DESTINATION');
   }
 
   /**
