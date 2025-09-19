@@ -44,7 +44,7 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showTutorialInterrupt', this.showTutorialInterrupt, this);
     this.events.on('showDestinationMenu', this.showDestinationMenu, this);
     this.events.on('showRegionChoiceMenu', this.showRegionChoiceMenu, this);
-    this.events.on('showCYOA', this.showCYOA, this);
+    // this.events.on('showCYOA', this.showCYOA, this); // REMOVED: Old event listener causing double-triggering
     this.events.on('showCyoaMenu', this.showCyoaMenu, this);
     this.events.on('showStoryMenu', this.showStoryMenu, this);
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);

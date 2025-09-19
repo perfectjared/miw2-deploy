@@ -200,21 +200,22 @@ export class GameScene extends Phaser.Scene {
           this.scene.bringToTop('MenuScene');
         }
       });
-      const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
-      keyC?.on('down', () => {
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showCYOA', {
-            imageKey: undefined,
-            text: 'You approach a fork in the road.',
-            optionA: 'Take the left path',
-            optionB: 'Take the right path',
-            followA: 'The left path was serene and quiet.',
-            followB: 'The right path was lively and bustling.'
-          });
-          this.scene.bringToTop('MenuScene');
-        }
-      });
+      // REMOVED: Debug keyboard shortcut for old showCYOA event (was causing double-triggering)
+      // const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
+      // keyC?.on('down', () => {
+      //   const menuScene = this.scene.get('MenuScene');
+      //   if (menuScene) {
+      //     menuScene.events.emit('showCYOA', {
+      //       imageKey: undefined,
+      //       text: 'You approach a fork in the road.',
+      //       optionA: 'Take the left path',
+      //       optionB: 'Take the right path',
+      //       followA: 'The left path was serene and quiet.',
+      //       followB: 'The right path was lively and bustling.'
+      //     });
+      //     this.scene.bringToTop('MenuScene');
+      //   }
+      // });
       const keyP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
       keyP?.on('down', () => {
         const menuScene = this.scene.get('MenuScene');
