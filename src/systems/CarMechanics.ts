@@ -634,6 +634,10 @@ export class CarMechanics {
         if (chosenExit) {
           cyoaThreshold = chosenExit.exitThreshold;
           console.log(`🎭 First sequence CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% (testing)`);
+          console.log(`🎭 Available exits:`, this.plannedExits.map(e => `Exit ${e.number} at ${e.exitThreshold}%`));
+        } else {
+          console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
+          console.log(`🎭 Available exits:`, this.plannedExits.map(e => `Exit ${e.number} at ${e.exitThreshold}%`));
         }
       }
       
@@ -988,6 +992,11 @@ export class CarMechanics {
    * Trigger bundled CYOA immediately after taking an exit
    */
   public triggerExitCyoa(exitNumber: number): void {
+    console.log(`🎭 triggerExitCyoa called for Exit ${exitNumber}`);
+    console.log(`🎭 Available planned CYOAs:`, this.plannedCyoa.map(cyoa => 
+      `CYOA ${cyoa.id}: ${cyoa.isExitRelated ? `exit-related (Exit ${cyoa.exitNumber})` : 'regular'} at ${cyoa.cyoaThreshold}% (triggered: ${cyoa.triggered})`
+    ));
+    
     // Find the bundled CYOA for this exit (only bundled ones, not all exit-related)
     const bundledCyoa = this.plannedCyoa.find(cyoa => 
       cyoa.isExitRelated && cyoa.exitNumber === exitNumber && !cyoa.triggered

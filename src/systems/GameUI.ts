@@ -302,9 +302,28 @@ export class GameUI {
     // Create triangle indicators for unspawned CYOA (light grey triangles)
     if (plannedCyoa) {
       plannedCyoa.forEach(cyoa => {
-        // Skip bundled CYOAs - they don't show indicators
+        // Show bundled CYOA indicators for testing (with different color)
         if (cyoa.isExitRelated && cyoa.exitNumber) {
-          return; // Don't show indicator for bundled CYOAs
+          // Show bundled CYOA with different color for testing
+          if (!cyoa.triggered) {
+            const triangleX = barX + (cyoa.progressThreshold / 100) * barWidth;
+            const triangleY = barY - 16; // Above the exit indicators
+            
+            const triangle = this.scene.add.graphics();
+            triangle.fillStyle(GREYSCALE_PALETTE.white, 0.8); // White for bundled CYOA
+            triangle.beginPath();
+            triangle.moveTo(triangleX, triangleY);
+            triangle.lineTo(triangleX - 4, triangleY + 8);
+            triangle.lineTo(triangleX + 4, triangleY + 8);
+            triangle.closePath();
+            triangle.fillPath();
+            
+            triangle.setScrollFactor(0);
+            triangle.setDepth(10002);
+            
+            this.progressThresholdIndicators.push(triangle);
+          }
+          return; // Skip regular CYOA processing for bundled ones
         }
         
         if (!cyoa.triggered) {

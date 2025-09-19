@@ -1990,12 +1990,16 @@ export class MenuManager {
         if (this.currentDisplayedMenuType === 'EXIT') {
           const currentMenu = this.menuStack[this.menuStack.length - 1];
           const exitNumber = currentMenu?.config?.exitNumber;
+          console.log(`MenuManager: Exit menu closed, exitNumber: ${exitNumber}`);
+          console.log(`MenuManager: Current menu config:`, currentMenu?.config);
           if (exitNumber) {
             console.log(`MenuManager: Triggering exit CYOA for Exit ${exitNumber}`);
             const gameScene = this.scene.scene.get('GameScene');
             if (gameScene && (gameScene as any).carMechanics) {
               (gameScene as any).carMechanics.triggerExitCyoa(exitNumber);
             }
+          } else {
+            console.log(`MenuManager: No exit number found in menu config`);
           }
         }
       }
