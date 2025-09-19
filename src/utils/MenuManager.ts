@@ -1226,6 +1226,8 @@ export class MenuManager {
     
     // Special-case: obstacle type 'exit' should show the dedicated Exit menu
     if (obstacleType === 'exit') {
+      console.log(`🎭 showObstacleMenu(exit): incoming exitNumber=`, exitNumber, `_lastExitNumber=`, (this as any)._lastExitNumber);
+      
       // Resolve exit number with fallbacks: event param -> persisted -> bundled CYOA exit
       let resolvedExitNumber = exitNumber ?? (this as any)._lastExitNumber;
       if (resolvedExitNumber == null) {
@@ -1241,7 +1243,7 @@ export class MenuManager {
       }
       // Persist exit number immediately so downstream menus can access it reliably
       (this as any)._lastExitNumber = resolvedExitNumber ?? (this as any)._lastExitNumber;
-      try { console.log(`showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber); } catch {}
+      console.log(`🎭 showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber, `updated _lastExitNumber=`, (this as any)._lastExitNumber);
       this.showExitMenu(damage, resolvedExitNumber);
       return;
     }

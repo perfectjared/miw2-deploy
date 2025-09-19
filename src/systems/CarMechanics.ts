@@ -1273,6 +1273,7 @@ export class CarMechanics {
       const menuScene = this.scene.scene.get('MenuScene');
       if (menuScene) {
         const { shopCount, exitNumber } = this.pendingExitAfterCyoa;
+        console.log(`🎭 CarMechanics: emitting deferred showObstacleMenu with exitNumber=`, exitNumber);
         (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
         this.scene.scene.bringToTop('MenuScene');
         this.pendingExitAfterCyoa = null;
@@ -2041,6 +2042,7 @@ export class CarMechanics {
             this.pendingExitAfterCyoa = { shopCount, exitNumber };
           } else {
             // No before CYOA; show the exit menu immediately
+            console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
             (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
             this.scene.scene.bringToTop('MenuScene');
           }
