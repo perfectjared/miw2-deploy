@@ -173,7 +173,7 @@ export class CarMechanics {
   // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
   private suppressRegularCyoaUntilStep: number = 0;
   // Also guard a window BEFORE upcoming exits to avoid regular CYOA right before an exit
-  private preExitCyoaGuardPercent: number = 6; // percent progress window before any upcoming exit
+  private preExitCyoaGuardPercent: number = 15; // percent progress window before any upcoming exit
 
   // Strong guard for the exact exit-collision tick: only allow the matching 'before' CYOA
   private exitCollisionGuardActive: boolean = false;
@@ -265,7 +265,7 @@ export class CarMechanics {
     if (isFirstSequence) {
       // For first sequence testing: exit very early
       exitRange = { min: 15, max: 25 }; // First exit at 15-25% for testing
-      cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+      cyoaRange = { min: 35, max: 90 }; // CYOA in 35-90% range (moved later to avoid conflict)
       console.log('First sequence: Exit range 15-25% for testing');
     } else {
       exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
