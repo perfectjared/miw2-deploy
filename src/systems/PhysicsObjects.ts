@@ -56,10 +56,14 @@ export class Trash implements PhysicsObject {
   private setupPhysics() {
     this.scene.matter.add.gameObject(this.gameObject, {
       shape: 'circle',
-      restitution: 0.3,
-      friction: 0.1,
-      density: 0.005 // Increased from 0.001 to make items heavier
+      restitution: 0.15, // less bouncy
+      friction: 0.2, // more ground friction
+      density: 0.01 // heavier
     });
+    // Add air friction to reduce drift
+    if (this.gameObject.body) {
+      (this.gameObject.body as any).frictionAir = 0.03;
+    }
   }
 
   setupDragInteraction() {
@@ -211,10 +215,13 @@ export class Item implements PhysicsObject {
   private setupPhysics() {
     this.scene.matter.add.gameObject(this.gameObject, {
       shape: 'circle',
-      restitution: 0.3,
-      friction: 0.1,
-      density: 0.005 // Increased from 0.001 to make items heavier
+      restitution: 0.15,
+      friction: 0.2,
+      density: 0.01
     });
+    if (this.gameObject.body) {
+      (this.gameObject.body as any).frictionAir = 0.03;
+    }
   }
 
   setupDragInteraction() {
@@ -402,10 +409,13 @@ export class Keys implements PhysicsObject {
   private setupPhysics() {
     this.scene.matter.add.gameObject(this.gameObject, {
       shape: 'circle',
-      restitution: 0.3,
-      friction: 0.1,
-      density: 0.005 // Increased from 0.001 to make items heavier
+      restitution: 0.15,
+      friction: 0.2,
+      density: 0.01
     });
+    if (this.gameObject.body) {
+      (this.gameObject.body as any).frictionAir = 0.03;
+    }
   }
 
   setupDragInteraction() {

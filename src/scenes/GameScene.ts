@@ -1805,7 +1805,7 @@ export class GameScene extends Phaser.Scene {
     
     // Found total bodies in matter world
     
-    // Apply large upward bump force to each body
+    // Apply large upward bump force to each body (reduced overall strength)
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
@@ -1819,15 +1819,15 @@ export class GameScene extends Phaser.Scene {
       
       // Apply much stronger force for pothole collision
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.2 } : // Much reduced vertical force for virtual pets
-        { x: 0, y: -0.15 }; // Much reduced force for other objects
+        { x: 0, y: -0.10 } : // Further reduced vertical force for virtual pets
+        { x: 0, y: -0.06 }; // Further reduced force for other objects
       
       // Applying bump to body
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add smaller random horizontal variation for less dramatic effect
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.1 : 0.05);
+      // Add minimal random horizontal variation
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.04 : 0.02);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
@@ -1855,7 +1855,7 @@ export class GameScene extends Phaser.Scene {
     // Get all bodies in the matter world
     const allBodies = matterWorld.getAllBodies();
     
-    // Apply very small upward bump force to each body
+    // Apply very small upward bump force to each body (reduced further)
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
@@ -1868,13 +1868,13 @@ export class GameScene extends Phaser.Scene {
       
       // Apply very small force for subtle step-by-step movement
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.01 } : // Very small force for virtual pets
-        { x: 0, y: -0.005 }; // Tiny force for other objects
+        { x: 0, y: -0.006 } : // Very small force for virtual pets
+        { x: 0, y: -0.002 }; // Tinier force for other objects
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add tiny random horizontal variation for subtle movement
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.01 : 0.005);
+      // Add tiny random horizontal variation (reduced)
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.006 : 0.003);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
@@ -1900,7 +1900,7 @@ export class GameScene extends Phaser.Scene {
     // Get all bodies in the matter world
     const allBodies = matterWorld.getAllBodies();
     
-    // Apply upward bump force to each body
+    // Apply upward bump force to each body (reduced)
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
@@ -1913,13 +1913,13 @@ export class GameScene extends Phaser.Scene {
       
       // Apply stronger force to virtual pets since they're constrained
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.2 } : // Reduced vertical force for virtual pets
-        { x: 0, y: -0.05 }; // Stronger force for other objects
+        { x: 0, y: -0.08 } : // Reduced vertical force for virtual pets
+        { x: 0, y: -0.02 }; // Reduced force for other objects
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add slight random horizontal variation for more natural feel
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.1 : 0.02);
+      // Add slight random horizontal variation (reduced)
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.04 : 0.01);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
