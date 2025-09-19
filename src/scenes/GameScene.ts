@@ -64,6 +64,7 @@ export class GameScene extends Phaser.Scene {
   private magneticVisualState: 'default' | 'near' | 'snap' = 'default';
   // Only allow ignition magnet to attract keys for a brief window after release
   private keysAttractionUntil: number = 0;
+  private lastMagneticAttractionLog: number = 0; // For throttled debugging
   
   // ============================================================================
   // PHYSICS OBJECTS
@@ -983,7 +984,13 @@ export class GameScene extends Phaser.Scene {
   private applyMagneticAttraction() {
     // Only apply magnetic attraction after game has started
     if (!this.gameState.isGameStarted()) {
-          return;
+      return;
+    }
+    
+    // Debug: Log when this method is called (throttled to avoid spam)
+    if (!this.lastMagneticAttractionLog || this.time.now - this.lastMagneticAttractionLog > 1000) {
+      console.log('🧲 applyMagneticAttraction called - carStarted:', this.carStarted, 'keysInIgnition:', this.keysInIgnition, 'gameStarted:', this.gameState.isGameStarted());
+      this.lastMagneticAttractionLog = this.time.now;
     }
     
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
@@ -1047,6 +1054,8 @@ export class GameScene extends Phaser.Scene {
         stiffness: magneticConfig.constraintStiffness,
         damping: magneticConfig.constraintDamping
       });
+      
+      console.log('🔑 Keys constraint created successfully:', !!this.keysConstraint);
       
       // Track that keys are now in the ignition
       this.keysInIgnition = true;
