@@ -1114,12 +1114,9 @@ export class CarMechanics {
     ));
     
     // Find the bundled CYOA for this exit (only bundled ones, not all exit-related)
-    console.log(`triggerScheduledExitCyoa: Searching for CYOA with criteria: exitNumber=${exitNumber}, exitTiming='after' or undefined, not triggered`);
-    const bundledCyoa = this.plannedCyoa.find(cyoa => {
-      const matches = cyoa.isExitRelated && cyoa.exitNumber === exitNumber && (!cyoa.exitTiming || cyoa.exitTiming === 'after') && !cyoa.triggered;
-      console.log(`  CYOA ${cyoa.id}: isExitRelated=${cyoa.isExitRelated}, exitNumber=${cyoa.exitNumber}, exitTiming='${cyoa.exitTiming}', triggered=${cyoa.triggered}, matches=${matches}`);
-      return matches;
-    });
+    const bundledCyoa = this.plannedCyoa.find(cyoa => 
+      cyoa.isExitRelated && cyoa.exitNumber === exitNumber && (!cyoa.exitTiming || cyoa.exitTiming === 'after') && !cyoa.triggered
+    );
     
     if (bundledCyoa) {
       console.log(`Triggering scheduled bundled CYOA for Exit ${exitNumber}`);
@@ -1300,16 +1297,11 @@ export class CarMechanics {
 
     // Check for scheduled exit CYOA
     if (this.scheduledExitCyoa && !this.scheduledExitCyoa.triggered) {
-      console.log(`onStepEvent: Checking scheduled CYOA - Exit ${this.scheduledExitCyoa.exitNumber}, triggerStep: ${this.scheduledExitCyoa.triggerStep}, currentStep: ${currentStep}`);
       if (currentStep >= this.scheduledExitCyoa.triggerStep) {
         console.log(`onStepEvent: Triggering scheduled CYOA for Exit ${this.scheduledExitCyoa.exitNumber} at step ${currentStep}`);
         this.triggerScheduledExitCyoa();
         this.scheduledExitCyoa.triggered = true;
       }
-    } else if (this.scheduledExitCyoa) {
-      console.log(`onStepEvent: Scheduled CYOA already triggered for Exit ${this.scheduledExitCyoa.exitNumber}`);
-    } else {
-      console.log(`onStepEvent: No scheduled CYOA pending`);
     }
     
     // Update speed progression on step events only

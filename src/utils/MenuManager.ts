@@ -2279,6 +2279,24 @@ export class MenuManager {
       if (gameScene) {
         gameScene.events.emit('gameResumed');
       }
+    } else if (this.currentDisplayedMenuType === 'EXIT') {
+      // Resume the game when EXIT menu closes
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = false;
+        console.log('MenuManager: Game resumed after EXIT menu');
+      }
+      
+      // Resume driving after EXIT menu closes
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
+        (gameScene as any).carMechanics.resumeDriving();
+        console.log('MenuManager: Resumed CarMechanics driving after EXIT');
+      }
+      // Emit game resumed event
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
+      }
     }
     
     // Pop the current displayed menu from the stack (not necessarily the top)
