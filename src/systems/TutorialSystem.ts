@@ -253,10 +253,16 @@ export class TutorialSystem {
       this.tutorialMaskGraphics.fillCircle(sx, sy, keysHoleRadius);
     }
     
-    // Ignition cutout with 20% padding (prefer live magnetic body position in world/screen space)
-    let ignitionX = this.config.magneticTargetX;
-    let ignitionY = this.config.magneticTargetY;
+    // Ignition cutout with 20% padding (use actual magnetic target position from GameElements)
+    let ignitionX = 200; // Default fallback
+    let ignitionY = 550; // Default fallback
     try {
+      // Get the actual magnetic target position from GameElements config
+      const magneticTargetConfig = gameElements.getMagneticTarget();
+      ignitionX = magneticTargetConfig.position.x;
+      ignitionY = magneticTargetConfig.position.y;
+      
+      // Also try to get the live magnetic body position as backup
       const mt: any = (this.scene as any).magneticTarget;
       const magneticBody: any = mt && (mt as any).magneticBody;
       if (magneticBody && magneticBody.position) {
