@@ -970,23 +970,9 @@ export class GameUI {
    * Update the steering indicator visual
    */
   private updateSteeringIndicator(steeringValue: number) {
+    // Steering indicator line disabled - no visual line needed
     if (this.steeringDialIndicator) {
-      const angleDeg = Phaser.Math.Clamp((steeringValue / 150) * 60, -60, 60); // Updated to match new range
-      const angleRad = Phaser.Math.DegToRad(angleDeg - 90); // Match original calculation
-      const gameWidth = this.scene.cameras.main.width;
-      const gameHeight = this.scene.cameras.main.height;
-      const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent;
-      const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent;
-      const lineLen = UI_TUNABLES.steering.indicatorLength;
-      const endX = dialX + Math.cos(angleRad) * lineLen;
-      const endY = dialY + Math.sin(angleRad) * lineLen;
-      
-      this.steeringDialIndicator.clear();
-      this.steeringDialIndicator.lineStyle(3, 0xffcc00, 1);
-      this.steeringDialIndicator.beginPath();
-      this.steeringDialIndicator.moveTo(dialX, dialY);
-      this.steeringDialIndicator.lineTo(endX, endY);
-      this.steeringDialIndicator.strokePath();
+      this.steeringDialIndicator.clear(); // Clear any existing line
     }
     
     // Update angle text - show percentage from 0-100%
