@@ -1574,8 +1574,19 @@ export class MenuManager {
 
         // Add food/bathroom/bored meters to the menu
         const gameScene = this.scene.scene.get('GameScene');
-        if (gameScene && (gameScene as any).virtualPet) {
-          const pet = (gameScene as any).virtualPet;
+        if (gameScene) {
+          // Derive the specific pet from the clicked sprite
+          let pet: any = undefined;
+          try {
+            const pets = (gameScene as any)?.virtualPets as any[];
+            if (pets && pets.length) {
+              pet = pets.find(p => p?.getPetSprite?.() === petSprite);
+            }
+            if (!pet && (gameScene as any).getVirtualPet) {
+              pet = (gameScene as any).getVirtualPet(0);
+            }
+          } catch {}
+          if (!pet) return;
           const foodMeter = pet.getFoodMeterElements();
           const bathMeter = pet.getBathroomMeterElements?.();
           const boredMeter = pet.getBoredMeterElements?.();
@@ -1595,7 +1606,7 @@ export class MenuManager {
           foodBarBG.setStrokeStyle(2, 0xffffff, 0.8);
           foodBarBG.setScrollFactor(0);
           
-          const foodValue = (gameScene as any).virtualPet.getFoodValue?.() || 0;
+          const foodValue = pet.getFoodValue?.() || 0;
           const fillWidth = Math.floor(foodBarWidth * (foodValue / 10));
           const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, 45, fillWidth, foodBarHeight - 4, 0x2ecc71, 1);
           foodBarFill.setOrigin(0, 0.5);

@@ -170,6 +170,9 @@ export class CarMechanics {
     triggered: boolean;
   } | null = null;
 
+  // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
+  private suppressRegularCyoaUntilStep: number = 0;
+
   // Pending Exit Menu to show after a 'before' CYOA is closed
   private pendingExitAfterCyoa: { shopCount: number; exitNumber: number } | null = null;
   
@@ -807,10 +810,19 @@ export class CarMechanics {
     });
     
     // Check if any planned non-exit CYOA should be triggered by progress
+    // Suppress near exit-collision windows to avoid duplicate/overlapping triggers
+    let currentStepForSuppression = 0;
+    try {
+      const gameScene: any = this.scene.scene.get('GameScene');
+      currentStepForSuppression = gameScene?.gameState?.getState()?.step || 0;
+    } catch {}
     this.plannedCyoa.forEach(plannedCyoa => {
       // Exit-related CYOA are coordinated with exit interactions (before at collision, after on close)
       if (plannedCyoa.isExitRelated && plannedCyoa.exitNumber) {
         return;
+      }
+      if (currentStepForSuppression <= this.suppressRegularCyoaUntilStep) {
+        return; // Skip regular CYOA during suppression window
       }
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
         console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
@@ -1983,6 +1995,13 @@ export class CarMechanics {
           exitNumber = this.activeExits[this.activeExits.length - 1].exitNumber;
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
+
+        // Set suppression window for regular CYOAs to avoid accidental co-trigger at the same time
+        try {
+          const gs: any = this.scene.scene.get('GameScene');
+          const stepNow = gs?.gameState?.getState()?.step || 0;
+          this.suppressRegularCyoaUntilStep = stepNow + 2; // allow after two steps
+        } catch {}
 
         // If there is a bundled BEFORE CYOA for this exit, trigger it now before the exit menu
         if (exitNumber != null) {
