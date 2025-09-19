@@ -288,11 +288,14 @@ export class MenuManager {
     // Handle different menu types
     switch (this.currentMenuAutoCompleteType) {
       case 'TURN_KEY':
-        // For ignition menu, emit turnKey event
-        const gameScene = this.scene.scene.get('GameScene');
-        if (gameScene) {
-          gameScene.events.emit('turnKey');
-        }
+        // For ignition menu, add delay before closing and emitting turnKey event (matches manual completion)
+        this.scene.time.delayedCall(500, () => {
+          this.closeDialog();
+          const gameScene = this.scene.scene.get('GameScene');
+          if (gameScene) {
+            gameScene.events.emit('turnKey');
+          }
+        });
         break;
       case 'CYOA':
         // For CYOA menus, just close and resume
