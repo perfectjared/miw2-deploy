@@ -1053,6 +1053,9 @@ export class CarMechanics {
    * Trigger a planned CYOA
    */
   private triggerCyoa(plannedCyoa: any, options?: { allowAfter?: boolean }) {
+    // Add detailed call stack logging to track double-triggering
+    console.log(`🎭 triggerCyoa called for CYOA ${plannedCyoa.id} - Call stack:`, new Error().stack?.split('\n').slice(1, 6));
+    
     // If we're on the exact exit-collision tick, only allow the matching 'before' bundled CYOA
     if (this.exitCollisionGuardActive) {
       const allowed = plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'before' && plannedCyoa.exitNumber === this.exitCollisionNumberGuard;
