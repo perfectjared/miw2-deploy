@@ -249,7 +249,7 @@ export class GameUI {
     this.updateProgress(state.progress); // Re-added to fix progress bar
     this.updateManagerValues(state); // This now includes stops
     this.updateRegionInfo(state.currentRegion, state.showsInCurrentRegion);
-    this.updateStopsCounter(state.stops);
+    // updateStopsCounter removed - stopsCounterText now shows sequence fraction
     // Speed crank removed - using automatic speed progression
   }
 
@@ -1208,23 +1208,43 @@ export class GameUI {
   }
 
   /**
-   * Update region information display with fractional sequence count
+   * Update region information display (region name + visit count)
    */
-  public updateRegionInfoWithTotal(regionName: string, showsInRegion: number, totalSequences: number) {
+  private updateRegionInfo(regionName: string, showsInRegion: number) {
     if (this.regionText) {
-      const currentSequence = showsInRegion + 1; // Shows are 0-based, display is 1-based
-      this.regionText.setText(`${regionName}-${currentSequence}/${totalSequences}`);
+      const visitCount = this.getRegionVisitCount(regionName, showsInRegion);
+      this.regionText.setText(`${regionName}-${visitCount}`);
     }
+  }
+
+  /**
+   * Get how many times a region has been visited (for display)
+   */
+  private getRegionVisitCount(regionName: string, showsInRegion: number): number {
+    // For now, we'll use a simple calculation
+    // In a real implementation, this would get the actual visit count from GameState
+    // For the first visit, showsInRegion starts at 0, so visit count is 1
+    return showsInRegion + 1;
   }
 
   /**
    * Update region information display with fractional sequence count
    */
-  private updateRegionInfo(regionName: string, showsInRegion: number) {
-    if (this.regionText) {
+  public updateRegionInfoWithTotal(regionName: string, showsInRegion: number, totalSequences: number) {
+    // Update region name + visit count
+    this.updateRegionInfo(regionName, showsInRegion);
+    
+    // Update sequence fraction display
+    this.updateSequenceFraction(showsInRegion, totalSequences);
+  }
+
+  /**
+   * Update sequence fraction display (1/2, 2/3, etc.)
+   */
+  private updateSequenceFraction(showsInRegion: number, totalSequences: number) {
+    if (this.stopsCounterText) {
       const currentSequence = showsInRegion + 1; // Shows are 0-based, display is 1-based
-      const totalSequences = this.getTotalSequencesForRegion(regionName);
-      this.regionText.setText(`${regionName}-${currentSequence}/${totalSequences}`);
+      this.stopsCounterText.setText(`${currentSequence}/${totalSequences}`);
     }
   }
 
