@@ -405,17 +405,17 @@ export class MenuManager {
     
     const menuToRestore = this.menuStack[this.menuStack.length - 1];
     
-    // Simple rule: Only restore PERSISTENT menus, and only if user didn't dismiss them
-    const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
-    const isOneTime = this.MENU_CATEGORIES.ONE_TIME.includes(menuToRestore.type);
-    
-    if (isOneTime) {
-      console.log(`MenuManager: ${menuToRestore.type} is one-time event, not restoring`);
+    // NEVER restore CYOA menus - they are one-time events
+    if (menuToRestore.type === 'CYOA') {
+      console.log(`MenuManager: CYOA is one-time event, not restoring`);
       return false;
     }
     
+    // Only restore PERSISTENT menus (START, PAUSE, GAME_OVER, TURN_KEY)
+    const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
+    
     if (!isPersistent) {
-      console.log(`MenuManager: ${menuToRestore.type} is temporary, not restoring`);
+      console.log(`MenuManager: ${menuToRestore.type} is not persistent, not restoring`);
       return false;
     }
     
@@ -2323,22 +2323,20 @@ export class MenuManager {
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
     
-    // Handle menu-specific cleanup based on category
+    // Simple cleanup - just pop the current menu and resume game
     if (this.currentDisplayedMenuType) {
       const menuType = this.currentDisplayedMenuType;
       
       if (this.MENU_CATEGORIES.ONE_TIME.includes(menuType)) {
         // One-time menus: Clean up all instances from stack
         this.clearMenusFromStack(menuType);
-        this.resumeGame();
-      } else if (this.MENU_CATEGORIES.TEMPORARY.includes(menuType)) {
-        // Temporary menus: Just pop this instance
-        this.popSpecificMenu(menuType);
-        this.resumeGame();
-      } else if (this.MENU_CATEGORIES.PERSISTENT.includes(menuType)) {
-        // Persistent menus: Just pop this instance, don't resume game
+      } else {
+        // All other menus: Just pop this instance
         this.popSpecificMenu(menuType);
       }
+      
+      // Always resume game when closing any menu
+      this.resumeGame();
     }
     
     this.clearCurrentDialog();
