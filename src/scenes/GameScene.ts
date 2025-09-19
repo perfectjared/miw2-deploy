@@ -1307,9 +1307,11 @@ export class GameScene extends Phaser.Scene {
     this.restoreKeyPhysics();
     
     // Reset target color
+    // Use GameElements config for magnetic target position
+    const magneticTargetConfig = gameElements.getMagneticTarget();
     this.magneticTarget.clear();
     this.magneticTarget.lineStyle(3, 0xff0000, 1);
-    this.magneticTarget.strokeCircle(200, 520, 25);
+    this.magneticTarget.strokeCircle(magneticTargetConfig.position.x, magneticTargetConfig.position.y, magneticTargetConfig.radius);
     
     // Snap speed crank to 0% when keys are removed
     this.resetCrankToZero();
@@ -1391,9 +1393,11 @@ export class GameScene extends Phaser.Scene {
    */
   private activateMagneticTarget() {
     if (this.magneticTarget) {
+      // Use GameElements config for magnetic target position
+      const magneticTargetConfig = gameElements.getMagneticTarget();
       this.magneticTarget.clear();
       this.magneticTarget.lineStyle(3, 0xff0000, 1);
-      this.magneticTarget.strokeCircle(200, 520, 25);
+      this.magneticTarget.strokeCircle(magneticTargetConfig.position.x, magneticTargetConfig.position.y, magneticTargetConfig.radius);
     // Magnetic target activated - keys can now be attracted
     }
   }
