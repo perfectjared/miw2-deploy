@@ -151,8 +151,11 @@ export class MenuManager {
    * Start universal menu auto-completion
    */
   private startMenuAutoComplete(menuType: string) {
-    // Skip auto-completion for start menu
-    if (menuType === 'START') return;
+    // Skip auto-completion for interactive menus that players should engage with
+    if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION') {
+      console.log(`Skipping auto-completion for ${menuType} menu (interactive content)`);
+      return;
+    }
     
     this.currentMenuAutoCompleteType = menuType;
     this.menuAutoCompleteStepCount = 0;
@@ -1601,8 +1604,7 @@ export class MenuManager {
     // Create dialog directly without complex menu management
     this.createDialog(menuConfig, 'CYOA');
     
-    // Start universal auto-completion
-    this.startMenuAutoComplete('CYOA');
+    // CYOA menus are exempt from auto-completion (interactive content)
     
     // Pause game immediately
     this.pauseGame();
@@ -2099,8 +2101,7 @@ export class MenuManager {
       });
     }
     
-    // Start universal auto-completion
-    this.startMenuAutoComplete('DESTINATION');
+    // Destination menus are exempt from auto-completion (interactive content)
   }
 
   private createDialog(menuConfig: MenuConfig, menuType?: string) {
