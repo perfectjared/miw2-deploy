@@ -20,6 +20,7 @@
  */
 
 import Phaser from 'phaser';
+import { gameElements } from '../config/GameConfig';
 
 export interface TutorialConfig {
   // Overlay Parameters
@@ -123,70 +124,21 @@ export class TutorialSystem {
    * Update tutorial overlay based on current game state
    */
   public updateTutorialOverlay(state: TutorialState) {
-    // Determine which tutorial state to show
+    // Tutorial overlay disabled - no visual overlays needed
     let tutorialState: 'none' | 'keys-and-ignition' | 'steering' | 'exit-warning' = 'none';
     
-    if (state.hasOpenMenu) {
-      // Menu is open - no tutorial overlay (menu has its own overlay)
-      tutorialState = 'none';
-    } else if (state.inExitCollisionPath) {
-      // Player is in collision path with an exit - show warning
-      tutorialState = 'exit-warning';
-    } else if (!state.keysInIgnition) {
-      // Keys not in ignition should always be highlighted unless a menu is open
-      tutorialState = 'keys-and-ignition';
-    } else if (state.keysInIgnition && state.carStarted) {
-      // Car started - show steering tutorial if not used yet
-      if (state.steeringUsed) {
-        tutorialState = 'none';
-      } else {
-        tutorialState = 'steering';
-      }
-    } else if (state.carStarted) {
-      // Car started but not driving yet - show steering tutorial
-      tutorialState = 'steering';
-    } else {
-      // Keys are in ignition but car not started - ignition menu will handle overlay
-      tutorialState = 'none';
-    }
-    
-    // Update overlay visibility and mask
+    // Always hide tutorial overlay since tutorial system is working without visual cues
     if (this.tutorialOverlay) {
-      const shouldShow = tutorialState !== 'none';
-      this.tutorialOverlay.setVisible(shouldShow);
+      this.tutorialOverlay.setVisible(false);
       try {
         // Inform parent scene so other scenes (like AppScene) can react (hide Pause/Save)
-        (this.scene as any).events?.emit?.('tutorialOverlayVisible', shouldShow);
+        (this.scene as any).events?.emit?.('tutorialOverlayVisible', false);
       } catch {}
-      if (shouldShow) {
-        // Ensure blink text is above overlay gfx
-        if (this.blinkText) {
-          this.blinkText.setDepth(1);
-          this.blinkText.setVisible(true);
-        }
-        this.updateTutorialMask(tutorialState as 'keys-and-ignition' | 'steering' | 'exit-warning');
-        
-        // Set appropriate text based on tutorial state
-        switch (tutorialState) {
-          case 'keys-and-ignition':
-            this.setBlinkText('Put keys in ignition');
-            break;
-          // Speed crank removed - no crank tutorial
-          case 'steering':
-            this.setBlinkText('Use steering wheel');
-            break;
-          case 'exit-warning':
-            this.setBlinkText('Exit ahead!');
-            break;
-        }
-      } else if (this.blinkText) {
-        this.blinkText.setVisible(false);
-      }
     }
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      // console.log('Tutorial overlay state changed:', tutorialState, 'keysInIgnition:', state.keysInIgnition, 'carStarted:', state.carStarted, 'hasOpenMenu:', state.hasOpenMenu, 'menuType:', state.currentMenuType, 'inExitCollisionPath:', state.inExitCollisionPath);
+      console.log('Tutorial overlay disabled - no visual overlays');
       this.lastTutorialState = tutorialState;
     }
   }
@@ -310,9 +262,10 @@ export class TutorialSystem {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Match GameUI dial placement (x: 0.3, y: 0.7) and knob radius (~80) with padding
-    const steeringX = gameWidth * 0.3;
-    const steeringY = gameHeight * 0.7;
+    // Use GameElements config for steering wheel position
+    const steeringConfig = gameElements.getSteeringWheel();
+    const steeringX = gameWidth * steeringConfig.position.x;
+    const steeringY = gameHeight * steeringConfig.position.y;
     const radius = 80 + 16; // knobRadius + padding
     this.tutorialMaskGraphics.fillCircle(steeringX, steeringY, radius);
   }

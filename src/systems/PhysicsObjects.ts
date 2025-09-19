@@ -18,6 +18,7 @@
  */
 
 import Phaser from 'phaser';
+import { gameElements } from '../config/GameConfig';
 
 // Base interface for physics objects
 export interface PhysicsObject {
@@ -38,10 +39,14 @@ export class Trash implements PhysicsObject {
   }
 
   private createGameObject() {
+    // Use GameElements config for item size
+    const itemSize = gameElements.getItemSize('medium');
+    const radius = itemSize.width / 2; // Convert width to radius
+    
     this.gameObject = this.scene.add.circle(
       100, // x position
       200, // y position
-      40,  // radius (2/3 of previous: was 60, now 40)
+      radius,  // radius from config
       0xff0000 // color (red)
     );
     // Set initial depth above steering wheel and keys
@@ -189,10 +194,14 @@ export class Item implements PhysicsObject {
   }
 
   private createGameObject() {
+    // Use GameElements config for item size
+    const itemSize = gameElements.getItemSize('medium');
+    const radius = itemSize.width / 2; // Convert width to radius
+    
     this.gameObject = this.scene.add.circle(
       1200, // x position
       200,  // y position
-      18,   // radius
+      radius,   // radius from config
       0x00ff00 // color (green)
     );
     // Set initial depth above steering wheel and keys
@@ -218,6 +227,8 @@ export class Item implements PhysicsObject {
     let lastPointerY = 0;
     let velocityX = 0;
     let velocityY = 0;
+    let pointerBody: any = null;
+    let dragConstraint: any = null;
     
     this.gameObject.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       isDragging = true;
@@ -370,10 +381,14 @@ export class Keys implements PhysicsObject {
   }
 
   private createGameObject() {
+    // Use GameElements config for item size
+    const itemSize = gameElements.getItemSize('small');
+    const radius = itemSize.width / 2; // Convert width to radius
+    
     this.gameObject = this.scene.add.circle(
       200, // x position
       300, // y position
-      15,  // radius
+      radius,  // radius from config
       0x0000ff // color (blue)
     );
     // Set initial depth above steering wheel and keys

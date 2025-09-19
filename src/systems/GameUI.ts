@@ -18,6 +18,7 @@
  */
 
 import Phaser from 'phaser';
+import { gameElements } from '../config/GameConfig';
 
 // Tunable UI constants for quick tweaking
 const UI_TUNABLES = {
@@ -782,8 +783,10 @@ export class GameUI {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent; // Left side
-    const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent; // Bottom area
+    // Use GameElements config for steering wheel position
+    const steeringConfig = gameElements.getSteeringWheel();
+    const dialX = gameWidth * steeringConfig.position.x;
+    const dialY = gameHeight * steeringConfig.position.y;
     
     // Create a simple custom knob using graphics
     const knobRadius = UI_TUNABLES.steering.knobRadius;
@@ -803,7 +806,7 @@ export class GameUI {
     
     // Create SVG overlay for visual appeal
     this.steeringWheelSVG = this.scene.add.sprite(dialX, dialY, 'steering-wheel');
-    this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale);
+    this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale * steeringConfig.scale);
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
     this.steeringWheelSVG.setAlpha(UI_TUNABLES.steering.svgAlpha); // Semi-transparent overlay
     this.steeringWheelSVG.setDepth(50001); // Above the knob

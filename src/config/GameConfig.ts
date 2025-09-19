@@ -11,6 +11,11 @@
  * - Clear documentation of what each parameter does
  */
 
+import { gameElements, GameElementsConfig } from './GameElements';
+
+// Re-export for convenience
+export { gameElements, type GameElementsConfig };
+
 // ============================================================================
 // CAR MECHANICS CONFIGURATION
 // ============================================================================
@@ -89,9 +94,9 @@ export const TUTORIAL_CONFIG = {
   maskColor: 0xffffff,
   keysHoleRadius: 30,
   targetHoleMultiplier: 1.5,
-  magneticTargetX: 200,
-  magneticTargetY: 550,
-  magneticTargetRadius: 25
+  magneticTargetX: 200,        // DEPRECATED: use gameElements.getMagneticTarget()
+  magneticTargetY: 550,        // DEPRECATED: use gameElements.getMagneticTarget()
+  magneticTargetRadius: 25     // DEPRECATED: use gameElements.getMagneticTarget()
 } as const;
 
 // ============================================================================
@@ -123,11 +128,11 @@ export const UI_LAYOUT = {
   progressX: 0.02,            // 2% from left edge
   progressY: 0.92,            // 92% from top edge (moved up from 95%)
   
-  // Rearview rectangle (virtual pets)
-  rearviewX: 0.55,             // 50% from left edge (centered)
-  rearviewY: 0.05,             // 5% from top edge (moved down from -0.05%)
-  rearviewWidth: 0.92,        // 85% of screen width
-  rearviewHeight: 0.4,       // 20% of screen height
+  // Rearview rectangle (virtual pets) - now managed by GameElements config
+  rearviewX: 0.55,             // 50% from left edge (centered) - DEPRECATED: use gameElements.getRearviewMirror()
+  rearviewY: 0.035,            // 3.5% from top edge (30% less low than 5%) - DEPRECATED: use gameElements.getRearviewMirror()
+  rearviewWidth: 0.92,        // 85% of screen width - DEPRECATED: use gameElements.getRearviewMirror()
+  rearviewHeight: 0.4,       // 20% of screen height - DEPRECATED: use gameElements.getRearviewMirror()
   
   // ============================================================================
   // SIZING (Font sizes, dimensions, etc.)

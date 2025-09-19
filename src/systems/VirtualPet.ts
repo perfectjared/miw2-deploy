@@ -9,6 +9,7 @@ export interface VirtualPetConfig {
 	xPercent?: number; // 0..1 horizontal position
 	yOffset?: number;  // pixels from top
 	depth?: number;
+	scale?: number;   // scale multiplier
 }
 
 export class VirtualPet {

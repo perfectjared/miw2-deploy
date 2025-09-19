@@ -25,7 +25,7 @@ import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
 import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
-import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG, REGION_CONFIG } from '../config/GameConfig';
+import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG, REGION_CONFIG, gameElements } from '../config/GameConfig';
 
 // Tunable scene constants (for quick tweaking)
 const SCENE_TUNABLES = {
@@ -127,6 +127,11 @@ export class GameScene extends Phaser.Scene {
     try {
       console.log('🎯 === GAMESCENE CREATE CALLED ===');
       console.log('GameScene: Initializing modular systems...');
+      
+      // Load game elements configuration first
+      await gameElements.loadConfig();
+      console.log('🎯 Game elements config loaded');
+      
       // Favor topmost hit-test only to reduce pointerover processing cost
       this.input.topOnly = true;
       
@@ -273,33 +278,28 @@ export class GameScene extends Phaser.Scene {
     const offScreenY = -cam.height; // Position above the screen
     rearviewContainer.setPosition(0, offScreenY);
     
-    // Create the shared rectangle background (rearview) using UI_LAYOUT
-    const rectWidth = Math.floor(cam.width * UI_LAYOUT.rearviewWidth);
-    const rectHeight = Math.floor(cam.height * UI_LAYOUT.rearviewHeight);
-    const rectX = Math.floor(cam.width * UI_LAYOUT.rearviewX);
-    const rectY = Math.floor(cam.height * UI_LAYOUT.rearviewY);
+    // Create the shared rectangle background (rearview) using GameElements config
+    const rearviewConfig = gameElements.getRearviewMirror();
+    const rectWidth = Math.floor(cam.width * rearviewConfig.size.width);
+    const rectHeight = Math.floor(cam.height * rearviewConfig.size.height);
+    const rectX = Math.floor(cam.width * rearviewConfig.position.x);
+    const rectY = Math.floor(cam.height * rearviewConfig.position.y);
     
     const rearviewRect = this.add.rectangle(rectX, rectY, rectWidth, rectHeight, UI_LAYOUT.rearviewBackgroundColor, UI_LAYOUT.rearviewBackgroundAlpha);
     rearviewRect.setStrokeStyle(2, UI_LAYOUT.rearviewStrokeColor, 1);
     rearviewRect.setScrollFactor(0);
     rearviewContainer.add(rearviewRect);
     
-    // Manual positioning for each virtual pet using x/y percentages
-    const petPositions = [
-      { xPercent: 0.12, yPercent: 0.76 }, // Pet 1
-      { xPercent: 0.3, yPercent: 0.6 }, // Pet 2
-      { xPercent: 0.5, yPercent: 0.7 }, // Pet 3
-      { xPercent: 0.73, yPercent: 0.68 }, // Pet 4
-      { xPercent: 0.9, yPercent: 0.73 }  // Pet 5
-    ];
+    // Get virtual pet positions from GameElements config
+    const petPositions = gameElements.getVirtualPetPositions();
     
     // Create five virtual pets with manual positioning
     for (let i = 0; i < 5; i++) {
       const position = petPositions[i];
       
       // Convert percentage to pixel offset from rectangle center
-      const xOffset = Math.floor((position.xPercent - 0.5) * rectWidth);
-      const yOffset = Math.floor((position.yPercent - 0.5) * rectHeight);
+      const xOffset = Math.floor((position.x - 0.5) * rectWidth);
+      const yOffset = Math.floor((position.y - 0.5) * rectHeight);
       
       // Position pets at their final screen coordinates (where they'll be when container is at y=0)
       const petX = rectX + xOffset;
@@ -311,7 +311,8 @@ export class GameScene extends Phaser.Scene {
         yOffset: petY, // Use absolute Y position at final location
         petColor: PET_CONFIG.petColor, // Use centralized pet color
         width: 0, // Don't create individual rectangles
-        height: 0
+        height: 0,
+        scale: position.scale || 0.8 // Use scale from config, default to 0.8
       });
       pet.initialize();
       
@@ -632,11 +633,12 @@ export class GameScene extends Phaser.Scene {
    * Create magnetic target
    */
   private createMagneticTarget() {
-    // Use centralized magnetic configuration
+    // Use GameElements config for magnetic target position
+    const magneticTargetConfig = gameElements.getMagneticTarget();
     const magneticConfig = {
-      x: PHYSICS_CONFIG.magneticTargetX,
-      y: PHYSICS_CONFIG.magneticTargetY,
-      radius: PHYSICS_CONFIG.magneticTargetRadius,
+      x: magneticTargetConfig.position.x,
+      y: magneticTargetConfig.position.y,
+      radius: magneticTargetConfig.radius,
       color: PHYSICS_CONFIG.magneticTargetColor,
       inactiveColor: PHYSICS_CONFIG.magneticTargetInactiveColor
     };
@@ -1010,11 +1012,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     
-    // Use centralized magnetic configuration
+    // Use GameElements config for magnetic target position
+    const magneticTargetConfig = gameElements.getMagneticTarget();
     const magneticConfig = {
-      x: PHYSICS_CONFIG.magneticTargetX,
-      y: PHYSICS_CONFIG.magneticTargetY,
-      radius: PHYSICS_CONFIG.magneticTargetRadius,
+      x: magneticTargetConfig.position.x,
+      y: magneticTargetConfig.position.y,
+      radius: magneticTargetConfig.radius,
       color: PHYSICS_CONFIG.magneticTargetColor,
       magneticRange: PHYSICS_CONFIG.magneticRadius,
       magneticStrength: PHYSICS_CONFIG.magneticStrength,
@@ -1387,9 +1390,12 @@ export class GameScene extends Phaser.Scene {
    * Start the game
    */
   public startGame() {
+    console.log('🎯 startGame() called');
     this.gameState.startGame();
     this.gameState.startTutorial(); // Start tutorial sequence
+    console.log('🎯 Tutorial started, phase:', this.gameState.getTutorialPhase());
     this.carMechanics.enableTutorialMode(); // Enable tutorial mode
+    console.log('🎯 Tutorial mode enabled');
     // Don't set carStarted = true here - car is not started yet
     this.scheduleTutorialUpdate(0);
     
@@ -1695,6 +1701,7 @@ export class GameScene extends Phaser.Scene {
     const tutorialStep = this.gameState.getTutorialStep();
     
     console.log(`🎓 Tutorial step ${step}: phase=${tutorialPhase}, tutorialStep=${tutorialStep}`);
+    console.log(`🎓 Game state: carStarted=${this.carStarted}, keysInIgnition=${this.keysInIgnition}`);
     
     switch (tutorialPhase) {
       case 'initial_driving':
@@ -1736,16 +1743,22 @@ export class GameScene extends Phaser.Scene {
    */
   private showTutorialInterrupt() {
     console.log('🎓 Showing tutorial interrupt - virtual pet care');
+    console.log('🎓 MenuScene exists:', !!this.scene.get('MenuScene'));
     
     // Show interrupt menu
     const menuScene = this.scene.get('MenuScene');
     if (menuScene) {
+      console.log('🎓 Emitting showTutorialInterrupt event to MenuScene');
       menuScene.events.emit('showTutorialInterrupt');
       this.scene.bringToTop('MenuScene');
+      console.log('🎓 MenuScene brought to top');
+    } else {
+      console.error('🎓 ERROR: MenuScene not found!');
     }
     
     // Schedule menu to disappear after 8 steps
     this.tutorialInterruptStep = this.gameState.getState().step + 8;
+    console.log(`🎓 Tutorial interrupt scheduled to end at step ${this.tutorialInterruptStep}`);
   }
   
   /**
@@ -1785,7 +1798,7 @@ export class GameScene extends Phaser.Scene {
     
     if (rearviewContainer) {
       const cam = this.cameras.main;
-      const targetY = Math.floor(cam.height * UI_LAYOUT.rearviewY);
+      const targetY = Math.floor(cam.height * gameElements.getRearviewMirror().position.y);
       console.log('🎓 Target Y position:', targetY, 'Current Y:', rearviewContainer.y);
       
       // Animate rearview mirror sliding down
@@ -1834,6 +1847,7 @@ export class GameScene extends Phaser.Scene {
     
     // Handle tutorial sequence
     if (this.gameState.isInTutorial()) {
+      console.log(`🎓 Step ${step}: Processing tutorial step`);
       this.handleTutorialStep(step);
       
       // Update tutorial interrupt countdown if menu is open
@@ -1895,7 +1909,7 @@ export class GameScene extends Phaser.Scene {
       // Update gravity based on speed percentage
       this.carMechanics.updateGravityBasedOnSpeed(speedPercentage);
       
-      const progressIncrement = Math.max(0.1, speedMultiplier); // Minimum 0.1 progress per step
+      const progressIncrement = Math.max(0.3, speedMultiplier * 2); // Minimum 0.3 progress per step, 2x multiplier for faster progress
       const next = cur + progressIncrement;
       this.gameState.updateState({ progress: next });
       

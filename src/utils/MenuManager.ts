@@ -1214,6 +1214,13 @@ export class MenuManager {
     this.clearCurrentDialog();
     this.pushMenu('CYOA', cyoaData);
     
+    // Pause the game when CYOA menu opens
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused for CYOA menu');
+    }
+    
     const cyoaDescription = cyoaData.isExitRelated 
       ? `Something happened near Exit ${cyoaData.exitNumber}!`
       : 'Something happened!';
@@ -2108,6 +2115,13 @@ export class MenuManager {
     
     // Handle special resumption logic for certain menu types
     if (this.currentDisplayedMenuType === 'CYOA') {
+      // Resume the game when CYOA menu closes
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = false;
+        console.log('MenuManager: Game resumed after CYOA menu');
+      }
+      
       // Resume driving after CYOA menu closes
       const gameScene = this.scene.scene.get('GameScene');
       if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {

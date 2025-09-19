@@ -97,7 +97,7 @@ export class CarMechanics {
   // Speed Progression System
   private baseSpeed: number = 0; // Base speed from crank input
   private speedProgressionStartStep: number = 0; // When speed progression started (step-based)
-  private speedProgressionDurationSteps: number = 600; // 600 steps to reach max progression (10 seconds at 60fps) - faster for testing
+  private speedProgressionDurationSteps: number = 1200; // 1200 steps to reach max progression (20 seconds at 60fps) - slower progression
   private maxSpeedMultiplier: number = 1.0; // Maximum 1x speed multiplier (100%)
   // private shouldAutoRestartDriving: boolean = false; // Unused
   // private shouldAutoResumeAfterCollision: boolean = false; // Unused
@@ -1014,7 +1014,7 @@ export class CarMechanics {
     const logFactor = Math.log(distanceToTarget + 1) / Math.log(2);
     
     // Base increment starts much higher for faster initial progression
-    const baseIncrementPercent = 0.08; // 8% per step (much faster progression for testing)
+    const baseIncrementPercent = 0.04; // 4% per step (slower progression)
     const incrementPercent = baseIncrementPercent * logFactor;
     
     // Calculate the actual speed increment
