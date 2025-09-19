@@ -667,13 +667,14 @@ export class CarMechanics {
         }
       }
       
-      // For first sequence, make CYOAs 2 and 3 exit-related for testing (before and after)
+      // For first sequence, make CYOAs 2 and 3 exit-related for testing (before and after different exits)
       if (isFirstSequence && (cyoaId === 2 || cyoaId === 3)) {
         isExitRelated = true;
-        exitNumber = 1; // Always bundle with Exit 1 for testing
         
         if (cyoaId === 2) {
-          exitTiming = 'before'; // 2nd CYOA is before exit
+          // 2nd CYOA is before Exit 1
+          exitNumber = 1;
+          exitTiming = 'before';
           const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
           if (chosenExit) {
             const offset = Phaser.Math.Between(5, 10); // trigger a bit before the exit
@@ -683,7 +684,10 @@ export class CarMechanics {
             console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
           }
         } else if (cyoaId === 3) {
-          exitTiming = 'after'; // 3rd CYOA is after exit
+          // 3rd CYOA is after Exit 2 (or Exit 1 if only 1 exit exists)
+          const availableExits = this.plannedExits.map(e => e.number).sort();
+          exitNumber = availableExits.length > 1 ? 2 : 1; // Use Exit 2 if available, otherwise Exit 1
+          exitTiming = 'after';
           const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
           if (chosenExit) {
             cyoaThreshold = chosenExit.exitThreshold; // Same threshold as exit (triggered on close)
