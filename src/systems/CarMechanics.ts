@@ -620,23 +620,40 @@ export class CarMechanics {
     console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
     console.log('Total planned exits:', this.plannedExits.length);
     
-    // Create planned CYOA - SIMPLIFIED: Just 2 regular CYOAs per sequence
-    cyoaThresholds.forEach((threshold, index) => {
-      const cyoaId = index + 1;
-      const cyoaThreshold = threshold;
-      
+    // Create planned CYOA - SMART SCHEDULING: 1-2 CYOAs with smart positioning
+    this.plannedCyoa = [];
+    
+    if (numCyoa === 1) {
+      // Single CYOA: random progress point
+      const randomThreshold = Phaser.Math.Between(20, 80);
       this.plannedCyoa.push({
-        id: cyoaId,
-        cyoaThreshold: cyoaThreshold,
+        id: 1,
+        cyoaThreshold: randomThreshold,
         triggered: false
       });
-    });
-    
-    // Final spacing check for all CYOA events
-    this.ensureCyoaSpacing();
+    } else if (numCyoa === 2) {
+      // Two CYOAs: one random + one at start OR end
+      const randomThreshold = Phaser.Math.Between(20, 80);
+      const useStartPosition = Math.random() < 0.5; // 50% chance for start vs end
+      
+      this.plannedCyoa.push({
+        id: 1,
+        cyoaThreshold: randomThreshold,
+        triggered: false
+      });
+      
+      this.plannedCyoa.push({
+        id: 2,
+        cyoaThreshold: useStartPosition ? 2 : 98, // Start (2%) or End (98%)
+        triggered: false
+      });
+      
+      // Sort by threshold to ensure proper order
+      this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+    }
     
     console.log('Planned CYOA:', this.plannedCyoa.map(c => 
-      `CYOA ${c.id}: ${c.cyoaThreshold}% (regular)`
+      `CYOA ${c.id}: ${c.cyoaThreshold}% (${c.cyoaThreshold === 2 ? 'start' : c.cyoaThreshold === 98 ? 'end' : 'random'})`
     ));
     console.log('Total planned CYOA:', this.plannedCyoa.length);
     
