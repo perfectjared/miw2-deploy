@@ -278,15 +278,23 @@ export class MenuManager {
    * Auto-complete the current menu
    */
   private autoCompleteCurrentMenu() {
-    if (!this.currentMenuAutoCompleteType) return;
+    console.log(`autoCompleteCurrentMenu called - currentMenuAutoCompleteType: ${this.currentMenuAutoCompleteType}`);
+    if (!this.currentMenuAutoCompleteType) {
+      console.log('autoCompleteCurrentMenu: No currentMenuAutoCompleteType, returning early');
+      return;
+    }
     
     console.log(`Auto-completing ${this.currentMenuAutoCompleteType} menu`);
+    
+    // Store the menu type before stopping auto-completion tracking
+    const menuType = this.currentMenuAutoCompleteType;
     
     // Stop auto-completion tracking
     this.stopMenuAutoComplete();
     
-    // Handle different menu types
-    switch (this.currentMenuAutoCompleteType) {
+    // Handle different menu types using the stored menu type
+    console.log(`autoCompleteCurrentMenu: Entering switch statement for ${menuType}`);
+    switch (menuType) {
       case 'TURN_KEY':
         // For ignition menu, add delay before closing and emitting turnKey event (matches manual completion)
         console.log('Auto-completion: Scheduling turnKey event in 500ms');
