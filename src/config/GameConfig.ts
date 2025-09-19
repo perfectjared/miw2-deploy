@@ -17,6 +17,22 @@ import { gameElements, GameElementsConfig } from './GameElements';
 export { gameElements, type GameElementsConfig };
 
 // ============================================================================
+// GREYSCALE COLOR PALETTE
+// ============================================================================
+
+export const GREYSCALE_PALETTE = {
+  // 8 different shades of grey from lightest to darkest
+  white: 0xffffff,      // Pure white
+  lightGray: 0xcccccc,   // Very light grey
+  mediumLightGray: 0x999999, // Medium light grey
+  mediumGray: 0x666666,  // Medium grey
+  mediumDarkGray: 0x444444, // Medium dark grey
+  darkGray: 0x333333,    // Dark grey
+  darkerGray: 0x222222,  // Darker grey
+  black: 0x000000       // Pure black
+} as const;
+
+// ============================================================================
 // CAR MECHANICS CONFIGURATION
 // ============================================================================
 
@@ -40,8 +56,8 @@ export const CAR_CONFIG = {
   centerReturnForce: 0.0,    // Force pulling car back to center (0 = no center return)
   lateralFriction: 0.99,     // Lateral friction/drag (higher = less slidey)
   
-  // Visual Appearance
-  roadColor: 0x333333,
+  // Visual Appearance - using greyscale palette
+  roadColor: GREYSCALE_PALETTE.darkGray,
   boundaryPadding: 50, // Increased to allow more car movement range
   roadDepth: -1000,
   lineWidth: 4,
@@ -59,7 +75,7 @@ export const CAR_CONFIG = {
   potholeMinPos: 0.45,
   potholeMaxPos: 0.55,
   potholeSpawnY: 0.2,
-  potholeColor: 0x8B4513,
+  potholeColor: GREYSCALE_PALETTE.mediumDarkGray,
   potholeSpeed: 1.2,
   
   // Exit Settings
@@ -67,7 +83,7 @@ export const CAR_CONFIG = {
   exitHeight: 60,
   exitPosition: 0.9,
   exitSpawnY: 0.1,
-  exitColor: 0x00ff00,
+  exitColor: GREYSCALE_PALETTE.lightGray,
   exitSpeed: 1.0,
   
   // Debug/Radar Settings
@@ -88,10 +104,10 @@ export const CAR_CONFIG = {
 // ============================================================================
 
 export const TUTORIAL_CONFIG = {
-  overlayColor: 0x000000,
+  overlayColor: GREYSCALE_PALETTE.black,
   overlayAlpha: 0.7,
   overlayDepth: 90000,
-  maskColor: 0xffffff,
+  maskColor: GREYSCALE_PALETTE.white,
   keysHoleRadius: 30,
   targetHoleMultiplier: 1.5,
   magneticTargetX: 200,        // DEPRECATED: use gameElements.getMagneticTarget()
@@ -161,28 +177,28 @@ export const UI_LAYOUT = {
   // COLORS & STYLING
   // ============================================================================
   
-  // Text colors
-  gameLayerColor: '#ffffff',
-  moneyColor: '#00ff00',
-  healthColor: '#ff0000',
-  countdownColor: '#ffffff',
-  progressColor: '#ffffff',
+  // Text colors - using greyscale palette
+  gameLayerColor: GREYSCALE_PALETTE.white,
+  moneyColor: GREYSCALE_PALETTE.lightGray,
+  healthColor: GREYSCALE_PALETTE.mediumGray,
+  countdownColor: GREYSCALE_PALETTE.white,
+  progressColor: GREYSCALE_PALETTE.white,
   
-  // Background colors
-  gameLayerBackgroundColor: '#000000',
-  managerValuesBackgroundColor: '#000000',
-  rearviewBackgroundColor: 0x222222,
+  // Background colors - using greyscale palette
+  gameLayerBackgroundColor: GREYSCALE_PALETTE.black,
+  managerValuesBackgroundColor: GREYSCALE_PALETTE.black,
+  rearviewBackgroundColor: GREYSCALE_PALETTE.darkerGray,
   rearviewBackgroundAlpha: 0.9,
-  rearviewStrokeColor: 0xffffff,
+  rearviewStrokeColor: GREYSCALE_PALETTE.white,
   
-  // Manager values colors
-  managerValuesSkillColor: '#00ff00',
-  managerValuesDifficultyColor: '#ff0000',
-  managerValuesMomentumColor: '#ffff00',
-  managerValuesPlotAColor: '#ff00ff',
-  managerValuesPlotBColor: '#00ffff',
-  managerValuesPlotCColor: '#ff8800',
-  managerValuesStopsColor: '#ffffff',
+  // Manager values colors - using greyscale palette
+  managerValuesSkillColor: GREYSCALE_PALETTE.lightGray,
+  managerValuesDifficultyColor: GREYSCALE_PALETTE.mediumGray,
+  managerValuesMomentumColor: GREYSCALE_PALETTE.mediumLightGray,
+  managerValuesPlotAColor: GREYSCALE_PALETTE.mediumGray,
+  managerValuesPlotBColor: GREYSCALE_PALETTE.mediumLightGray,
+  managerValuesPlotCColor: GREYSCALE_PALETTE.mediumDarkGray,
+  managerValuesStopsColor: GREYSCALE_PALETTE.white,
   
   // Opacity
   managerValuesOpacity: 0.8,
@@ -201,36 +217,36 @@ export const UI_LAYOUT = {
   
   buttonPadding: 10,
   buttonCornerRadius: 5,
-  buttonBackgroundColor: '#333333',
-  buttonHoverColor: '#555555',
+  buttonBackgroundColor: GREYSCALE_PALETTE.darkGray,
+  buttonHoverColor: GREYSCALE_PALETTE.mediumDarkGray,
   frontseatFontSize: '18px',
   backseatFontSize: '18px',
-  frontseatColor: '#ffffff',
-  backseatColor: '#ffffff',
+  frontseatColor: GREYSCALE_PALETTE.white,
+  backseatColor: GREYSCALE_PALETTE.white,
   
   // Speed Crank Styling
   speedCrankOffsetX: 120,
   speedCrankOffsetY: -20,
   speedCrankWidth: 40,
   speedCrankHeight: 150,
-  speedCrankTrackColor: 0x333333,
+  speedCrankTrackColor: GREYSCALE_PALETTE.darkGray,
   speedCrankTrackAlpha: 0.8,
-  speedCrankTrackStrokeColor: 0xffffff,
+  speedCrankTrackStrokeColor: GREYSCALE_PALETTE.white,
   speedCrankTrackStrokeWidth: 2,
   speedCrankTrackCornerRadius: 5,
-  speedCrankHandleColor: 0x00ff00,
+  speedCrankHandleColor: GREYSCALE_PALETTE.mediumLightGray,
   speedCrankHandleAlpha: 0.9,
-  speedCrankHandleStrokeColor: 0xffffff,
+  speedCrankHandleStrokeColor: GREYSCALE_PALETTE.white,
   speedCrankHandleStrokeWidth: 1,
   speedCrankHandleCornerRadius: 3,
   speedCrankHandleMargin: 4,
   speedCrankHandleHeight: 20,
-  speedCrankIndicatorColor: 0xffffff,
-  speedCrankIndicatorStrokeColor: 0x000000,
+  speedCrankIndicatorColor: GREYSCALE_PALETTE.white,
+  speedCrankIndicatorStrokeColor: GREYSCALE_PALETTE.black,
   speedCrankIndicatorRadius: 3,
   speedCrankTextOffsetX: 10,
   speedCrankTextFontSize: '16px',
-  speedCrankTextColor: '#ffffff',
+  speedCrankTextColor: GREYSCALE_PALETTE.white,
   speedCrankSnapPositions: [0, 0.4, 0.7, 1.0],
   speedCrankDepthTrack: 1000,
   speedCrankDepthHandle: 1001,
@@ -453,27 +469,27 @@ export const PHYSICS_CONFIG = {
   gravityY: 0.5,
   worldBounds: true,
   
-  // Object Properties
+  // Object Properties - using greyscale palette
   keysMass: 1,
   keysFriction: 0.1,
   keysBounce: 0.3,
-  keysColor: 0x0000ff,
-  keysHoverColor: 0x6666ff,
-  keysDragColor: 0x3333ff,
+  keysColor: GREYSCALE_PALETTE.mediumGray,
+  keysHoverColor: GREYSCALE_PALETTE.lightGray,
+  keysDragColor: GREYSCALE_PALETTE.mediumLightGray,
   
   trashMass: 0.5,
   trashFriction: 0.2,
   trashBounce: 0.1,
-  trashColor: 0xff0000,
-  trashHoverColor: 0xff6666,
-  trashDragColor: 0xff3333,
+  trashColor: GREYSCALE_PALETTE.darkGray,
+  trashHoverColor: GREYSCALE_PALETTE.mediumDarkGray,
+  trashDragColor: GREYSCALE_PALETTE.mediumGray,
   
   itemMass: 0.8,
   itemFriction: 0.15,
   itemBounce: 0.2,
-  itemColor: 0x00ff00,
-  itemHoverColor: 0x66ff66,
-  itemDragColor: 0x33ff33,
+  itemColor: GREYSCALE_PALETTE.mediumLightGray,
+  itemHoverColor: GREYSCALE_PALETTE.lightGray,
+  itemDragColor: GREYSCALE_PALETTE.white,
   
   // Magnetic Attraction
   magneticStrength: 0.005,
@@ -481,8 +497,8 @@ export const PHYSICS_CONFIG = {
   magneticTargetRadius: 25,
   magneticTargetX: 200,
   magneticTargetY: 520, // Moved up 5% from 550
-  magneticTargetColor: 0xff0000,
-  magneticTargetInactiveColor: 0x666666,
+  magneticTargetColor: GREYSCALE_PALETTE.mediumGray,
+  magneticTargetInactiveColor: GREYSCALE_PALETTE.mediumDarkGray,
   magneticSnapThreshold: 15,
   magneticConstraintStiffness: 1,
   magneticConstraintDamping: 0.1
@@ -493,36 +509,36 @@ export const PHYSICS_CONFIG = {
 // ============================================================================
 
 export const REGION_CONFIG = {
-  // Region definitions
+  // Region definitions - using greyscale palette
   regions: {
     west: {
       name: 'West',
       displayName: 'West',
-      color: 0xff6b35, // Orange
+      color: GREYSCALE_PALETTE.mediumGray,
       description: 'The vast western frontier'
     },
     southwest: {
       name: 'Southwest',
       displayName: 'Southwest',
-      color: 0xffd23f, // Yellow
+      color: GREYSCALE_PALETTE.mediumLightGray,
       description: 'Desert landscapes and canyons'
     },
     south: {
       name: 'South',
       displayName: 'South',
-      color: 0x06ffa5, // Green
+      color: GREYSCALE_PALETTE.lightGray,
       description: 'Southern hospitality and warmth'
     },
     midwest: {
       name: 'Midwest',
       displayName: 'Midwest',
-      color: 0x3b82f6, // Blue
+      color: GREYSCALE_PALETTE.mediumDarkGray,
       description: 'Heartland of America'
     },
     northeast: {
       name: 'Northeast',
       displayName: 'Northeast',
-      color: 0x8b5cf6, // Purple
+      color: GREYSCALE_PALETTE.darkGray,
       description: 'Historic cities and coastlines'
     }
   },
@@ -547,12 +563,12 @@ export const REGION_CONFIG = {
     regionChoiceY: 0.6,      // Percentage of screen height
     regionChoiceDepth: 50000,
     regionChoiceFontSize: '24px',
-    regionChoiceColor: '#ffffff',
-    regionChoiceBackgroundColor: 0x000000,
+    regionChoiceColor: GREYSCALE_PALETTE.white,
+    regionChoiceBackgroundColor: GREYSCALE_PALETTE.black,
     regionChoiceBackgroundAlpha: 0.8,
     regionChoicePadding: 20,
     regionChoiceCornerRadius: 10,
-    regionChoiceStrokeColor: 0xffffff,
+    regionChoiceStrokeColor: GREYSCALE_PALETTE.white,
     regionChoiceStrokeWidth: 2
   }
 } as const;

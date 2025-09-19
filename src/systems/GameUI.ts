@@ -18,7 +18,7 @@
  */
 
 import Phaser from 'phaser';
-import { gameElements } from '../config/GameConfig';
+import { gameElements, GREYSCALE_PALETTE } from '../config/GameConfig';
 
 // Tunable UI constants for quick tweaking
 const UI_TUNABLES = {
@@ -274,7 +274,7 @@ export class GameUI {
         const triangleY = barY - 8; // Above the progress bar
         
         const triangle = this.scene.add.graphics();
-        triangle.fillStyle(0xff6b35, 0.8); // Orange color for exits
+        triangle.fillStyle(GREYSCALE_PALETTE.mediumGray, 0.8); // Medium grey for exits
         triangle.beginPath();
         triangle.moveTo(triangleX, triangleY);
         triangle.lineTo(triangleX - 4, triangleY + 8);
@@ -297,7 +297,7 @@ export class GameUI {
           const triangleY = barY - 16; // Above the exit indicators
           
           const triangle = this.scene.add.graphics();
-          triangle.fillStyle(0x9b59b6, 0.8); // Purple color for CYOA
+          triangle.fillStyle(GREYSCALE_PALETTE.lightGray, 0.8); // Light grey for CYOA
           triangle.beginPath();
           triangle.moveTo(triangleX, triangleY);
           triangle.lineTo(triangleX - 4, triangleY + 8);
@@ -465,9 +465,9 @@ export class GameUI {
 
     // Look Up
     this.frontseatButton = this.scene.add.graphics();
-    this.frontseatButton.fillStyle(0x202020, 0.75);
+    this.frontseatButton.fillStyle(GREYSCALE_PALETTE.darkerGray, 0.75);
     this.frontseatButton.fillRoundedRect(leftX, topY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
-    this.frontseatButton.lineStyle(2, 0xffffff, 1);
+    this.frontseatButton.lineStyle(2, GREYSCALE_PALETTE.white, 1);
     this.frontseatButton.strokeRoundedRect(leftX, topY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
     this.frontseatButton.setScrollFactor(0);
     this.frontseatButton.setDepth(10000);
@@ -504,9 +504,9 @@ export class GameUI {
 
     // Look Down
     this.backseatButton = this.scene.add.graphics();
-    this.backseatButton.fillStyle(0x202020, 0.75);
+    this.backseatButton.fillStyle(GREYSCALE_PALETTE.darkerGray, 0.75);
     this.backseatButton.fillRoundedRect(leftX, bottomY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
-    this.backseatButton.lineStyle(2, 0xffffff, 1);
+    this.backseatButton.lineStyle(2, GREYSCALE_PALETTE.white, 1);
     this.backseatButton.strokeRoundedRect(leftX, bottomY - Math.floor(btnHeight / 2), btnWidth, btnHeight, 8);
     this.backseatButton.setScrollFactor(0);
     this.backseatButton.setDepth(10000);
@@ -611,7 +611,7 @@ export class GameUI {
     this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1); // Just above the handle
     
     // Apply white fill and black stroke styling
-    this.speedCrankSVG.setTint(0xffffff); // White fill
+    this.speedCrankSVG.setTint(GREYSCALE_PALETTE.white); // White fill
 
     // Create triangle indicator above the meter
     this.speedCrankTriangle = this.scene.add.graphics();
@@ -720,7 +720,7 @@ export class GameUI {
     
     // Background circle (empty)
     this.speedMeterBG = this.scene.add.graphics();
-    this.speedMeterBG.lineStyle(meterThickness, 0x333333, 0.8);
+    this.speedMeterBG.lineStyle(meterThickness, GREYSCALE_PALETTE.darkGray, 0.8);
     this.speedMeterBG.strokeCircle(0, 0, meterRadius);
     this.speedMeterBG.setPosition(speedDisplayX, speedDisplayY);
     this.speedMeterBG.setScrollFactor(0);
@@ -793,9 +793,9 @@ export class GameUI {
     const knob = this.scene.add.graphics();
     
     // Draw the knob
-    knob.fillStyle(0x444444);
+    knob.fillStyle(GREYSCALE_PALETTE.mediumDarkGray);
     knob.fillCircle(0, 0, knobRadius);
-    knob.lineStyle(2, 0xffffff, 1);
+    knob.lineStyle(2, GREYSCALE_PALETTE.white, 1);
     knob.strokeCircle(0, 0, knobRadius);
     
     // Remove extraneous square; indicator line will represent value
@@ -812,7 +812,7 @@ export class GameUI {
     this.steeringWheelSVG.setDepth(50001); // Above the knob
     
     // Apply white fill and black stroke styling
-    this.steeringWheelSVG.setTint(0xffffff); // White fill
+    this.steeringWheelSVG.setTint(GREYSCALE_PALETTE.white); // White fill
     // Note: Stroke styling would need to be handled via SVG modification or post-processing
     
     // SVG will be positioned independently but follow the graphics circle
@@ -849,9 +849,9 @@ export class GameUI {
        
        // Redraw knob with active color
        knob.clear();
-       knob.fillStyle(0x666666);
+       knob.fillStyle(GREYSCALE_PALETTE.mediumGray);
        knob.fillCircle(0, 0, knobRadius);
-       knob.lineStyle(2, 0xffffff, 1);
+       knob.lineStyle(2, GREYSCALE_PALETTE.white, 1);
        knob.strokeCircle(0, 0, knobRadius);
        // No square overlay; indicator line shows current value
 
@@ -923,9 +923,9 @@ export class GameUI {
       
       // Redraw knob with original color
       knob.clear();
-      knob.fillStyle(0x444444);
+      knob.fillStyle(GREYSCALE_PALETTE.mediumDarkGray);
       knob.fillCircle(0, 0, knobRadius);
-      knob.lineStyle(2, 0xffffff, 1);
+      knob.lineStyle(2, GREYSCALE_PALETTE.white, 1);
       knob.strokeCircle(0, 0, knobRadius);
       
       // Gradual return to center will be handled in update method
@@ -1081,8 +1081,8 @@ export class GameUI {
     
     // Clear and redraw triangle
     this.speedCrankTriangle.clear();
-    this.speedCrankTriangle.fillStyle(0xffffff, 1);
-    this.speedCrankTriangle.lineStyle(1, 0x000000, 1);
+    this.speedCrankTriangle.fillStyle(GREYSCALE_PALETTE.white, 1);
+    this.speedCrankTriangle.lineStyle(1, GREYSCALE_PALETTE.black, 1);
     
     const triangleSize = UI_TUNABLES.crank.triangleSize;
     const triangleOffsetY = UI_TUNABLES.crank.triangleOffsetY;
