@@ -670,11 +670,28 @@ export class GameScene extends Phaser.Scene {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
     
-    // Generate random X position (but keep it reasonable)
-    const randomX = Phaser.Math.Between(50, gameWidth - 50);
+    // Define specific respawn positions for each object type
+    let respawnX: number;
+    let respawnY: number;
     
-    // Position at halfway up the screen
-    const respawnY = gameHeight * 0.5;
+    switch (objectName) {
+      case 'frontseatTrash':
+        respawnX = 100; // Left side
+        respawnY = 200;
+        break;
+      case 'backseatItem':
+        respawnX = 230; // Backseat area
+        respawnY = 320;
+        break;
+      case 'frontseatKeys':
+        respawnX = gameWidth * 0.8; // Right side
+        respawnY = 200;
+        break;
+      default:
+        // Fallback: random position
+        respawnX = Phaser.Math.Between(50, gameWidth - 50);
+        respawnY = gameHeight * 0.5;
+    }
     
     // Reset physics body position
     if (obj.gameObject && obj.gameObject.body) {
@@ -685,12 +702,12 @@ export class GameScene extends Phaser.Scene {
       body.angularVelocity = 0;
       
       // Set new position
-      body.position = { x: randomX, y: respawnY };
+      body.position = { x: respawnX, y: respawnY };
       
       // Update visual position
-      obj.gameObject.setPosition(randomX, respawnY);
+      obj.gameObject.setPosition(respawnX, respawnY);
       
-      console.log(`✅ ${objectName} respawned at (${randomX}, ${respawnY})`);
+      console.log(`✅ ${objectName} respawned at (${respawnX}, ${respawnY})`);
     }
   }
 
@@ -752,7 +769,6 @@ export class GameScene extends Phaser.Scene {
    * Disable night time mode
    */
   private disableNightTimeMode() {
-    console.log('☀️ Disabling night time mode');
     // Remove night time visual effects
     if (this.nightTimeOverlay) {
       this.nightTimeOverlay.setVisible(false);
@@ -1214,12 +1230,6 @@ export class GameScene extends Phaser.Scene {
     // Only apply magnetic attraction after game has started
     if (!this.gameState.isGameStarted()) {
       return;
-    }
-    
-    // Debug: Log when this method is called (throttled to avoid spam)
-    if (!this.lastMagneticAttractionLog || this.time.now - this.lastMagneticAttractionLog > 1000) {
-      console.log('🧲 applyMagneticAttraction called - carStarted:', this.carStarted, 'keysInIgnition:', this.keysInIgnition, 'gameStarted:', this.gameState.isGameStarted());
-      this.lastMagneticAttractionLog = this.time.now;
     }
     
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
@@ -1809,15 +1819,15 @@ export class GameScene extends Phaser.Scene {
       
       // Apply much stronger force for pothole collision
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.8 } : // Reduced vertical force for virtual pets
-        { x: 0, y: -0.5 }; // Strong force for other objects
+        { x: 0, y: -0.2 } : // Much reduced vertical force for virtual pets
+        { x: 0, y: -0.15 }; // Much reduced force for other objects
       
       // Applying bump to body
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add larger random horizontal variation for more dramatic effect
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.5 : 0.2);
+      // Add smaller random horizontal variation for less dramatic effect
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.1 : 0.05);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
@@ -1826,7 +1836,7 @@ export class GameScene extends Phaser.Scene {
         const currentVelocity = (this.matter as any).body.getVelocity(body);
         const dampedVelocity = {
           x: currentVelocity.x,
-          y: currentVelocity.y * 0.1 // Very strong vertical damping (90% reduction)
+          y: currentVelocity.y * 0.3 // Stronger vertical damping (70% reduction)
         };
         (this.matter as any).body.setVelocity(body, dampedVelocity);
       }
@@ -2305,22 +2315,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.exitDetectionLogCounter) this.exitDetectionLogCounter = 0;
     this.exitDetectionLogCounter++;
     
-    if (this.exitDetectionLogCounter % 30 === 0) {
-      console.log(`isPlayerInExitCollisionPath called (${this.exitDetectionLogCounter} times)`);
-    }
-    
     if (!this.carMechanics) {
-      if (this.exitDetectionLogCounter % 30 === 0) {
-        console.log('No carMechanics');
-      }
       return false;
     }
     
     // Get all obstacles that are exits
     const obstacles = (this.carMechanics as any).obstacles || [];
-    if (this.exitDetectionLogCounter % 30 === 0) {
-      console.log('Total obstacles:', obstacles.length);
-    }
     
     const exits = obstacles.filter((obstacle: any) => {
       const isExit = obstacle.getData('isExit');
@@ -2328,25 +2328,15 @@ export class GameScene extends Phaser.Scene {
       return isExit && !isPreview;
     });
     
-    if (this.exitDetectionLogCounter % 30 === 0) {
-      console.log('Found exits:', exits.length);
-    }
-    
     if (exits.length === 0) {
-      if (this.exitDetectionLogCounter % 30 === 0) {
-        console.log('No exits found');
-      }
       return false;
     }
     
     // Check if any exit is close enough to the car's position
     const carBounds = (this.carMechanics as any).drivingCar?.getBounds();
     if (!carBounds) {
-      console.log('No car bounds');
       return false;
     }
-    
-    console.log('Car bounds:', carBounds);
     
     // Check if car is approaching any exit from the right
     const inPath = exits.some((exit: any) => {

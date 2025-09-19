@@ -126,6 +126,8 @@ export class MenuManager {
     this.saveManager = SaveManager.getInstance();
     // Listen for global step events to auto-hide ephemeral overlays
     this.scene.events.on('step', this.onGlobalStep, this);
+    // Listen for CYOA menu events
+    this.scene.events.on('showCyoaMenu', this.showCyoaMenu, this);
   }
 
   /**
@@ -137,14 +139,10 @@ export class MenuManager {
     
     // Check if there's a higher priority menu already showing
     const currentMenu = this.menuStack[this.menuStack.length - 1];
-    console.log(`MenuManager: canShowMenu(${menuType}) - newPriority: ${newPriority}, currentMenu:`, currentMenu ? `${currentMenu.type}(${currentMenu.priority})` : 'none');
     
     if (currentMenu && currentMenu.priority > newPriority) {
-      console.log(`MenuManager: Cannot show ${menuType} (priority ${newPriority}) - higher priority menu ${currentMenu.type} (priority ${currentMenu.priority}) is active`);
       return false;
     }
-    
-    console.log(`MenuManager: Can show ${menuType} (priority ${newPriority})`);
     return true;
   }
   
@@ -152,13 +150,11 @@ export class MenuManager {
     const priority = this.MENU_PRIORITIES[menuType as keyof typeof this.MENU_PRIORITIES];
     if (priority) {
       this.menuStack.push({ type: menuType, priority, config });
-      console.log(`MenuManager: Pushed ${menuType} to stack (priority ${priority}). Stack:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
     }
   }
   
   private popMenu(): {type: string, priority: number, config?: any} | null {
     const popped = this.menuStack.pop();
-    console.log(`MenuManager: Popped ${popped?.type} from stack. Remaining:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
     return popped || null;
   }
   
@@ -167,10 +163,8 @@ export class MenuManager {
     const index = this.menuStack.findIndex(menu => menu.type === menuType);
     if (index !== -1) {
       const popped = this.menuStack.splice(index, 1)[0];
-      console.log(`MenuManager: Popped specific ${popped.type} from stack. Remaining:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
       return popped;
     }
-    console.log(`MenuManager: Could not find ${menuType} in stack to pop`);
     return null;
   }
 
@@ -423,12 +417,9 @@ export class MenuManager {
   }
 
   public showStartMenu() {
-    console.log('=== MenuManager: showStartMenu called ===');
     if (!this.canShowMenu('START')) {
-      console.log('MenuManager: canShowMenu(START) returned false, returning early');
       return;
     }
-    console.log('MenuManager: canShowMenu(START) returned true, proceeding');
     
     this.clearCurrentDialog();
     this.pushMenu('START');
@@ -497,7 +488,6 @@ export class MenuManager {
       };
     }
 
-    console.log('MenuManager: About to call createDialog with menuType: START');
     this.createDialog(menuConfig, 'START');
   }
 
@@ -719,9 +709,31 @@ export class MenuManager {
   }
 
   public showExitMenu(shopCount: number = 3, exitNumber?: number) {
+    // Persist the last exit number so nested menus (e.g., Shop -> Back) can restore it
+    (this as any)._lastExitNumber = exitNumber ?? (this as any)._lastExitNumber;
     if (!this.canShowMenu('EXIT')) return;
     this.clearCurrentDialog();
-    this.pushMenu('EXIT', { exitNumber }); // Store exit number for CYOA triggering
+    // Determine the exit number for this menu instance with robust fallbacks
+    let exitNumForMenu = exitNumber ?? (this as any)._lastExitNumber;
+    if (exitNumForMenu == null) {
+      for (let i = this.menuStack.length - 1; i >= 0; i--) {
+        const m = this.menuStack[i];
+        if (m.type === 'EXIT' && m.config && m.config.exitNumber != null) {
+          exitNumForMenu = m.config.exitNumber;
+          break;
+        }
+      }
+    }
+    // Final fallback: if first driving sequence, default to Exit 1
+    if (exitNumForMenu == null) {
+      try {
+        const gameScene = this.scene.scene.get('GameScene') as any;
+        const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+        if (isFirstSequence) exitNumForMenu = 1;
+      } catch {}
+    }
+    // Push menu with whichever exit number we resolved (may still be undefined in worst case)
+    this.pushMenu('EXIT', { exitNumber: exitNumForMenu }); // Store exit number for CYOA triggering
     
     // Generate shop names based on count
     const shopNames = this.generateShopNames(shopCount);
@@ -730,42 +742,44 @@ export class MenuManager {
     const buttons: MenuButton[] = shopNames.map((shopName, index) => ({
       text: shopName,
       onClick: () => { 
-        // Trigger exit CYOA before handling shop choice if this exit has one
-        if (exitNumber) {
-          console.log(`🎭 MenuManager: Shop ${shopName} selected for Exit ${exitNumber} - checking for CYOA`);
-          const gameScene = this.scene.scene.get('GameScene');
-          if (gameScene && (gameScene as any).carMechanics) {
-            console.log(`🎭 MenuManager: Calling triggerExitCyoa(${exitNumber}) for shop choice`);
-            (gameScene as any).carMechanics.triggerExitCyoa(exitNumber);
-            console.log(`🎭 MenuManager: triggerExitCyoa call completed for shop choice`);
-          } else {
-            console.error(`🎭 MenuManager: GameScene or carMechanics not found for shop choice!`);
-          }
-        } else {
-          console.log(`🎭 MenuManager: No exitNumber provided to shop button`);
-        }
         this.handleExitShopChoice(shopName); 
       }
     }));
     
-    // Add close button that triggers CYOA if this exit has one
+    // Add close button
     buttons.push({ 
       text: 'Close', 
       onClick: () => {
-        // Trigger exit CYOA before closing if this exit has one
-        if (exitNumber) {
-          console.log(`🎭 MenuManager: Close button pressed for Exit ${exitNumber} - checking for CYOA`);
+        // Resolve exit number from multiple sources for robustness
+        const persistedExitNumber = (this as any)._lastExitNumber;
+        const stackExitNumber = this.menuStack[this.menuStack.length - 1]?.config?.exitNumber;
+        const dialogExitNumber = (this.currentDialog as any)?.exitNumber;
+        let finalExitNumber = dialogExitNumber ?? exitNumForMenu ?? persistedExitNumber ?? stackExitNumber;
+        if (finalExitNumber == null) {
+          // Final fallback: if first sequence, assume Exit 1
+          try {
+            const gameScene = this.scene.scene.get('GameScene') as any;
+            const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+            if (isFirstSequence) finalExitNumber = 1;
+          } catch {}
+        }
+        try { console.log('🎭 Exit Close pressed: dialog=', dialogExitNumber, ' captured=', exitNumForMenu, ' persisted=', persistedExitNumber, ' stack=', stackExitNumber, ' final=', finalExitNumber); } catch {}
+        
+        if (finalExitNumber) {
+          console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - scheduling CYOA for 4 steps later`);
           const gameScene = this.scene.scene.get('GameScene');
           if (gameScene && (gameScene as any).carMechanics) {
-            console.log(`🎭 MenuManager: Calling triggerExitCyoa(${exitNumber})`);
-            (gameScene as any).carMechanics.triggerExitCyoa(exitNumber);
-            console.log(`🎭 MenuManager: triggerExitCyoa call completed`);
+            console.log(`🎭 MenuManager: Calling scheduleExitCyoa(${finalExitNumber}, 4)`);
+            (gameScene as any).carMechanics.scheduleExitCyoa(finalExitNumber, 4); // Schedule CYOA for 4 steps later
+            console.log(`🎭 MenuManager: scheduleExitCyoa call completed`);
           } else {
-            console.error(`🎭 MenuManager: GameScene or carMechanics not found!`);
+            console.error(`🎭 MenuManager: ERROR - Could not find GameScene or carMechanics`);
           }
         } else {
-          console.log(`🎭 MenuManager: No exitNumber provided to Close button`);
+          // Gracefully skip scheduling if we cannot resolve an exit number
+          console.warn(`🎭 MenuManager: No exit number resolved on Close - skipping CYOA scheduling`);
         }
+        
         this.closeDialog();
       }
     });
@@ -776,6 +790,8 @@ export class MenuManager {
       buttons: buttons
     };
     this.createDialog(menuConfig, 'EXIT');
+    // Attach exit number to the dialog instance as a definitive source
+    try { (this.currentDialog as any).exitNumber = exitNumForMenu; console.log('🎭 showExitMenu: attached dialog exitNumber=', exitNumForMenu); } catch {}
   }
 
   /**
@@ -810,6 +826,7 @@ export class MenuManager {
   private handleExitShopChoice(shopName: string) {
     // Placeholder: simply close the dialog and resume game. Hook narrative/transition later.
     try { console.log('Exit menu choice:', shopName); } catch {}
+    
     // Open shop menu instead of closing
     this.showShopMenu();
     // Optionally emit an event for GameScene to react to
@@ -1215,7 +1232,23 @@ export class MenuManager {
     
     // Special-case: obstacle type 'exit' should show the dedicated Exit menu
     if (obstacleType === 'exit') {
-      this.showExitMenu(damage, exitNumber);
+      // Resolve exit number with fallbacks: event param -> persisted -> bundled CYOA exit
+      let resolvedExitNumber = exitNumber ?? (this as any)._lastExitNumber;
+      if (resolvedExitNumber == null) {
+        try {
+          const gameScene = this.scene.scene.get('GameScene') as any;
+          const cm = gameScene?.carMechanics;
+          const planned = cm?.getPlannedCyoa?.();
+          if (Array.isArray(planned)) {
+            const bundled = planned.find((c: any) => c.isExitRelated && c.exitNumber != null);
+            if (bundled) resolvedExitNumber = bundled.exitNumber;
+          }
+        } catch {}
+      }
+      // Persist exit number immediately so downstream menus can access it reliably
+      (this as any)._lastExitNumber = resolvedExitNumber ?? (this as any)._lastExitNumber;
+      try { console.log(`🎭 showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber); } catch {}
+      this.showExitMenu(damage, resolvedExitNumber);
       return;
     }
     
@@ -1747,7 +1780,6 @@ export class MenuManager {
   }
 
   private createDialog(menuConfig: MenuConfig, menuType?: string) {
-    console.log('=== MenuManager: createDialog called for menuType:', menuType, '===');
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
@@ -1802,8 +1834,6 @@ export class MenuManager {
     });
     title.setOrigin(0.5);
     this.currentDialog.add(title);
-    
-    console.log('MenuManager: Dialog background and title added. Dialog children count:', this.currentDialog.list.length);
     
     // Content - instant display with brief pause
     if (menuConfig.content) {
@@ -1868,17 +1898,11 @@ export class MenuManager {
       this.currentDialog.add(buttonText);
     });
     
-    console.log('MenuManager: All buttons added. Dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog children:', this.currentDialog.list.map((child: any) => child.constructor.name));
-    
     // Notify GameScene that a menu is now open
     const gameSceneForTutorial: any = this.scene.scene.get('GameScene');
     if (gameSceneForTutorial && gameSceneForTutorial.updateAllTutorialOverlays) {
       gameSceneForTutorial.updateAllTutorialOverlays();
     }
-    
-    console.log('MenuManager: After GameScene notification. Dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog children after notification:', this.currentDialog.list.map((child: any) => child.constructor.name));
   }
 
   private createActionButtons(buttons: MenuButton[]) {

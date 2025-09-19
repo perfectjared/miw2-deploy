@@ -199,8 +199,8 @@ export class Item implements PhysicsObject {
     const radius = itemSize.width / 2; // Convert width to radius
     
     this.gameObject = this.scene.add.circle(
-      1200, // x position
-      200,  // y position
+      150, // x position - further left to avoid exits
+      320, // y position - backseat area
       radius,   // radius from config
       0x00ff00 // color (green)
     );

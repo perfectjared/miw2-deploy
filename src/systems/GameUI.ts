@@ -266,7 +266,7 @@ export class GameUI {
   /**
    * Update threshold indicators based on planned exits, CYOA, and story
    */
-  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean; isExitRelated?: boolean; exitNumber?: number }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
+  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean; isExitRelated?: boolean; exitNumber?: number; exitTiming?: 'before' | 'after' }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
     // Clear existing indicators
     this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
     this.progressThresholdIndicators = [];
@@ -320,8 +320,15 @@ export class GameUI {
             
             triangle.setScrollFactor(0);
             triangle.setDepth(10002);
+            // Add B/A label above the triangle
+            const label = this.scene.add.text(triangleX, triangleY - 8, cyoa.exitTiming === 'before' ? 'B' : 'A', {
+              fontSize: '10px', color: '#ffffff', fontStyle: 'bold', stroke: '#000000', strokeThickness: 2
+            }).setOrigin(0.5);
+            label.setScrollFactor(0);
+            label.setDepth(10003);
             
             this.progressThresholdIndicators.push(triangle);
+            this.progressThresholdIndicators.push(label as any);
           }
           return; // Skip regular CYOA processing for bundled ones
         }
