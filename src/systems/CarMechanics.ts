@@ -145,13 +145,10 @@ export class CarMechanics {
     exitSpawned: boolean;
   }> = [];
 
-  // CYOA Planning System - random choose-your-own-adventure events during driving
+  // CYOA Planning System - simple choose-your-own-adventure events during driving
   private plannedCyoa: Array<{
-    id: number; // CYOA ID (1, 2, 3, etc.)
+    id: number; // CYOA ID (1, 2, etc.)
     cyoaThreshold: number; // When to trigger CYOA (0-100)
-    isExitRelated: boolean; // True if this CYOA is related to an exit
-    exitNumber?: number; // Which exit this CYOA is related to (if isExitRelated)
-    exitTiming?: 'before' | 'after'; // Whether to occur before or after exit interaction
     triggered: boolean; // Whether CYOA has been triggered
   }> = [];
 
@@ -172,12 +169,6 @@ export class CarMechanics {
   // Also guard a window BEFORE upcoming exits to avoid regular CYOA right before an exit
   private preExitCyoaGuardPercent: number = 15; // percent progress window before any upcoming exit
 
-  // Strong guard for the exact exit-collision tick: only allow the matching 'before' CYOA
-  private exitCollisionGuardActive: boolean = false;
-  private exitCollisionNumberGuard: number | null = null;
-
-  // Pending Exit Menu to show after a 'before' CYOA is closed
-  private pendingExitAfterCyoa: { shopCount: number; exitNumber: number } | null = null;
   
   private currentSequenceProgress: number = 0;
   private lastPotholeSpawnStep: number = 0;
@@ -378,13 +369,7 @@ export class CarMechanics {
         const next = this.plannedCyoa[i + 1];
         const spacing = next.cyoaThreshold - current.cyoaThreshold;
         
-        // Skip spacing check if either CYOA is bundled with an exit
-        if (current.isExitRelated && current.exitNumber) {
-          continue; // Bundled CYOAs can be right on top of exits
-        }
-        if (next.isExitRelated && next.exitNumber) {
-          continue; // Bundled CYOAs can be right on top of exits
-        }
+        // All CYOAs are regular now, so check spacing normally
         
         if (spacing < minSpacing) {
           needsAdjustment = true;
@@ -635,80 +620,14 @@ export class CarMechanics {
     console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
     console.log('Total planned exits:', this.plannedExits.length);
     
-    // Create planned CYOA
+    // Create planned CYOA - SIMPLIFIED: Just 2 regular CYOAs per sequence
     cyoaThresholds.forEach((threshold, index) => {
       const cyoaId = index + 1;
-      let isExitRelated = false;
-      let exitNumber: number | undefined;
-      let exitTiming: 'before' | 'after' | undefined;
-      let cyoaThreshold = threshold;
-      
-      // Allow any CYOA to be exit-related (except when there's only 1 CYOA)
-      // For the first sequence, we disable random exit-related picks to avoid duplicates
-      if (numCyoa > 1 && numExits > 0 && !isFirstSequence) {
-        // 30% chance for any CYOA to be exit-related
-        if (Math.random() < 0.3) {
-          isExitRelated = true;
-          exitNumber = Phaser.Math.Between(1, numExits);
-          exitTiming = Math.random() < 0.5 ? 'before' : 'after';
-          
-          // Find the chosen exit to validate it exists
-          const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
-          if (chosenExit) {
-            // If 'before', set slightly before exit; if 'after', use exit threshold (will be scheduled on close)
-            if (exitTiming === 'before') {
-              const offset = Phaser.Math.Between(5, 10); // 5-10% before
-              cyoaThreshold = Math.max(1, chosenExit.exitThreshold - offset);
-            } else {
-              cyoaThreshold = chosenExit.exitThreshold; // Same threshold as exit (triggered on close)
-            }
-            console.log(`CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% - will only trigger if exit is taken`);
-          } else {
-            console.log(`CYOA ${cyoaId} - Exit ${exitNumber} not found, making it non-exit-related`);
-            isExitRelated = false;
-            exitNumber = undefined;
-            exitTiming = undefined;
-          }
-        }
-      }
-      
-      // For first sequence, make CYOAs 2 and 3 exit-related for testing (before and after different exits)
-      if (isFirstSequence && (cyoaId === 2 || cyoaId === 3)) {
-        isExitRelated = true;
-        
-        if (cyoaId === 2) {
-          // 2nd CYOA is before Exit 1
-          exitNumber = 1;
-          exitTiming = 'before';
-          const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
-          if (chosenExit) {
-            const offset = Phaser.Math.Between(5, 10); // trigger a bit before the exit
-            cyoaThreshold = Math.max(1, chosenExit.exitThreshold - offset);
-            console.log(`First sequence CYOA ${cyoaId} bundled BEFORE Exit ${exitNumber} at ${cyoaThreshold}% (exit at ${chosenExit.exitThreshold}%)`);
-          } else {
-            console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
-          }
-        } else if (cyoaId === 3) {
-          // 3rd CYOA is after Exit 2 (or Exit 1 if only 1 exit exists)
-          const availableExits = this.plannedExits.map(e => e.number).sort();
-          exitNumber = availableExits.length > 1 ? 2 : 1; // Use Exit 2 if available, otherwise Exit 1
-          exitTiming = 'after';
-          const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
-          if (chosenExit) {
-            cyoaThreshold = chosenExit.exitThreshold; // Same threshold as exit (triggered on close)
-            console.log(`First sequence CYOA ${cyoaId} bundled AFTER Exit ${exitNumber} at ${cyoaThreshold}% (will trigger on exit close)`);
-          } else {
-            console.error(`🎭 ERROR: Could not find Exit ${exitNumber} for first sequence CYOA ${cyoaId}`);
-          }
-        }
-      }
+      const cyoaThreshold = threshold;
       
       this.plannedCyoa.push({
         id: cyoaId,
         cyoaThreshold: cyoaThreshold,
-        isExitRelated: isExitRelated,
-        exitNumber: exitNumber,
-        exitTiming: exitTiming,
         triggered: false
       });
     });
@@ -717,7 +636,7 @@ export class CarMechanics {
     this.ensureCyoaSpacing();
     
     console.log('Planned CYOA:', this.plannedCyoa.map(c => 
-      `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (${c.exitTiming || 'after'} Exit ${c.exitNumber})` : ' (regular)'}`
+      `CYOA ${c.id}: ${c.cyoaThreshold}% (regular)`
     ));
     console.log('Total planned CYOA:', this.plannedCyoa.length);
     
@@ -838,7 +757,7 @@ export class CarMechanics {
       }
     });
     
-    // Check if any planned non-exit CYOA should be triggered by progress
+    // Check if any planned CYOA should be triggered by progress
     // Suppress near exit-collision windows to avoid duplicate/overlapping triggers
     let currentStepForSuppression = 0;
     try {
@@ -846,25 +765,19 @@ export class CarMechanics {
       currentStepForSuppression = gameScene?.gameState?.getState()?.step || 0;
     } catch {}
     this.plannedCyoa.forEach(plannedCyoa => {
-      // Exit-related CYOA are coordinated with exit interactions (before at collision, after on close)
-      // Skip ALL exit-related CYOAs - they should never be triggered by progress
-      if (plannedCyoa.isExitRelated) {
-        console.log(`updateProgress: Skipping exit-related CYOA ${plannedCyoa.id} (${plannedCyoa.exitTiming || 'after'} Exit ${plannedCyoa.exitNumber}) - not triggered by progress`);
-        return;
-      }
       if (currentStepForSuppression <= this.suppressRegularCyoaUntilStep) {
-        return; // Skip regular CYOA during suppression window
+        return; // Skip CYOA during suppression window
       }
-      // Pre-exit guard: if an exit is imminent within N% progress, skip regular CYOA
+      // Pre-exit guard: if an exit is imminent within N% progress, skip CYOA
       const upcomingExit = this.plannedExits.find(e => !e.exitSpawned && progress < e.exitThreshold);
       if (upcomingExit) {
         const delta = upcomingExit.exitThreshold - progress;
         if (delta <= this.preExitCyoaGuardPercent) {
-          return;
+          return; // Skip CYOA if exit is too close
         }
       }
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
-        console.log(`updateProgress: Triggering REGULAR CYOA ${plannedCyoa.id} at progress ${progress}%`);
+        console.log(`updateProgress: Triggering CYOA ${plannedCyoa.id} at progress ${progress.toFixed(1)}%`);
         this.triggerCyoa(plannedCyoa);
         plannedCyoa.triggered = true;
       }
@@ -1052,23 +965,8 @@ export class CarMechanics {
   /**
    * Trigger a planned CYOA
    */
-  private triggerCyoa(plannedCyoa: any, options?: { allowAfter?: boolean }) {
-    // Add detailed call stack logging to track double-triggering
-    console.log(`🎭 triggerCyoa called for CYOA ${plannedCyoa.id} - Call stack:`, new Error().stack?.split('\n').slice(1, 6));
-    
-    // If we're on the exact exit-collision tick, only allow the matching 'before' bundled CYOA
-    if (this.exitCollisionGuardActive) {
-      const allowed = plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'before' && plannedCyoa.exitNumber === this.exitCollisionNumberGuard;
-      if (!allowed) {
-        console.warn(`🎭 Guard: Blocking non-matching CYOA during exit-collision tick`);
-        return;
-      }
-    }
-    // Defensive: prevent accidental early trigger of 'after' exit-related events unless explicitly allowed
-    if (plannedCyoa.isExitRelated && plannedCyoa.exitTiming === 'after' && !options?.allowAfter) {
-      console.warn(`🎭 Guard: Attempted to trigger 'after' exit CYOA ${plannedCyoa.id} early; ignoring`);
-      return;
-    }
+  private triggerCyoa(plannedCyoa: any) {
+    console.log(`🎭 triggerCyoa called for CYOA ${plannedCyoa.id}`);
     
     // Prevent double-triggering of the same CYOA
     if (plannedCyoa.triggered) {
@@ -1076,7 +974,7 @@ export class CarMechanics {
       return;
     }
     
-    console.log(`Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber}, ${plannedCyoa.exitTiming || 'after'})` : ''}`);
+    console.log(`Triggering CYOA ${plannedCyoa.id}`);
     
     // Mark as triggered immediately to prevent double-triggering
     plannedCyoa.triggered = true;
@@ -1089,55 +987,14 @@ export class CarMechanics {
     if (menuScene) {
       (menuScene as any).events.emit('showCyoaMenu', {
         cyoaId: plannedCyoa.id,
-        isExitRelated: plannedCyoa.isExitRelated,
-        exitNumber: plannedCyoa.exitNumber,
-        exitTiming: plannedCyoa.exitTiming
+        isExitRelated: false,
+        exitNumber: undefined,
+        exitTiming: undefined
       });
       this.scene.scene.bringToTop('MenuScene');
     }
   }
 
-  /**
-   * Trigger after exit CYOA directly (simplified approach)
-   */
-  public triggerAfterExitCyoa(exitNumber: number): void {
-    console.log(`triggerAfterExitCyoa: Looking for after CYOA for Exit ${exitNumber}`);
-    console.log(`triggerAfterExitCyoa: FULL Call stack:`, new Error().stack?.split('\n').slice(1, 10));
-    
-    // Find the after CYOA for this exit
-    const afterCyoa = this.plannedCyoa.find(cyoa => 
-      cyoa.isExitRelated && 
-      cyoa.exitNumber === exitNumber && 
-      cyoa.exitTiming === 'after' && 
-      !cyoa.triggered
-    );
-    
-    if (afterCyoa) {
-      console.log(`triggerAfterExitCyoa: Found after CYOA ${afterCyoa.id} for Exit ${exitNumber} - triggering now`);
-      this.triggerCyoa(afterCyoa, { allowAfter: true });
-      
-      // Update UI immediately
-      const gameScene = this.scene.scene.get('GameScene') as any;
-      if (gameScene && gameScene.gameUI) {
-        const plannedExits = this.getPlannedExits();
-        const plannedCyoa = this.getPlannedCyoa();
-        const plannedStory = this.getPlannedStory();
-        gameScene.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
-      }
-    } else {
-      console.log(`triggerAfterExitCyoa: No after CYOA found for Exit ${exitNumber}`);
-    }
-  }
-
-  /**
-   * Schedule an exit CYOA to trigger after a certain number of steps
-   * @deprecated - Use triggerAfterExitCyoa instead for direct triggering
-   */
-  public scheduleExitCyoa(exitNumber: number, stepsDelay: number): void {
-    console.log(`scheduleExitCyoa: DEPRECATED - Use triggerAfterExitCyoa instead`);
-    // Redirect to direct triggering
-    this.triggerAfterExitCyoa(exitNumber);
-  }
 
   // triggerScheduledExitCyoa method removed - now using direct triggering
 
@@ -1180,10 +1037,7 @@ export class CarMechanics {
   public getPlannedCyoa() {
     const result = this.plannedCyoa.filter(cyoa => !cyoa.triggered).map(cyoa => ({
       progressThreshold: cyoa.cyoaThreshold,
-      triggered: cyoa.triggered,
-      isExitRelated: cyoa.isExitRelated,
-      exitNumber: cyoa.exitNumber,
-      exitTiming: cyoa.exitTiming
+      triggered: cyoa.triggered
     }));
     
     return result;
@@ -1289,18 +1143,7 @@ export class CarMechanics {
   public onStepEvent(currentStep: number) {
     if (!this.drivingMode || this.drivingPaused) return;
     
-    // If a 'before' CYOA just finished and we resumed, show the deferred exit menu now
-    if (this.pendingExitAfterCyoa) {
-      const menuScene = this.scene.scene.get('MenuScene');
-      if (menuScene) {
-        const { shopCount, exitNumber } = this.pendingExitAfterCyoa;
-        console.log(`🎭 CarMechanics: emitting deferred showObstacleMenu with exitNumber=`, exitNumber);
-        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
-        this.scene.scene.bringToTop('MenuScene');
-        this.pendingExitAfterCyoa = null;
-        // Exit menu will handle pausing via MenuManager
-      }
-    }
+    // No more exit-related CYOAs, so no deferred exit menus
 
     // Scheduled CYOA system removed - now using direct triggering
     
@@ -2034,39 +1877,23 @@ export class CarMechanics {
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
 
-        // Activate exact-tick guard
-        this.exitCollisionGuardActive = true;
-        this.exitCollisionNumberGuard = exitNumber ?? null;
-
-        // Set suppression window for regular CYOAs to avoid accidental co-trigger at the same time
+        // Set suppression window for CYOAs to avoid accidental co-trigger at the same time
         try {
           const gs: any = this.scene.scene.get('GameScene');
           const stepNow = gs?.gameState?.getState()?.step || 0;
           this.suppressRegularCyoaUntilStep = stepNow + 2; // allow after two steps
         } catch {}
 
-        // If there is a bundled BEFORE CYOA for this exit, trigger it now before the exit menu
+        // Show the exit menu immediately (no more exit-related CYOAs)
         if (exitNumber != null) {
-          const beforeCyoa = this.plannedCyoa.find(c => c.isExitRelated && c.exitNumber === exitNumber && c.exitTiming === 'before' && !c.triggered);
-          if (beforeCyoa) {
-            console.log(`Triggering BEFORE CYOA ${beforeCyoa.id} for Exit ${exitNumber} prior to showing exit menu`);
-            this.triggerCyoa(beforeCyoa); // normal guard allows 'before'
-            beforeCyoa.triggered = true;
-            // Defer exit menu until CYOA closes and gameplay resumes
-            this.pendingExitAfterCyoa = { shopCount, exitNumber };
-          } else {
-            // No before CYOA; show the exit menu immediately
-            console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
-            console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
-            console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
-            (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
-            console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
-            this.scene.scene.bringToTop('MenuScene');
-          }
+          console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
+          console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
+          console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
+          (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+          console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
+          this.scene.scene.bringToTop('MenuScene');
         }
       }
-      // Deactivate the exact-tick guard on the next tick
-      this.scene.time.delayedCall(0, () => { this.exitCollisionGuardActive = false; this.exitCollisionNumberGuard = null; });
     }
     obstacle.destroy();
     const index = this.obstacles.indexOf(obstacle);

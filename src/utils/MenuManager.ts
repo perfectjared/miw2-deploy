@@ -840,20 +840,7 @@ export class MenuManager {
         }
         // Debug line intentionally minimized
         
-        if (finalExitNumber) {
-          console.log(`🎭 MenuManager: Player closed Exit ${finalExitNumber} - checking for after CYOA`);
-          const gameScene = this.scene.scene.get('GameScene');
-          if (gameScene && (gameScene as any).carMechanics) {
-            console.log(`🎭 MenuManager: Calling triggerAfterExitCyoa(${finalExitNumber})`);
-            // Trigger after CYOA directly instead of scheduling
-            (gameScene as any).carMechanics.triggerAfterExitCyoa(finalExitNumber);
-            console.log(`🎭 MenuManager: triggerAfterExitCyoa call completed`);
-          } else {
-            console.error(`🎭 MenuManager: ERROR - Could not find GameScene or carMechanics`);
-          }
-        } else {
-          console.warn(`🎭 MenuManager: No exit number resolved on Close - skipping after CYOA`);
-        }
+        // Exit menu closed - no more exit-related CYOAs to trigger
         
         this.closeDialog();
       }
@@ -1354,7 +1341,7 @@ export class MenuManager {
 
   public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
     // SIMPLIFIED: CYOA menus are completely independent and immediate
-    console.log(`🎭 SIMPLE CYOA: Creating ${cyoaData.exitTiming || 'regular'} CYOA ${cyoaData.cyoaId} for Exit ${cyoaData.exitNumber || 'N/A'}`);
+    console.log(`🎭 SIMPLE CYOA: Creating regular CYOA ${cyoaData.cyoaId}`);
     
     // Clear any existing dialog immediately
     this.clearCurrentDialog();
@@ -1363,10 +1350,8 @@ export class MenuManager {
     this.menuStack = [];
     console.log(`🎭 SIMPLE CYOA: Cleared entire menu stack to prevent restoration conflicts`);
     
-    // Don't use the complex menu stack for CYOA - create directly
-    const cyoaDescription = cyoaData.isExitRelated 
-      ? `Something happened ${cyoaData.exitTiming === 'before' ? 'before' : 'after'} Exit ${cyoaData.exitNumber}!`
-      : 'Something happened!';
+    // Simple CYOA description
+    const cyoaDescription = 'Something happened!';
     
     const menuConfig: MenuConfig = {
       title: 'CYOA',
@@ -1375,7 +1360,7 @@ export class MenuManager {
         {
           text: 'OK',
           onClick: () => {
-            console.log(`🎭 SIMPLE CYOA: User clicked OK on ${cyoaData.exitTiming || 'regular'} CYOA ${cyoaData.cyoaId}`);
+            console.log(`🎭 SIMPLE CYOA: User clicked OK on regular CYOA ${cyoaData.cyoaId}`);
             this.clearCurrentDialog();
             this.resumeGame();
           },
@@ -1384,7 +1369,7 @@ export class MenuManager {
         {
           text: 'No',
           onClick: () => {
-            console.log(`🎭 SIMPLE CYOA: User clicked No on ${cyoaData.exitTiming || 'regular'} CYOA ${cyoaData.cyoaId}`);
+            console.log(`🎭 SIMPLE CYOA: User clicked No on regular CYOA ${cyoaData.cyoaId}`);
             this.clearCurrentDialog();
             this.resumeGame();
           },
