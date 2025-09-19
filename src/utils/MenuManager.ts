@@ -1359,6 +1359,10 @@ export class MenuManager {
     // Clear any existing dialog immediately
     this.clearCurrentDialog();
     
+    // CRITICAL: Clear the entire menu stack to prevent restoration issues
+    this.menuStack = [];
+    console.log(`🎭 SIMPLE CYOA: Cleared entire menu stack to prevent restoration conflicts`);
+    
     // Don't use the complex menu stack for CYOA - create directly
     const cyoaDescription = cyoaData.isExitRelated 
       ? `Something happened ${cyoaData.exitTiming === 'before' ? 'before' : 'after'} Exit ${cyoaData.exitNumber}!`
