@@ -378,6 +378,13 @@ export class MenuManager {
       return false;
     }
     
+    // If the user just dismissed a CYOA menu, don't restore anything
+    // This prevents complex menu restoration chains after CYOA events
+    if (this.userDismissedMenuType === 'CYOA') {
+      console.log('MenuManager: shouldRestorePreviousMenu - CYOA was just dismissed, not restoring anything');
+      return false;
+    }
+    
     const shouldRestore = menuToRestore.type !== this.userDismissedMenuType;
     
     console.log('MenuManager: shouldRestorePreviousMenu - stack length:', this.menuStack.length, 'currentDialog:', !!this.currentDialog, 'menuToRestore:', menuToRestore.type, 'userDismissed:', this.userDismissedMenuType, 'shouldRestore:', shouldRestore);
