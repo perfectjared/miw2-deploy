@@ -566,7 +566,9 @@ export class GameScene extends Phaser.Scene {
     this.frontseatKeys = new Keys(this);
     
     // Create key SVG overlay that will follow the key's position
-    this.keySVG = this.add.sprite(800, 300, 'key-white'); // Start at key's initial position (right side)
+    const gameWidth = this.cameras.main.width;
+    const keysX = gameWidth * 0.8; // Match the keys position (80% from left edge)
+    this.keySVG = this.add.sprite(keysX, 300, 'key-white'); // Start at key's initial position (right side)
     this.keySVG.setScale(0.08); // Scaled to match key physics object (radius 15)
     this.keySVG.setOrigin(0.5, 0.5);
     this.keySVG.setAlpha(0.8); // Semi-transparent overlay

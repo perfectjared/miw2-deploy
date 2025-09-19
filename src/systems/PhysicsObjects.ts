@@ -385,8 +385,12 @@ export class Keys implements PhysicsObject {
     const itemSize = gameElements.getItemSize('small');
     const radius = itemSize.width / 2; // Convert width to radius
     
+    // Position keys on right side but still visible (80% of screen width)
+    const gameWidth = this.scene.cameras.main.width;
+    const keysX = gameWidth * 0.8; // 80% from left edge (right side but visible)
+    
     this.gameObject = this.scene.add.circle(
-      800, // x position - moved to right side of screen
+      keysX, // x position - right side but visible
       300, // y position
       radius,  // radius from config
       0x0000ff // color (blue)
