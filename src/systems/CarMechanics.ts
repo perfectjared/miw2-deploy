@@ -2043,7 +2043,10 @@ export class CarMechanics {
           } else {
             // No before CYOA; show the exit menu immediately
             console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
+            console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
+            console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
             (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+            console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
             this.scene.scene.bringToTop('MenuScene');
           }
         }

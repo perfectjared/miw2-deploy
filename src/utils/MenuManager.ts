@@ -1230,6 +1230,8 @@ export class MenuManager {
       
       // Resolve exit number with fallbacks: event param -> persisted -> bundled CYOA exit
       let resolvedExitNumber = exitNumber ?? (this as any)._lastExitNumber;
+      console.log(`🎭 showObstacleMenu(exit): after ?? operator, resolvedExitNumber=`, resolvedExitNumber);
+      
       if (resolvedExitNumber == null) {
         try {
           const gameScene = this.scene.scene.get('GameScene') as any;
@@ -1241,9 +1243,12 @@ export class MenuManager {
           }
         } catch {}
       }
+      console.log(`🎭 showObstacleMenu(exit): after fallback logic, resolvedExitNumber=`, resolvedExitNumber);
+      
       // Persist exit number immediately so downstream menus can access it reliably
       (this as any)._lastExitNumber = resolvedExitNumber ?? (this as any)._lastExitNumber;
       console.log(`🎭 showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber, `updated _lastExitNumber=`, (this as any)._lastExitNumber);
+      console.log(`🎭 showObstacleMenu(exit): calling showExitMenu with damage=`, damage, `exitNumber=`, resolvedExitNumber);
       this.showExitMenu(damage, resolvedExitNumber);
       return;
     }
