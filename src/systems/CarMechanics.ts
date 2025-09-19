@@ -627,7 +627,8 @@ export class CarMechanics {
       let cyoaThreshold = threshold;
       
       // Allow any CYOA to be exit-related (except when there's only 1 CYOA)
-      if (numCyoa > 1 && numExits > 0) {
+      // For the first sequence, we disable random exit-related picks to avoid duplicates
+      if (numCyoa > 1 && numExits > 0 && !isFirstSequence) {
         // 30% chance for any CYOA to be exit-related
         if (Math.random() < 0.3) {
           isExitRelated = true;
