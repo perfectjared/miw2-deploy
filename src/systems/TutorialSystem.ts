@@ -124,21 +124,31 @@ export class TutorialSystem {
    * Update tutorial overlay based on current game state
    */
   public updateTutorialOverlay(state: TutorialState) {
-    // Tutorial overlay disabled - no visual overlays needed
+    // Determine tutorial state based on game state
     let tutorialState: 'none' | 'keys-and-ignition' | 'steering' | 'exit-warning' = 'none';
     
-    // Always hide tutorial overlay since tutorial system is working without visual cues
+    // Show keys-and-ignition tutorial when keys are not in ignition and car is not started
+    if (!state.keysInIgnition && !state.carStarted) {
+      tutorialState = 'keys-and-ignition';
+    }
+    
+    // Update tutorial overlay visibility
     if (this.tutorialOverlay) {
-      this.tutorialOverlay.setVisible(false);
+      this.tutorialOverlay.setVisible(tutorialState !== 'none');
       try {
         // Inform parent scene so other scenes (like AppScene) can react (hide Pause/Save)
-        (this.scene as any).events?.emit?.('tutorialOverlayVisible', false);
+        (this.scene as any).events?.emit?.('tutorialOverlayVisible', tutorialState !== 'none');
       } catch {}
+    }
+    
+    // Update tutorial mask if needed
+    if (tutorialState !== 'none') {
+      this.updateTutorialMask(tutorialState);
     }
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      console.log('Tutorial overlay disabled - no visual overlays');
+      console.log('Tutorial state:', tutorialState);
       this.lastTutorialState = tutorialState;
     }
   }

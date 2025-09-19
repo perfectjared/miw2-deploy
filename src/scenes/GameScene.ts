@@ -1051,6 +1051,11 @@ export class GameScene extends Phaser.Scene {
       this.gameState.updateState({ keysInIgnition: true });
       console.log('Keys snapped to ignition');
       
+      // Advance tutorial if we're in keys_placement phase
+      if (this.gameState.getTutorialPhase() === 'keys_placement') {
+        this.gameState.advanceTutorial();
+      }
+      
       // Disable physics body for the key when it's constrained & prevent collisions
       if (this.frontseatKeys.gameObject.body) {
         const keyBody = this.frontseatKeys.gameObject.body as any;
@@ -1677,6 +1682,11 @@ export class GameScene extends Phaser.Scene {
     // Tutorial step processing
     
     switch (tutorialPhase) {
+      case 'keys_placement':
+        // Wait for keys to be placed in ignition
+        // Tutorial system will show keys-and-ignition overlay
+        break;
+        
       case 'initial_driving':
         // Show countdown after 4 steps
         if (tutorialStep >= 4) {

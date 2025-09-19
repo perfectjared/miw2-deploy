@@ -25,7 +25,7 @@ export interface GameStateData {
   step: number;
   
   // Tutorial State
-  tutorialPhase: 'none' | 'initial_driving' | 'countdown' | 'interrupt' | 'normal';
+  tutorialPhase: 'none' | 'keys_placement' | 'initial_driving' | 'countdown' | 'interrupt' | 'normal';
   tutorialStep: number;
   
   // Player Stats
@@ -184,11 +184,11 @@ export class GameState {
    */
   public startTutorial() {
     this.updateState({
-      tutorialPhase: 'initial_driving',
+      tutorialPhase: 'keys_placement',
       tutorialStep: 0
     });
     
-    console.log('🎓 Tutorial started: initial driving phase');
+    console.log('Tutorial started: keys placement phase');
   }
   
   /**
@@ -200,6 +200,15 @@ export class GameState {
     let nextStep = this.state.tutorialStep + 1;
     
     switch (currentPhase) {
+      case 'keys_placement':
+        // Only advance when keys are placed in ignition
+        if (this.state.keysInIgnition) {
+          nextPhase = 'initial_driving';
+          nextStep = 0;
+        } else {
+          nextPhase = 'keys_placement';
+        }
+        break;
       case 'initial_driving':
         if (nextStep >= 4) {
           nextPhase = 'countdown';
