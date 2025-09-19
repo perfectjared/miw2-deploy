@@ -25,6 +25,7 @@ import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
 import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
+import { WindowShapes } from '../utils/WindowShapes';
 import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG, REGION_CONFIG, gameElements } from '../config/GameConfig';
 
 // Tunable scene constants (for quick tweaking)
@@ -54,6 +55,7 @@ export class GameScene extends Phaser.Scene {
   private gameUI!: GameUI;
   private inputHandlers!: InputHandlers;
   private gameState!: GameState;
+  private windowShapes!: WindowShapes;
   private virtualPets: VirtualPet[] = [];
   private petLabels: Phaser.GameObjects.Text[] = [];
   private dragOverlay?: Phaser.GameObjects.Container;
@@ -64,6 +66,9 @@ export class GameScene extends Phaser.Scene {
   private magneticVisualState: 'default' | 'near' | 'snap' = 'default';
   // Only allow ignition magnet to attract keys for a brief window after release
   private keysAttractionUntil: number = 0;
+  
+  // Debug variables
+  private debugWindows: Phaser.GameObjects.Container[] = [];
   
   // ============================================================================
   // PHYSICS OBJECTS
@@ -233,6 +238,18 @@ export class GameScene extends Phaser.Scene {
           console.log('Debug: Setting progress to 99%');
           this.gameState.updateState({ progress: 99 });
         }
+      });
+
+      // Debug: Add 'R' key to generate random window shapes for testing
+      const keyR = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.R, true, false);
+      keyR?.on('down', () => {
+        this.createDebugWindow();
+      });
+
+      // Debug: Add 'S' key to generate speech bubble specifically
+      const keyS = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S, true, false);
+      keyS?.on('down', () => {
+        this.createDebugSpeechBubble();
       });
 
       // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability
@@ -547,6 +564,9 @@ export class GameScene extends Phaser.Scene {
     };
     
     this.carMechanics = new CarMechanics(this, carConfig);
+    
+    // Window Shapes utility for menu boundaries
+    this.windowShapes = new WindowShapes(this);
     
     // Tutorial System Configuration - using centralized config
     const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
@@ -2218,5 +2238,70 @@ export class GameScene extends Phaser.Scene {
       console.log('Error calling stopDriving:', e);
     }
     this.gravityXTarget = 0;
+  }
+
+  /**
+   * DEBUG: Create a random window shape for testing
+   */
+  private createDebugWindow() {
+    // Clear previous debug windows
+    this.debugWindows.forEach(window => window.destroy());
+    this.debugWindows = [];
+
+    // Create a new random window shape
+    const newWindow = this.windowShapes.createRandomTestWindow();
+    this.debugWindows.push(newWindow);
+
+    // Set high depth so it appears on top
+    newWindow.setDepth(2000);
+
+    // Auto-remove after 3 seconds
+    this.time.delayedCall(3000, () => {
+      if (newWindow && !newWindow.scene) return; // Already destroyed
+      newWindow.destroy();
+      const index = this.debugWindows.indexOf(newWindow);
+      if (index > -1) {
+        this.debugWindows.splice(index, 1);
+      }
+    });
+
+    console.log('Debug window created! Press R again to generate a new one.');
+  }
+
+  /**
+   * Create a debug speech bubble window for testing 'S' key
+   */
+  private createDebugSpeechBubble() {
+    // Clear previous debug windows
+    this.debugWindows.forEach(window => window.destroy());
+    this.debugWindows = [];
+
+    // Create a new speech bubble composition
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Random position and size
+    const width = Phaser.Math.Between(200, 350);
+    const height = Phaser.Math.Between(150, 250);
+    const x = Phaser.Math.Between(50, gameWidth - width - 50);
+    const y = Phaser.Math.Between(50, gameHeight - height - 50);
+    
+    const newWindow = this.windowShapes.createSpeechBubbleComposition(x, y, width, height);
+    this.debugWindows.push(newWindow);
+
+    // Set high depth so it appears on top
+    newWindow.setDepth(2000);
+
+    // Auto-remove after 3 seconds
+    this.time.delayedCall(3000, () => {
+      if (newWindow && !newWindow.scene) return; // Already destroyed
+      newWindow.destroy();
+      const index = this.debugWindows.indexOf(newWindow);
+      if (index > -1) {
+        this.debugWindows.splice(index, 1);
+      }
+    });
+
+    console.log('Debug speech bubble created! Press S again to generate a new one.');
   }
 }
