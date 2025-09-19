@@ -362,6 +362,13 @@ export class MenuManager {
     if (this.menuStack.length === 0 || this.currentDialog) return false;
     
     const menuToRestore = this.menuStack[this.menuStack.length - 1];
+    
+    // CYOA menus are one-time events and should never be restored
+    if (menuToRestore.type === 'CYOA') {
+      console.log('MenuManager: shouldRestorePreviousMenu - CYOA menu found, not restoring (one-time event)');
+      return false;
+    }
+    
     const shouldRestore = menuToRestore.type !== this.userDismissedMenuType;
     
     console.log('MenuManager: shouldRestorePreviousMenu - stack length:', this.menuStack.length, 'currentDialog:', !!this.currentDialog, 'menuToRestore:', menuToRestore.type, 'userDismissed:', this.userDismissedMenuType, 'shouldRestore:', shouldRestore);
