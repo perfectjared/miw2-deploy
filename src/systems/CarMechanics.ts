@@ -595,19 +595,19 @@ export class CarMechanics {
       let exitNumber: number | undefined;
       let cyoaThreshold = threshold;
       
-      // If we have 3 CYOA, one should be exit-related and occur immediately after leaving an exit
+      // If we have 3 CYOA, the 3rd should be bundled with a specific exit
       if (numCyoa === 3 && cyoaId === 3) {
         isExitRelated = true;
-        // Pick a random exit to be related to (only if exits exist)
+        // Pick a random exit to bundle with (only if exits exist)
         if (numExits > 0) {
           exitNumber = Phaser.Math.Between(1, numExits);
           
           // Find the chosen exit to validate it exists
           const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
           if (chosenExit) {
-            // Don't schedule based on progress - this will be triggered immediately when exit is left
-            cyoaThreshold = 999; // Set to high value so it won't trigger via progress
-            console.log(`🎭 CYOA ${cyoaId} will trigger immediately after leaving Exit ${exitNumber} (exit at ${chosenExit.exitThreshold}%)`);
+            // Bundle this CYOA with the exit - it will only trigger if player takes the exit
+            cyoaThreshold = chosenExit.exitThreshold; // Same threshold as exit
+            console.log(`🎭 CYOA ${cyoaId} bundled with Exit ${exitNumber} at ${cyoaThreshold}% - will only trigger if exit is taken`);
           } else {
             console.log(`🎭 CYOA ${cyoaId} - Exit ${exitNumber} not found, making it non-exit-related`);
             isExitRelated = false;
@@ -754,8 +754,14 @@ export class CarMechanics {
     
     // Check if any planned CYOA should be triggered
     this.plannedCyoa.forEach(plannedCyoa => {
+      // Skip bundled CYOAs - they only trigger when exit is taken
+      if (plannedCyoa.isExitRelated && plannedCyoa.exitNumber) {
+        // This is a bundled CYOA - don't trigger via progress
+        return;
+      }
+      
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
-        console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%${plannedCyoa.isExitRelated ? ` (exit-related)` : ''}`);
+        console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
         this.triggerCyoa(plannedCyoa);
         plannedCyoa.triggered = true;
       }
@@ -962,20 +968,20 @@ export class CarMechanics {
   }
 
   /**
-   * Trigger exit-related CYOA immediately after leaving an exit
+   * Trigger bundled CYOA immediately after taking an exit
    */
   public triggerExitCyoa(exitNumber: number): void {
-    // Find the planned exit-related CYOA for this exit
-    const exitCyoa = this.plannedCyoa.find(cyoa => 
+    // Find the bundled CYOA for this exit (only bundled ones, not all exit-related)
+    const bundledCyoa = this.plannedCyoa.find(cyoa => 
       cyoa.isExitRelated && cyoa.exitNumber === exitNumber && !cyoa.triggered
     );
     
-    if (exitCyoa) {
-      console.log(`🎭 Triggering exit CYOA immediately after leaving Exit ${exitNumber}`);
-      this.triggerCyoa(exitCyoa);
-      exitCyoa.triggered = true;
+    if (bundledCyoa) {
+      console.log(`🎭 Triggering bundled CYOA immediately after taking Exit ${exitNumber}`);
+      this.triggerCyoa(bundledCyoa);
+      bundledCyoa.triggered = true;
     } else {
-      console.log(`🎭 No exit CYOA found for Exit ${exitNumber}`);
+      console.log(`🎭 No bundled CYOA found for Exit ${exitNumber} - CYOA will be skipped`);
     }
   }
 

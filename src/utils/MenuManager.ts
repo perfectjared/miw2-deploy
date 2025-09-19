@@ -1223,7 +1223,7 @@ export class MenuManager {
     }
     
     const cyoaDescription = cyoaData.isExitRelated 
-      ? `Something happened near Exit ${cyoaData.exitNumber}!`
+      ? `Something happened after taking Exit ${cyoaData.exitNumber}!`
       : 'Something happened!';
     
     const menuConfig: MenuConfig = {
