@@ -551,7 +551,6 @@ export class CarMechanics {
     
     // Plan CYOA per sequence
     let numCyoa: number;
-    const gameScene = this.scene.scene.get('GameScene') as any;
     const showsInCurrentRegion = gameScene?.gameState?.getState()?.showsInCurrentRegion || 0;
     
     if (showsInCurrentRegion === 0) {
