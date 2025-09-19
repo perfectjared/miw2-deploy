@@ -688,7 +688,7 @@ export class CarMechanics {
       console.log(`📖 Story scheduled at independent threshold ${storyThreshold}%`);
     }
     
-    // Ensure story doesn't conflict with CYOA events (minimum 10% spacing)
+    // Ensure story doesn't conflict with CYOA events or exits (minimum 10% spacing)
     const minSpacing = 10;
     let attempts = 0;
     const maxAttempts = 20;
@@ -701,6 +701,17 @@ export class CarMechanics {
         if (Math.abs(cyoa.cyoaThreshold - storyThreshold) < minSpacing) {
           needsAdjustment = true;
           break;
+        }
+      }
+      
+      // Check spacing against planned exits (both preview and exit thresholds)
+      if (!needsAdjustment) {
+        for (const exit of this.plannedExits) {
+          if (Math.abs(exit.previewThreshold - storyThreshold) < minSpacing ||
+              Math.abs(exit.exitThreshold - storyThreshold) < minSpacing) {
+            needsAdjustment = true;
+            break;
+          }
         }
       }
       

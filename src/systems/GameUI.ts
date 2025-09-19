@@ -319,7 +319,7 @@ export class GameUI {
       const triangleY = barY - 24; // Above the CYOA indicators
       
       const triangle = this.scene.add.graphics();
-      triangle.fillStyle(GREYSCALE_PALETTE.white, 0.9); // White for story
+      triangle.fillStyle(GREYSCALE_PALETTE.white, 0.8); // White for story - same alpha as others
       triangle.beginPath();
       triangle.moveTo(triangleX, triangleY);
       triangle.lineTo(triangleX - 4, triangleY + 8);
