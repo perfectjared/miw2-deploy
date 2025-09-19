@@ -882,9 +882,19 @@ export class GameScene extends Phaser.Scene {
    * Main update loop
    */
   update() {
+    // Safety check: ensure gameState is initialized
+    if (!this.gameState) {
+      console.warn('GameScene.update(): gameState not initialized yet, skipping update');
+      return;
+    }
+    
     // Update all systems
     const currentStep = this.gameState.getState().step || 0;
-    this.carMechanics.update(currentStep);
+    
+    // Safety check: ensure carMechanics is initialized
+    if (this.carMechanics) {
+      this.carMechanics.update(currentStep);
+    }
     
     // Update game UI (steering wheel gradual return to center)
     if (this.gameUI) {
@@ -900,7 +910,9 @@ export class GameScene extends Phaser.Scene {
     }
     
     // HUD camera remains unrotated; no per-frame virtual pet counter-rotation needed
-    this.applyMagneticAttraction();
+    if (this.frontseatKeys && this.frontseatTrash && this.backseatItem) {
+      this.applyMagneticAttraction();
+    }
     // Smoothly apply lateral gravity based on steering
     this.gravityXCurrent = Phaser.Math.Linear(this.gravityXCurrent, this.gravityXTarget, 0.1);
     this.matter.world.setGravity(this.gravityXCurrent, this.gravityBaseY);
@@ -986,13 +998,16 @@ export class GameScene extends Phaser.Scene {
         (this.tutorialSystem as any).updateTutorialMaskRealTime();
       }
     }
-    this.inputHandlers.setInputState({
-      isDraggingObject: false, // TODO: Get from physics objects
-      isKnobActive: false, // TODO: Get from UI
-      keysConstraint: this.keysConstraint,
-      hasOpenMenu: false, // TODO: Get from menu system
-      currentMenuType: null
-    });
+    // Safety check: ensure inputHandlers is initialized
+    if (this.inputHandlers) {
+      this.inputHandlers.setInputState({
+        isDraggingObject: false, // TODO: Get from physics objects
+        isKnobActive: false, // TODO: Get from UI
+        keysConstraint: this.keysConstraint,
+        hasOpenMenu: false, // TODO: Get from menu system
+        currentMenuType: null
+      });
+    }
   }
 
 
