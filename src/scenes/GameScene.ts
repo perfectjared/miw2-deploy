@@ -1752,6 +1752,12 @@ export class GameScene extends Phaser.Scene {
     // Advance tutorial phase to normal
     this.gameState.advanceTutorial();
     
+    // Ensure car is in driving mode before disabling tutorial mode
+    if (!this.carMechanics.isDriving()) {
+      const currentStep = this.gameState.getState().step || 0;
+      this.carMechanics.startDriving(currentStep);
+    }
+    
     // Disable tutorial mode so progress can start
     this.carMechanics.disableTutorialMode();
     
