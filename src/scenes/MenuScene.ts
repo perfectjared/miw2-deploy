@@ -99,11 +99,11 @@ export class MenuScene extends Phaser.Scene {
     this.menuManager.showGameOverMenu();
   }
 
-  private showObstacleMenu(obstacleType: string, shopCount?: number) {
+  private showObstacleMenu(obstacleType: string, shopCount?: number, exitNumber?: number) {
     if (obstacleType === 'pothole') {
       this.menuManager.showPotholeMenu();
     } else if (obstacleType === 'exit') {
-      this.menuManager.showExitMenu(shopCount || 3);
+      this.menuManager.showExitMenu(shopCount || 3, exitNumber);
     }
   }
 
