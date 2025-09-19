@@ -172,6 +172,8 @@ export class CarMechanics {
 
   // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
   private suppressRegularCyoaUntilStep: number = 0;
+  // Also guard a window BEFORE upcoming exits to avoid regular CYOA right before an exit
+  private preExitCyoaGuardPercent: number = 6; // percent progress window before any upcoming exit
 
   // Pending Exit Menu to show after a 'before' CYOA is closed
   private pendingExitAfterCyoa: { shopCount: number; exitNumber: number } | null = null;
@@ -823,6 +825,14 @@ export class CarMechanics {
       }
       if (currentStepForSuppression <= this.suppressRegularCyoaUntilStep) {
         return; // Skip regular CYOA during suppression window
+      }
+      // Pre-exit guard: if an exit is imminent within N% progress, skip regular CYOA
+      const upcomingExit = this.plannedExits.find(e => !e.exitSpawned && progress < e.exitThreshold);
+      if (upcomingExit) {
+        const delta = upcomingExit.exitThreshold - progress;
+        if (delta <= this.preExitCyoaGuardPercent) {
+          return;
+        }
       }
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
         console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
