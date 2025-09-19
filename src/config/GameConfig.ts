@@ -57,7 +57,8 @@ export const CAR_CONFIG = {
   lateralFriction: 0.99,     // Lateral friction/drag (higher = less slidey)
   
   // Visual Appearance - using greyscale palette
-  roadColor: GREYSCALE_PALETTE.darkGray,
+  skyColor: GREYSCALE_PALETTE.black,
+  roadColor: GREYSCALE_PALETTE.mediumGray,
   boundaryPadding: 50, // Increased to allow more car movement range
   roadDepth: -1000,
   lineWidth: 4,
@@ -75,7 +76,7 @@ export const CAR_CONFIG = {
   potholeMinPos: 0.45,
   potholeMaxPos: 0.55,
   potholeSpawnY: 0.2,
-  potholeColor: GREYSCALE_PALETTE.mediumDarkGray,
+  potholeColor: GREYSCALE_PALETTE.mediumGray,
   potholeSpeed: 1.2,
   
   // Exit Settings
@@ -83,7 +84,7 @@ export const CAR_CONFIG = {
   exitHeight: 60,
   exitPosition: 0.9,
   exitSpawnY: 0.1,
-  exitColor: GREYSCALE_PALETTE.lightGray,
+  exitColor: GREYSCALE_PALETTE.white,
   exitSpeed: 1.0,
   
   // Debug/Radar Settings
