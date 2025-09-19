@@ -1077,7 +1077,7 @@ export class GameScene extends Phaser.Scene {
     
     // If in tutorial, start the initial driving phase
     if (this.gameState.isInTutorial()) {
-      console.log('🎓 Tutorial: Car started, beginning initial driving phase');
+      // Tutorial: Car started, beginning initial driving phase
     }
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
@@ -1163,7 +1163,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    console.log('🚗 TURN KEY: Car is now started.');
+    // Car is now started
     this.carStarted = true;
     this.gameState.updateState({ carStarted: true });
     
@@ -1171,9 +1171,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.carMechanics.isDriving()) {
       const currentStep = this.gameState.getState().step || 0;
       this.carMechanics.startDriving(currentStep);
-      console.log('🚗 TURN KEY: Driving mode started with car ignition, drivingMode:', this.carMechanics.isDriving());
+      // Driving mode started with car ignition
     } else {
-      console.log('🚗 TURN KEY: CarMechanics was already driving');
+      // CarMechanics was already driving
     }
     
     // Animate rearview mirror sliding down on first car start
@@ -1209,7 +1209,7 @@ export class GameScene extends Phaser.Scene {
           });
         }
       } else {
-        console.log('🎓 Tutorial mode: Skipping rearview mirror animation - will be revealed after interrupt');
+        // Tutorial mode: Skipping rearview mirror animation - will be revealed after interrupt
       }
     }
 
@@ -1369,19 +1369,14 @@ export class GameScene extends Phaser.Scene {
    * Start the game
    */
   public startGame() {
-    console.log('🎯 startGame() called');
     this.gameState.startGame();
     this.gameState.startTutorial(); // Start tutorial sequence
-    console.log('🎯 Tutorial started, phase:', this.gameState.getTutorialPhase());
     this.carMechanics.enableTutorialMode(); // Enable tutorial mode
-    console.log('🎯 Tutorial mode enabled');
     // Don't set carStarted = true here - car is not started yet
     this.scheduleTutorialUpdate(0);
     
     // Activate magnetic target when game starts
     this.activateMagneticTarget();
-    
-    console.log('🎯 Game started with tutorial sequence');
   }
 
   /**
@@ -1392,7 +1387,7 @@ export class GameScene extends Phaser.Scene {
       this.magneticTarget.clear();
       this.magneticTarget.lineStyle(3, 0xff0000, 1);
       this.magneticTarget.strokeCircle(200, 520, 25);
-      console.log('Magnetic target activated - keys can now be attracted');
+    // Magnetic target activated - keys can now be attracted
     }
   }
 
@@ -1524,7 +1519,7 @@ export class GameScene extends Phaser.Scene {
       
       // Apply screen shake to game cameras
       camera.shake(intensity, duration);
-      console.log(`📳 Applied screen shake to camera: ${cameraName || 'unnamed'} (intensity: ${intensity}, duration: ${duration}ms)`);
+      // Applied screen shake to camera
     });
   }
 
@@ -1538,13 +1533,13 @@ export class GameScene extends Phaser.Scene {
     // Get all bodies in the matter world
     const allBodies = matterWorld.getAllBodies();
     
-    console.log(`🔍 Found ${allBodies.length} total bodies in matter world`);
+    // Found total bodies in matter world
     
     // Apply large upward bump force to each body
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
-        console.log(`⏭️ Skipping static body ${index}: ${body.label}`);
+        // Skipping static body
         return;
       }
       
@@ -1557,7 +1552,7 @@ export class GameScene extends Phaser.Scene {
         { x: 0, y: -0.8 } : // Reduced vertical force for virtual pets
         { x: 0, y: -0.5 }; // Strong force for other objects
       
-      console.log(`💥 Applying bump to body ${index}: ${body.label} (isVirtualPet: ${isVirtualPet}, force: ${JSON.stringify(bumpForce)})`);
+      // Applying bump to body
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
@@ -1577,7 +1572,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
-    console.log(`💥 Applied LARGE bump effect to ${allBodies.length} matter physics objects (pothole collision)`);
+    // Applied LARGE bump effect to matter physics objects (pothole collision)
   }
 
   /**
@@ -1669,7 +1664,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
-    console.log(`🚗 Applied bump effect to ${allBodies.length} matter physics objects`);
+    // Applied bump effect to matter physics objects
   }
 
   /**
@@ -1679,8 +1674,7 @@ export class GameScene extends Phaser.Scene {
     const tutorialPhase = this.gameState.getTutorialPhase();
     const tutorialStep = this.gameState.getTutorialStep();
     
-    console.log(`🎓 Tutorial step ${step}: phase=${tutorialPhase}, tutorialStep=${tutorialStep}`);
-    console.log(`🎓 Game state: carStarted=${this.carStarted}, keysInIgnition=${this.keysInIgnition}`);
+    // Tutorial step processing
     
     switch (tutorialPhase) {
       case 'initial_driving':
@@ -1705,7 +1699,7 @@ export class GameScene extends Phaser.Scene {
         break;
         
       default:
-        console.warn('🎓 Unknown tutorial phase:', tutorialPhase);
+        console.warn('Unknown tutorial phase:', tutorialPhase);
     }
   }
   
@@ -1713,51 +1707,40 @@ export class GameScene extends Phaser.Scene {
    * Show tutorial countdown
    */
   private showTutorialCountdown() {
-    console.log('🎓 Showing tutorial countdown');
-    // TODO: Show countdown UI
+    // Show countdown UI
   }
   
   /**
    * Show tutorial interrupt (virtual pet care)
    */
   private showTutorialInterrupt() {
-    console.log('🎓 Showing tutorial interrupt - virtual pet care');
-    console.log('🎓 MenuScene exists:', !!this.scene.get('MenuScene'));
-    
     // Show interrupt menu
     const menuScene = this.scene.get('MenuScene');
     if (menuScene) {
-      console.log('🎓 Emitting showTutorialInterrupt event to MenuScene');
       menuScene.events.emit('showTutorialInterrupt');
       this.scene.bringToTop('MenuScene');
-      console.log('🎓 MenuScene brought to top');
     } else {
-      console.error('🎓 ERROR: MenuScene not found!');
+      console.error('ERROR: MenuScene not found!');
     }
     
     // Schedule menu to disappear after 8 steps
     this.tutorialInterruptStep = this.gameState.getState().step + 8;
-    console.log(`🎓 Tutorial interrupt scheduled to end at step ${this.tutorialInterruptStep}`);
   }
   
   /**
    * Handle tutorial interrupt closed event
    */
   private onTutorialInterruptClosed() {
-    console.log('🎓 GameScene: Tutorial interrupt closed event received!');
-    console.log('🎓 Tutorial interrupt closed - revealing rearview mirror');
+    // Tutorial interrupt closed - revealing rearview mirror
     
     // Advance tutorial phase to normal
     this.gameState.advanceTutorial();
-    console.log('🎓 Tutorial phase advanced to:', this.gameState.getTutorialPhase());
     
     // Disable tutorial mode so progress can start
     this.carMechanics.disableTutorialMode();
-    console.log('🎓 Tutorial mode disabled - progress can now start');
     
     // Wait a moment for menu to fully close, then reveal rearview mirror
     this.time.delayedCall(200, () => {
-      console.log('🎓 Starting rearview mirror reveal animation');
       this.revealRearviewMirror();
     });
     
@@ -1769,16 +1752,12 @@ export class GameScene extends Phaser.Scene {
    * Reveal rearview mirror with animation
    */
   private revealRearviewMirror() {
-    console.log('🎓 Revealing rearview mirror');
-    
     // Reveal rearview mirror by moving it down
     const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
-    console.log('🎓 Rearview container found:', !!rearviewContainer);
     
     if (rearviewContainer) {
       const cam = this.cameras.main;
       const targetY = Math.floor(cam.height * gameElements.getRearviewMirror().position.y);
-      console.log('🎓 Target Y position:', targetY, 'Current Y:', rearviewContainer.y);
       
       // Animate rearview mirror sliding down
       this.tweens.add({
@@ -1787,7 +1766,7 @@ export class GameScene extends Phaser.Scene {
         duration: 1000,
         ease: 'Power2',
         onComplete: () => {
-          console.log('🎓 Rearview mirror revealed');
+          // Rearview mirror revealed
           
           // Fade in the virtual pets smoothly when rearview container reaches final position
           this.virtualPets.forEach((pet, index) => {
@@ -1805,7 +1784,7 @@ export class GameScene extends Phaser.Scene {
         }
       });
     } else {
-      console.error('🎓 ERROR: Rearview container not found!');
+      console.error('ERROR: Rearview container not found!');
     }
   }
 
@@ -1826,7 +1805,6 @@ export class GameScene extends Phaser.Scene {
     
     // Handle tutorial sequence
     if (this.gameState.isInTutorial()) {
-      console.log(`🎓 Step ${step}: Processing tutorial step`);
       this.handleTutorialStep(step);
       
       // Update tutorial interrupt countdown if menu is open
@@ -1895,7 +1873,7 @@ export class GameScene extends Phaser.Scene {
       // Debug logging every 10 steps to show speed-progress relationship
       if (state.step && state.step % 10 === 0) {
         const speedPercent = Math.round(speedMultiplier * 100);
-        console.log(`🚗 Speed: ${speedPercent}% → Progress: +${progressIncrement.toFixed(2)} (${cur.toFixed(1)}% → ${next.toFixed(1)}%)`);
+        // Speed progress calculation
       }
       
       // Update car mechanics with progress for exit planning
@@ -2140,10 +2118,7 @@ export class GameScene extends Phaser.Scene {
     
     // Only log when we actually find exits and are in collision path
     if (exits.length > 0 && inPath) {
-      console.log('🚨 EXIT COLLISION PATH DETECTED! Exits:', exits.length);
-      console.log('   Car visual X position (carBounds.x):', carBounds.x, 'Rightmost threshold:', this.cameras.main.width * 0.7);
-      console.log('   Car internal X position (carMechanics.getCarX()):', this.carMechanics.getCarX());
-      console.log('   Car bottom:', carBounds.bottom, 'Exit top:', exits[0].getData('visual').getBounds().top);
+      // Exit collision path detected
     }
     // console.log('In exit collision path:', inPath);
     return inPath;
