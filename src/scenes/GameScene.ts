@@ -691,6 +691,29 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Generate a countdown value using bell curve probability (6-12)
+   * Bell curve centered around 9, with 6 and 12 being least likely
+   */
+  private generateCountdownValue(): number {
+    // Generate two random numbers and use Box-Muller transform for bell curve
+    const u1 = Math.random();
+    const u2 = Math.random();
+    
+    // Box-Muller transform to get normal distribution
+    const z0 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    
+    // Scale and shift to get values roughly in range 6-12
+    // Mean = 9, Standard deviation = 1.5
+    const normalValue = z0 * 1.5 + 9;
+    
+    // Clamp to range 6-12 and round
+    const clampedValue = Math.max(6, Math.min(12, Math.round(normalValue)));
+    
+    console.log(`🎲 Generated countdown value: ${clampedValue} (from normal distribution)`);
+    return clampedValue;
+  }
+
+  /**
    * Create game content container
    */
   private createGameContentContainer() {
@@ -1494,6 +1517,10 @@ export class GameScene extends Phaser.Scene {
    * Start the game
    */
   public startGame() {
+    // Generate initial countdown value with bell curve distribution
+    const initialCountdown = this.generateCountdownValue();
+    this.gameState.updateState({ gameTime: initialCountdown });
+    
     this.gameState.startGame();
     this.gameState.startTutorial(); // Start tutorial sequence
     this.carMechanics.enableTutorialMode(); // Enable tutorial mode
@@ -1993,8 +2020,8 @@ export class GameScene extends Phaser.Scene {
     const state = this.gameState.getState();
     if (state.gameStarted && carOn && state.gameTime > 0) {
       this.countdownStepCounter++;
-      // Only decrement countdown every fourth step
-      if (this.countdownStepCounter >= 4) {
+      // Only decrement countdown every eighth step (changed from every fourth)
+      if (this.countdownStepCounter >= 8) {
         this.countdownStepCounter = 0; // Reset counter
         const newTime = state.gameTime - 1;
         this.gameState.updateState({ gameTime: newTime });
@@ -2057,8 +2084,9 @@ export class GameScene extends Phaser.Scene {
         }
       }
       
-      // Reset progress and countdown
-      this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 8 });
+      // Reset progress and countdown with bell curve distribution
+      const newCountdownValue = this.generateCountdownValue();
+      this.gameState.updateState({ stops: newStops, progress: 0, gameTime: newCountdownValue });
       this.countdownStepCounter = 0; // Reset countdown step counter
       const appScene = this.scene.get('AppScene');
       if (appScene) {
