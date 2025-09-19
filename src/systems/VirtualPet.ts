@@ -1,17 +1,50 @@
+/**
+ * VIRTUAL PET - INTERACTIVE PET SIMULATION
+ * 
+ * This module implements interactive virtual pets that players can care for
+ * during the driving sequence. Each pet has its own needs, emotions, and
+ * interactive behaviors.
+ * 
+ * Key Features:
+ * - Interactive pet care system
+ * - Food bar management with decay
+ * - Emotional state visualization (face sprites)
+ * - Hover and click interactions
+ * - Responsive positioning and scaling
+ * - Visual feedback for pet states
+ * 
+ * Pet States:
+ * - Hungry: Low food value, sad face
+ * - Content: Medium food value, neutral face
+ * - Happy: High food value, happy face
+ * 
+ * The pets are positioned in the rearview mirror area and provide
+ * a secondary gameplay loop for player engagement.
+ */
+
 import Phaser from 'phaser';
 import { PET_CONFIG } from '../config/GameConfig';
 
+/**
+ * Configuration interface for virtual pet creation
+ */
 export interface VirtualPetConfig {
-	width?: number;
-	height?: number;
-	backgroundColor?: number;
-	petColor?: number;
-	xPercent?: number; // 0..1 horizontal position
-	yOffset?: number;  // pixels from top
-	depth?: number;
-	scale?: number;   // scale multiplier
+	width?: number;           // Pet container width
+	height?: number;          // Pet container height
+	backgroundColor?: number; // Background color for pet container
+	petColor?: number;        // Base color for pet body
+	xPercent?: number;        // Horizontal position as percentage (0..1)
+	yOffset?: number;         // Vertical offset in pixels from top
+	depth?: number;           // Rendering depth/layer
+	scale?: number;           // Scale multiplier for pet size
 }
 
+/**
+ * VirtualPet class - Interactive pet simulation
+ * 
+ * Manages individual pet state, interactions, and visual feedback.
+ * Each pet has its own food bar, emotional state, and interactive behaviors.
+ */
 export class VirtualPet {
 	private scene: Phaser.Scene;
 	private config: VirtualPetConfig;
