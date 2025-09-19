@@ -106,7 +106,7 @@ export const CAR_CONFIG = {
 
 export const TUTORIAL_CONFIG = {
   overlayColor: GREYSCALE_PALETTE.black,
-  overlayAlpha: 0.7,
+  overlayAlpha: 0.2, // Reduced from 0.7 to match tutorial interrupt opacity
   overlayDepth: 90000,
   maskColor: GREYSCALE_PALETTE.white,
   keysHoleRadius: 30,
@@ -139,7 +139,7 @@ export const UI_LAYOUT = {
   
   // Center elements
   countdownX: 0.5,            // 50% from left edge (centered)
-  countdownY: 0.25,           // 25% from top edge (moved down from 15%)
+  countdownY: 0.20,           // 20% from top edge (moved up from 25%)
   
   // Bottom elements
   progressX: 0.02,            // 2% from left edge

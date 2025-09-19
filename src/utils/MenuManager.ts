@@ -2228,9 +2228,11 @@ export class MenuManager {
     // For story-type overlay, skip grey background; otherwise use default overlay
     let background: Phaser.GameObjects.Container | null = null;
     if (menuType !== 'STORY' && menuType !== 'PET_STORY') {
+      // Use lower opacity for tutorial interrupt
+      const opacity = menuType === 'TUTORIAL_INTERRUPT' ? 0.2 : 0.3;
       background = this.createOverlayBackground(gameWidth, gameHeight, [
         { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
-      ]);
+      ], opacity);
     }
     
     // Store reference for cleanup
@@ -2366,7 +2368,7 @@ export class MenuManager {
     });
   }
 
-  private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>) {
+  private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>, opacity: number = 0.3) {
     // Create overlay container
     const overlay = this.scene.add.container(0, 0);
     overlay.setScrollFactor(0);
@@ -2374,7 +2376,7 @@ export class MenuManager {
     
     // Create semi-transparent black background covering the screen (same as tutorial overlay)
     const background = this.scene.add.graphics();
-    background.fillStyle(0x000000, 0.3); // Black, 30% opacity (reduced from 70%)
+    background.fillStyle(0x000000, opacity); // Use provided opacity
     background.fillRect(0, 0, gameWidth, gameHeight);
     overlay.add(background);
     

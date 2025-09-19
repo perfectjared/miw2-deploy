@@ -23,6 +23,7 @@ export interface GameStateData {
   gameStarted: boolean;
   gameTime: number;
   step: number;
+  countdownStepCounter: number;
   
   // Tutorial State
   tutorialPhase: 'none' | 'keys_placement' | 'initial_driving' | 'countdown' | 'interrupt' | 'normal';
@@ -479,6 +480,7 @@ export class GameState {
       gameStarted: false,
       gameTime: this.config.initialGameTime,
       step: 0,
+      countdownStepCounter: 0,
       
       // Tutorial State
       tutorialPhase: 'none',

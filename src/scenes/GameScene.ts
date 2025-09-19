@@ -50,7 +50,8 @@ export class GameScene extends Phaser.Scene {
   // SYSTEM MODULES
   // ============================================================================
   
-  private carMechanics!: CarMechanics;
+  private carMechanics!: CarMechanics
+  private lastPlannedData: string = ''; // Track planned events to avoid unnecessary updates;
   private tutorialSystem!: TutorialSystem;
   private gameUI!: GameUI;
   private inputHandlers!: InputHandlers;
@@ -986,10 +987,17 @@ export class GameScene extends Phaser.Scene {
         }
         
         // Update threshold indicators based on planned exits, CYOA, and story
+        // Only update if the planned events have actually changed
         const plannedExits = this.carMechanics.getPlannedExits();
         const plannedCyoa = this.carMechanics.getPlannedCyoa();
         const plannedStory = this.carMechanics.getPlannedStory();
-        this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
+        
+        // Check if planned events have changed since last update
+        const currentPlannedData = JSON.stringify({ plannedExits, plannedCyoa, plannedStory });
+        if (this.lastPlannedData !== currentPlannedData) {
+          this.lastPlannedData = currentPlannedData;
+          this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
+        }
         // Auto-snap crank to 0 when keys are out of ignition
         // Speed crank removed - no need to reset
         this.scheduleTutorialUpdate(0);
@@ -1510,6 +1518,14 @@ export class GameScene extends Phaser.Scene {
       console.log('GameScene: Starting driving mechanics at step:', currentStep);
       this.carMechanics.startDriving(currentStep);
       console.log('GameScene: Driving mechanics started');
+      
+      // Update threshold indicators after driving mechanics are started
+      const plannedExits = this.carMechanics.getPlannedExits();
+      const plannedCyoa = this.carMechanics.getPlannedCyoa();
+      const plannedStory = this.carMechanics.getPlannedStory();
+      console.log('🔺 GameScene: Updating threshold indicators after startDriving');
+      this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
+      
       // Driving mode started with car ignition
     } else {
       console.log('GameScene: CarMechanics was already driving');
@@ -1536,13 +1552,19 @@ export class GameScene extends Phaser.Scene {
               this.virtualPets.forEach((pet, index) => {
                 const petContainer = pet.getRoot?.();
                 if (petContainer) {
-                  this.tweens.add({
-                    targets: petContainer,
-                    alpha: 1,
-                    duration: 800, // 0.8 seconds fade-in
-                    ease: 'Cubic.easeOut',
-                    delay: index * 100 // Stagger each pet by 100ms for elegant appearance
-                  });
+                this.tweens.add({
+                  targets: petContainer,
+                  alpha: 1,
+                  duration: 800, // 0.8 seconds fade-in
+                  ease: 'Cubic.easeOut',
+                  delay: index * 100, // Stagger each pet by 100ms for elegant appearance
+                  onComplete: () => {
+                    // Fade in regional UI after the last pet finishes fading in
+                    if (index === this.virtualPets.length - 1) {
+                      this.gameUI.fadeInRegionalUI();
+                    }
+                  }
+                });
                 }
               });
             }
@@ -2083,8 +2105,8 @@ export class GameScene extends Phaser.Scene {
       console.error('ERROR: MenuScene not found!');
     }
     
-    // Schedule menu to disappear after 8 steps
-    this.tutorialInterruptStep = this.gameState.getState().step + 8;
+    // Schedule menu to disappear after 2 steps
+    this.tutorialInterruptStep = this.gameState.getState().step + 2;
   }
   
   /**
@@ -2108,6 +2130,8 @@ export class GameScene extends Phaser.Scene {
     // Wait a moment for menu to fully close, then reveal rearview mirror
     this.time.delayedCall(200, () => {
       this.revealRearviewMirror();
+      // Also ensure triangles fade in after rearview mirror is revealed
+      this.gameUI.ensureTrianglesFadeIn();
     });
     
     // Clear the interrupt step
@@ -2143,7 +2167,13 @@ export class GameScene extends Phaser.Scene {
                 alpha: 1,
                 duration: 800, // 0.8 seconds fade-in
                 ease: 'Cubic.easeOut',
-                delay: index * 100 // Stagger each pet by 100ms for elegant appearance
+                delay: index * 100, // Stagger each pet by 100ms for elegant appearance
+                onComplete: () => {
+                  // Fade in regional UI after the last pet finishes fading in
+                  if (index === this.virtualPets.length - 1) {
+                    this.gameUI.fadeInRegionalUI();
+                  }
+                }
               });
             }
           });
@@ -2209,11 +2239,14 @@ export class GameScene extends Phaser.Scene {
     const state = this.gameState.getState();
     if (state.gameStarted && carOn && state.gameTime > 0) {
       this.countdownStepCounter++;
+      // Update countdownStepCounter in state every step
+      this.gameState.updateState({ countdownStepCounter: this.countdownStepCounter });
+      
       // Only decrement countdown every sixteenth step (changed from every eighth)
       if (this.countdownStepCounter >= 16) {
         this.countdownStepCounter = 0; // Reset counter
         const newTime = state.gameTime - 1;
-        this.gameState.updateState({ gameTime: newTime });
+        this.gameState.updateState({ gameTime: newTime, countdownStepCounter: this.countdownStepCounter });
         // Notify systems (e.g., driving scene) that countdown changed
         this.events.emit('countdownChanged', {
           time: newTime,
@@ -2278,7 +2311,7 @@ export class GameScene extends Phaser.Scene {
       
       // Reset progress and countdown with bell curve distribution
       const newCountdownValue = this.generateCountdownValue();
-      this.gameState.updateState({ stops: newStops, progress: 0, gameTime: newCountdownValue });
+      this.gameState.updateState({ stops: newStops, progress: 0, gameTime: newCountdownValue, countdownStepCounter: 0 });
       this.countdownStepCounter = 0; // Reset countdown step counter
       const appScene = this.scene.get('AppScene');
       if (appScene) {

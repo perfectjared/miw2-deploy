@@ -159,6 +159,7 @@ export interface GameUIState {
   // Monthly Listeners System
   monthlyListeners: number;
   buzz: number;
+  countdownStepCounter: number;
 }
 
 export class GameUI {
@@ -168,12 +169,14 @@ export class GameUI {
   // UI Elements
   private gameLayerText!: Phaser.GameObjects.Text;
   private countdownText!: Phaser.GameObjects.Text;
+  private minutesText!: Phaser.GameObjects.Text;
   private moneyText!: Phaser.GameObjects.Text;
   private healthText!: Phaser.GameObjects.Text;
   private progressText!: Phaser.GameObjects.Text;
   private progressBarBG!: Phaser.GameObjects.Rectangle;
   private progressBarFill!: Phaser.GameObjects.Rectangle;
   private progressThresholdIndicators: Phaser.GameObjects.Graphics[] = [];
+  private regionalUIFadedIn: boolean = false;
   private managerValuesText!: Phaser.GameObjects.Text;
   private frontseatButton!: Phaser.GameObjects.Graphics;
   private backseatButton!: Phaser.GameObjects.Graphics;
@@ -251,7 +254,7 @@ export class GameUI {
    * Update UI with current state
    */
   public updateUI(state: GameUIState) {
-    this.updateCountdown(state.gameTime);
+    this.updateCountdown(state.gameTime, state.countdownStepCounter);
     this.updateMoney(state.money);
     // Health update removed - no longer needed
     this.updateProgress(state.progress); // Re-added to fix progress bar
@@ -267,6 +270,7 @@ export class GameUI {
    * Update threshold indicators based on planned exits, CYOA, and story
    */
   public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean; number?: number }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean; isExitRelated?: boolean; exitNumber?: number; exitTiming?: 'before' | 'after' }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
+    
     // Clear existing indicators
     this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
     this.progressThresholdIndicators = [];
@@ -275,28 +279,31 @@ export class GameUI {
     const barX = (this as any).progressBarX;
     const barY = (this as any).progressBarY;
     
-    if (!barWidth || !barX || !barY) return;
+    if (!barWidth || !barX || !barY) {
+      return;
+    }
     
     // Create triangle indicators for unspawned exits (orange triangles)
-    plannedExits.forEach(exit => {
-      if (!exit.spawned) {
-        const triangleX = barX + (exit.progressThreshold / 100) * barWidth;
-        const triangleY = barY - 8; // Above the progress bar
-        
-        const triangle = this.scene.add.graphics();
-        triangle.fillStyle(GREYSCALE_PALETTE.mediumGray, 0.8); // Medium grey for exits
-        triangle.beginPath();
-        triangle.moveTo(triangleX, triangleY);
-        triangle.lineTo(triangleX - 4, triangleY + 8);
-        triangle.lineTo(triangleX + 4, triangleY + 8);
-        triangle.closePath();
-        triangle.fillPath();
-        
-        triangle.setScrollFactor(0);
-        triangle.setDepth(10002);
-        
-        this.progressThresholdIndicators.push(triangle);
-      }
+    const unspawnedExits = plannedExits.filter(exit => !exit.spawned);
+    
+    unspawnedExits.forEach(exit => {
+      const triangleX = barX + (exit.progressThreshold / 100) * barWidth;
+      const triangleY = barY - 8; // Above the progress bar
+      
+      const triangle = this.scene.add.graphics();
+      triangle.fillStyle(GREYSCALE_PALETTE.mediumGray, 0.8); // Medium grey for exits
+      triangle.beginPath();
+      triangle.moveTo(triangleX, triangleY);
+      triangle.lineTo(triangleX - 4, triangleY + 8);
+      triangle.lineTo(triangleX + 4, triangleY + 8);
+      triangle.closePath();
+      triangle.fillPath();
+      
+      triangle.setScrollFactor(0);
+      triangle.setDepth(10002);
+      triangle.setAlpha(0); // Start invisible for fade-in animation
+      
+      this.progressThresholdIndicators.push(triangle);
     });
     
     // Create triangle indicators for unspawned CYOA (light grey triangles)
@@ -326,6 +333,7 @@ export class GameUI {
             
             triangle.setScrollFactor(0);
             triangle.setDepth(10002);
+            triangle.setAlpha(0); // Start invisible for fade-in animation
             // Add B/A label above the triangle
             const labelChar = (cyoa.exitTiming === 'before' || cyoa.exitTiming === 'after') ? (cyoa.exitTiming === 'before' ? 'B' : 'A') : '';
             if (labelChar) {
@@ -334,6 +342,7 @@ export class GameUI {
               }).setOrigin(0.5);
               label.setScrollFactor(0);
               label.setDepth(10003);
+              label.setAlpha(0); // Start invisible for fade-in animation
               this.progressThresholdIndicators.push(label as any);
             }
             
@@ -357,6 +366,7 @@ export class GameUI {
           
           triangle.setScrollFactor(0);
           triangle.setDepth(10002);
+          triangle.setAlpha(0); // Start invisible for fade-in animation
           
           this.progressThresholdIndicators.push(triangle);
         }
@@ -379,8 +389,14 @@ export class GameUI {
       
       triangle.setScrollFactor(0);
       triangle.setDepth(10002);
+      triangle.setAlpha(0); // Start invisible for fade-in animation
       
       this.progressThresholdIndicators.push(triangle);
+    }
+    
+    // Always try to fade in triangles if we have any
+    if (this.progressThresholdIndicators.length > 0) {
+      this.fadeInTriangles();
     }
   }
 
@@ -399,7 +415,7 @@ export class GameUI {
     const gameHeight = this.scene.cameras.main.height;
     
     const countdownX = gameWidth * this.config.countdownPositionX;
-    const countdownY = gameHeight * this.config.countdownPositionY + 40; // Moved down by 40px
+    const countdownY = gameHeight * this.config.countdownPositionY + 60; // Moved down by 60px (was 40px)
      
     this.countdownText = this.scene.add.text(countdownX, countdownY, '0', {
       fontSize: this.config.countdownFontSize,
@@ -411,6 +427,24 @@ export class GameUI {
      
     this.countdownText.setScrollFactor(0);
     this.countdownText.setDepth(10000);
+    this.countdownText.setAlpha(0); // Start invisible for fade-in animation
+    
+    // Create minutes counter directly to the right of countdown
+    const countdownTextWidth = this.countdownText.width || 40; // Approximate width if not available
+    const minutesX = countdownX + (countdownTextWidth / 2) + 10; // 10px gap after hours text
+    const minutesY = countdownY; // Same Y as countdown
+    
+    this.minutesText = this.scene.add.text(minutesX, minutesY, '0', {
+      fontSize: '12px', // 1/3 of 36px countdown font size
+      color: `#${this.config.countdownColor.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 4, y: 2 }
+    }).setOrigin(0.5);
+    
+    this.minutesText.setScrollFactor(0);
+    this.minutesText.setDepth(10000);
+    this.minutesText.setAlpha(0); // Start invisible for fade-in animation
   }
 
   /**
@@ -443,6 +477,7 @@ export class GameUI {
     
     this.regionText.setScrollFactor(0);
     this.regionText.setDepth(10000);
+    this.regionText.setAlpha(0); // Start invisible for fade-in animation
 
     // Create stops counter to the right of region text
     const stopsX = regionX + 120; // To the right of region text
@@ -457,10 +492,13 @@ export class GameUI {
     
     this.stopsCounterText.setScrollFactor(0);
     this.stopsCounterText.setDepth(10000);
+    this.stopsCounterText.setAlpha(0); // Start invisible for fade-in animation
     this.progressBarBG = this.scene.add.rectangle(barX, barY, barWidth, barHeight, 0x000000, 0.4).setOrigin(0, 0.5);
     this.progressBarFill = this.scene.add.rectangle(barX, barY, 0, barHeight, 0x00ff00, 0.9).setOrigin(0, 0.5);
     this.progressBarBG.setScrollFactor(0); this.progressBarBG.setDepth(10000);
+    this.progressBarBG.setAlpha(0); // Start invisible for fade-in animation
     this.progressBarFill.setScrollFactor(0); this.progressBarFill.setDepth(10001);
+    this.progressBarFill.setAlpha(0); // Start invisible for fade-in animation
     
     // Stops counter moved to be next to region text above
     
@@ -477,9 +515,11 @@ export class GameUI {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Money text
-    const moneyX = gameWidth * this.config.moneyPositionX;
-    const moneyY = gameHeight * this.config.moneyPositionY;
+    // Money text - positioned above monthly listeners
+    const steeringConfig = gameElements.getSteeringWheel();
+    const steeringX = gameWidth * steeringConfig.position.x;
+    const moneyX = steeringX + 200; // Same X as monthly listeners
+    const moneyY = gameHeight * 0.7 - 60; // Above monthly listeners (listenersY - 20, so moneyY = listenersY - 60)
     
     this.moneyText = this.scene.add.text(moneyX, moneyY, '$0', {
       fontSize: this.config.moneyHealthFontSize,
@@ -781,8 +821,8 @@ export class GameUI {
     // Position directly above the steering wheel
     const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent; // Same X as steering wheel
     const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent; // Same Y as steering wheel
-    const speedDisplayX = dialX;
-    const speedDisplayY = dialY - 120; // Directly above steering wheel
+    const speedDisplayX = dialX + 7; // 5px more to the right (was +2, now +7)
+    const speedDisplayY = dialY - 80; // 20px lower (was -100, now -80)
     
     // Create smaller radial speed meter
     const meterRadius = 25; // Smaller radius
@@ -1059,11 +1099,28 @@ export class GameUI {
   }
 
   /**
-   * Update countdown display
+   * Update countdown display (hours) and minutes counter
    */
-  private updateCountdown(gameTime: number) {
+  private updateCountdown(gameTime: number, countdownStepCounter: number) {
     if (this.countdownText) {
+      // Countdown represents hours
       this.countdownText.setText(gameTime.toString());
+    }
+    
+    if (this.minutesText) {
+      // Minutes count down every 16 steps
+      // Each hour has 60 minutes, and we count down every 16 steps
+      // So we need to calculate minutes based on the current step within the hour
+      const stepsPerHour = 16; // Countdown decrements every 16 steps
+      const stepsPerMinute = stepsPerHour / 60; // Steps per minute
+      
+      // Calculate current step within the current hour (0-15)
+      const currentStepInHour = countdownStepCounter || 0;
+      
+      // Calculate minutes remaining in current hour
+      const minutesRemaining = Math.max(0, Math.floor((stepsPerHour - currentStepInHour) / stepsPerMinute));
+      
+      this.minutesText.setText(minutesRemaining.toString());
     }
   }
 
@@ -1258,8 +1315,73 @@ export class GameUI {
   }
 
   /**
-   * Update region information display (region name + visit count)
+   * Fade in regional UI elements (region, progress, countdown) after virtual pets
    */
+  public fadeInRegionalUI() {
+    console.log('🔺 fadeInRegionalUI called - regionalUIFadedIn:', this.regionalUIFadedIn);
+    
+    // Prevent multiple fade-in attempts
+    if (this.regionalUIFadedIn) {
+      console.log('🔺 fadeInRegionalUI: Already faded in, returning early');
+      return;
+    }
+    
+    this.regionalUIFadedIn = true;
+    
+    const regionalElements = [
+      this.regionText,
+      this.stopsCounterText,
+      this.countdownText,
+      this.minutesText,
+      this.progressBarBG,
+      this.progressBarFill
+    ];
+
+    regionalElements.forEach((element, index) => {
+      if (element) {
+        console.log(`🔺 Fading in regional element ${index} from alpha ${element.alpha} to 1`);
+        this.scene.tweens.add({
+          targets: element,
+          alpha: 1,
+          duration: 600, // 0.6 seconds fade-in
+          ease: 'Cubic.easeOut',
+          delay: index * 50 // Stagger each element by 50ms
+        });
+      }
+    });
+
+    // Fade in triangles separately since they might be created later
+    console.log('🔺 fadeInRegionalUI calling fadeInTriangles');
+    this.fadeInTriangles();
+  }
+
+  /**
+   * Fade in progress threshold indicators (triangles)
+   */
+  private fadeInTriangles() {
+    // Only fade in triangles that are currently invisible (alpha = 0)
+    let hasInvisibleTriangles = false;
+    this.progressThresholdIndicators.forEach((indicator, index) => {
+      if (indicator && indicator.alpha === 0) {
+        hasInvisibleTriangles = true;
+        this.scene.tweens.add({
+          targets: indicator,
+          alpha: 1,
+          duration: 600,
+          ease: 'Cubic.easeOut',
+          delay: index * 50, // Stagger each triangle by 50ms
+        });
+      }
+    });
+  }
+
+  /**
+   * Public method to ensure triangles fade in (can be called from GameScene)
+   */
+  public ensureTrianglesFadeIn() {
+    this.fadeInTriangles();
+  }
+
   private updateRegionInfo(regionName: string, showsInRegion: number) {
     if (this.regionText) {
       const visitCount = this.getRegionVisitCount(regionName, showsInRegion);
@@ -1303,7 +1425,7 @@ export class GameUI {
     
     // Monthly listeners text
     this.monthlyListenersText = this.scene.add.text(listenersX, listenersY - 20, 'MONTHLY LISTENERS:\n2,000', {
-      fontSize: '16px',
+      fontSize: '12px', // Smaller than BUZZ (14px) because of long word
       color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
@@ -1397,6 +1519,7 @@ export class GameUI {
     const elements = [
       this.gameLayerText,
       this.countdownText,
+      this.minutesText,
       this.moneyText,
       // healthText removed - no longer needed
       // progressText removed - no longer needed

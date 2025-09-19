@@ -73,18 +73,18 @@ const DEFAULT_CONFIG: GameElementsConfig = {
       position: { x: 0.25, y: 0.8 },
       scale: 1.0
     },
-    magneticTarget: {
-      position: { x: 320, y: 550 },
-      radius: 25
-    }
+        magneticTarget: {
+          position: { x: 213, y: 550 },
+          radius: 25
+        }
   },
   virtualPets: {
     positions: [
-      { x: 0.15, y: 0.9, scale: 0.8 },
-      { x: 0.35, y: 0.85, scale: 0.8 },
-      { x: 0.55, y: 0.95, scale: 0.8 },
-      { x: 0.75, y: 0.87, scale: 0.8 },
-      { x: 0.95, y: 0.93, scale: 0.8 }
+      { x: 0.15, y: 0.93, scale: 0.8 },
+      { x: 0.35, y: 0.88, scale: 0.8 },
+      { x: 0.55, y: 0.98, scale: 0.8 },
+      { x: 0.75, y: 0.90, scale: 0.8 },
+      { x: 0.95, y: 0.96, scale: 0.8 }
     ]
   },
   itemSizes: {

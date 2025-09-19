@@ -109,6 +109,11 @@ export class AppScene extends Phaser.Scene {
     const buttonY1 = 5; // Top button (pause) - moved higher
     const buttonY2 = buttonY1 + buttonSpacing; // Bottom button (save)
     
+    // Add MUTE button in top right corner
+    const gameWidth = this.cameras.main.width;
+    const muteButtonX = gameWidth - 10 - 60; // 10px right margin + button width (~60px)
+    const muteButtonY = 5; // Same Y as pause button
+    
     const pauseButton = this.add.text(buttonX, buttonY1, 'PAUSE', {
       fontSize: '16px',
       color: '#ffffff',
@@ -143,12 +148,31 @@ export class AppScene extends Phaser.Scene {
       saveButton.setStyle({ backgroundColor: '#27ae60' });
     });
 
+    // Create MUTE button in top right
+    const muteButton = this.add.text(muteButtonX, muteButtonY, 'MUTE', {
+      fontSize: '16px',
+      color: '#ffffff',
+      backgroundColor: '#e74c3c',
+      padding: { x: 10, y: 5 }
+    });
+    muteButton.setScrollFactor(0);
+    muteButton.setDepth(40000);
+    muteButton.setInteractive();
+    muteButton.on('pointerdown', () => {
+      muteButton.setStyle({ backgroundColor: '#c0392b' });
+    });
+    muteButton.on('pointerup', () => {
+      muteButton.setStyle({ backgroundColor: '#e74c3c' });
+      // TODO: Add mute functionality
+    });
+
     try {
       const gameScene = this.scene.get('GameScene');
       if (gameScene) {
         gameScene.events.on('tutorialOverlayVisible', (visible: boolean) => {
           pauseButton.setVisible(!visible);
           saveButton.setVisible(!visible);
+          muteButton.setVisible(!visible);
         });
       }
     } catch {}
