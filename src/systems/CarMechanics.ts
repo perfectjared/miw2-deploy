@@ -1066,7 +1066,17 @@ export class CarMechanics {
       console.warn(`🎭 Guard: Attempted to trigger 'after' exit CYOA ${plannedCyoa.id} early; ignoring`);
       return;
     }
+    
+    // Prevent double-triggering of the same CYOA
+    if (plannedCyoa.triggered) {
+      console.warn(`🎭 Guard: CYOA ${plannedCyoa.id} already triggered, preventing double-trigger`);
+      return;
+    }
+    
     console.log(`Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber}, ${plannedCyoa.exitTiming || 'after'})` : ''}`);
+    
+    // Mark as triggered immediately to prevent double-triggering
+    plannedCyoa.triggered = true;
     
     // Pause driving
     this.pauseDriving();
@@ -1102,7 +1112,6 @@ export class CarMechanics {
     if (afterCyoa) {
       console.log(`triggerAfterExitCyoa: Found after CYOA ${afterCyoa.id} for Exit ${exitNumber} - triggering now`);
       this.triggerCyoa(afterCyoa, { allowAfter: true });
-      afterCyoa.triggered = true;
       
       // Update UI immediately
       const gameScene = this.scene.scene.get('GameScene') as any;
