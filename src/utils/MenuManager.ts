@@ -53,7 +53,8 @@ export class MenuManager {
   // Ignition menu auto-completion tracking
   private ignitionMenuStepCount: number = 0
   private ignitionMenuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null
-  private ignitionCountdownText: Phaser.GameObjects.Text | null = null;
+  private ignitionCountdownText: Phaser.GameObjects.Text | null = null
+  private ignitionCountdownTimer: Phaser.Time.TimerEvent | null = null;
   
   // Slider Parameters
   private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
@@ -141,30 +142,49 @@ export class MenuManager {
     this.scene.events.on('step', this.onGlobalStep, this);
     // Listen for CYOA menu events
     this.scene.events.on('showCyoaMenu', this.showCyoaMenu, this);
-    // Listen for step events to track ignition menu timeout
-    this.scene.events.on('step', this.onStepEvent, this);
   }
 
   /**
-   * Step event handler for ignition menu auto-completion
+   * Start ignition countdown timer
    */
-  private onStepEvent(step: number) {
-    // Only track steps when ignition menu is open
-    if (this.currentDisplayedMenuType === 'TURN_KEY') {
-      this.ignitionMenuStepCount++;
-      const remainingSteps = 16 - this.ignitionMenuStepCount;
-      console.log(`Ignition menu step count: ${this.ignitionMenuStepCount}/16 (${remainingSteps} remaining)`);
-      
-      // Update countdown text
-      if (this.ignitionCountdownText) {
-        this.ignitionCountdownText.setText(`Auto-complete in: ${remainingSteps} steps`);
-      }
-      
-      // Auto-complete after 16 steps
-      if (this.ignitionMenuStepCount >= 16) {
-        console.log('Ignition menu auto-completing after 16 steps');
-        this.autoCompleteIgnitionMenu();
-      }
+  private startIgnitionCountdown() {
+    let countdown = 16; // Start with 16 seconds
+    
+    // Update countdown text immediately
+    if (this.ignitionCountdownText) {
+      this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} seconds`);
+    }
+    
+    // Create timer that updates every second
+    this.ignitionCountdownTimer = this.scene.time.addEvent({
+      delay: 1000, // 1 second
+      callback: () => {
+        countdown--;
+        console.log(`Ignition countdown: ${countdown} seconds remaining`);
+        
+        // Update countdown text
+        if (this.ignitionCountdownText) {
+          this.ignitionCountdownText.setText(`Auto-complete in: ${countdown} seconds`);
+        }
+        
+        // Auto-complete when countdown reaches 0
+        if (countdown <= 0) {
+          console.log('Ignition menu auto-completing after 16 seconds');
+          this.autoCompleteIgnitionMenu();
+        }
+      },
+      loop: true,
+      repeat: 15 // Repeat 15 times (16 total seconds)
+    });
+  }
+
+  /**
+   * Stop ignition countdown timer
+   */
+  private stopIgnitionCountdown() {
+    if (this.ignitionCountdownTimer) {
+      this.ignitionCountdownTimer.destroy();
+      this.ignitionCountdownTimer = null;
     }
   }
 
@@ -176,6 +196,9 @@ export class MenuManager {
     
     console.log('Auto-completing ignition menu');
     
+    // Stop the countdown timer
+    this.stopIgnitionCountdown();
+    
     // Clear the dialog
     this.closeDialog();
     
@@ -185,8 +208,8 @@ export class MenuManager {
       gameScene.events.emit('turnKey');
     }
     
-    // Reset step counter
-    this.ignitionMenuStepCount = 0;
+    // Clear countdown text reference
+    this.ignitionCountdownText = null;
   }
 
   /**
@@ -1029,9 +1052,6 @@ export class MenuManager {
     console.log('MenuManager: Current dialog exists:', !!this.currentDialog);
     console.log('MenuManager: Current displayed menu type:', this.currentDisplayedMenuType);
     
-    // Reset step counter for ignition menu
-    this.ignitionMenuStepCount = 0;
-    
     // Always rebuild the ignition menu when keys are in ignition and car not started
     console.log('MenuManager: Showing ignition menu');
     this.clearCurrentDialog();
@@ -1051,6 +1071,9 @@ export class MenuManager {
     
     // Add countdown text
     this.addIgnitionCountdown();
+    
+    // Start countdown timer
+    this.startIgnitionCountdown();
     
     // Emit event to notify GameScene that ignition menu is shown
     console.log('MenuManager: Emitting ignitionMenuShown event');
@@ -1346,7 +1369,7 @@ export class MenuManager {
     const centerY = gameHeight / 2;
     
     // Create countdown text positioned above the slider
-    this.ignitionCountdownText = this.scene.add.text(centerX, centerY - 100, 'Auto-complete in: 16 steps', {
+    this.ignitionCountdownText = this.scene.add.text(centerX, centerY - 100, 'Auto-complete in: 16 seconds', {
       fontSize: '16px',
       color: '#ff6b6b',
       fontStyle: 'bold',
@@ -2399,9 +2422,9 @@ export class MenuManager {
   }
 
   private closeDialog() {
-    // Reset ignition step counter if closing ignition menu
+    // Stop ignition countdown timer if closing ignition menu
     if (this.currentDisplayedMenuType === 'TURN_KEY') {
-      this.ignitionMenuStepCount = 0;
+      this.stopIgnitionCountdown();
       this.ignitionCountdownText = null; // Clear countdown text reference
     }
     
