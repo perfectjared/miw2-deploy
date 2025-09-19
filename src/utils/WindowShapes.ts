@@ -36,6 +36,9 @@ export interface PolygonWindowConfig {
 export class WindowShapes {
   private scene: Phaser.Scene;
   private activeShapes: Map<string, { graphics: Phaser.GameObjects.Graphics, config: WindowShapeConfig }> = new Map();
+  // Shape animation tracking
+  private activeSpeechBubbles = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number }>();
+  private activeAnimatedShapes = new Map<string, { graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number }>();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -45,7 +48,7 @@ export class WindowShapes {
    * Create a "collage-style" rectangle with organic polygon border
    * This is the main method you'll want to use for UI elements
    */
-  createCollageRect(config: WindowShapeConfig): Phaser.GameObjects.Graphics {
+  createCollageRect(config: WindowShapeConfig, enableAnimation: boolean = false, shapeType: string = 'rectangle'): Phaser.GameObjects.Graphics {
     const graphics = this.scene.add.graphics();
     
     // Set default values - now defaults to darker grey for backgrounds
@@ -155,6 +158,20 @@ export class WindowShapes {
     // Then draw the filled rectangle on top (NO STROKE, only fill) - use EXACT same fill settings
     graphics.fillStyle(fillColor, fillAlpha); // Explicitly set the same fill style
     graphics.fillRect(config.x, config.y, config.width, config.height);
+    
+    // Register for animation if enabled
+    if (enableAnimation) {
+      const shapeId = `animated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      this.registerAnimatedShape(shapeId, graphics, shapeType, config.x, config.y, config.width, config.height);
+      
+      // Store the ID for cleanup
+      (graphics as any).animationId = shapeId;
+      
+      // Add cleanup when graphics is destroyed
+      graphics.on('destroy', () => {
+        this.unregisterAnimatedShape(shapeId);
+      });
+    }
     
     return graphics;
   }
@@ -286,7 +303,7 @@ export class WindowShapes {
     return this.createCollageRect({ 
       x, y, width, height, 
       fillColor: 0xffffff // White for buttons
-    });
+    }, true, 'button'); // Enable animation for buttons too!
   }
 
   /**
@@ -461,21 +478,282 @@ export class WindowShapes {
   }
 
   /**
+   * Register a speech bubble to be animated on every step
+   */
+  registerSpeechBubble(id: string, graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number): void {
+    this.activeSpeechBubbles.set(id, { graphics, x, y, width, height });
+  }
+
+  /**
+   * Unregister a speech bubble from step animations
+   */
+  unregisterSpeechBubble(id: string): void {
+    this.activeSpeechBubbles.delete(id);
+  }
+
+  /**
+   * Call this from your game's step handler to update all registered speech bubbles
+   */
+  onStep(): void {
+    this.activeSpeechBubbles.forEach(({ graphics, x, y, width, height }) => {
+      this.regenerateSpeechBubbleShape(graphics, x, y, width, height);
+    });
+  }
+
+  /**
+   * Call this from your game's half-step handler to update all registered shapes
+   */
+  onHalfStep(halfStep: number): void {
+    // Update speech bubbles on half-steps (more frequent for lively animation)
+    this.activeSpeechBubbles.forEach(({ graphics, x, y, width, height }) => {
+      this.regenerateSpeechBubbleShape(graphics, x, y, width, height);
+    });
+    
+    // Update other animated shapes on half-steps too
+    this.activeAnimatedShapes.forEach(({ graphics, shapeType, x, y, width, height }) => {
+      if (graphics && graphics.scene) {
+        this.regenerateShapeWithSubtleAnimation(graphics, shapeType, x, y, width, height);
+      }
+    });
+  }
+
+  /**
+   * Regenerate the speech bubble shape with new random points (for step animations)
+   * Keeps the same overall dimensions, just changes the jagged points
+   */
+  private regenerateSpeechBubbleShape(graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number): void {
+    // Clear the existing graphics
+    graphics.clear();
+    
+    // Set styling
+    const strokeWidth = 2;
+    const strokeColor = 0x000000; // Black
+    const fillColor = 0xffffff; // White fill
+    const fillAlpha = 1.0;
+    
+    // Create NEW simplified speech bubble shape with different random values
+    const bubblePoints = [];
+    
+    // Start from bottom edge (was top) - 3-4 points with NEW random values
+    bubblePoints.push({ x: x + 20 + Phaser.Math.Between(-5, 5), y: y + height + Phaser.Math.Between(-3, 3) });
+    bubblePoints.push({ x: x + width * 0.5 + Phaser.Math.Between(-8, 8), y: y + height + Phaser.Math.Between(2, 5) });
+    bubblePoints.push({ x: x + width - 20 + Phaser.Math.Between(-5, 5), y: y + height + Phaser.Math.Between(-3, 3) });
+    
+    // Right edge - 2-3 points with NEW random values 
+    bubblePoints.push({ x: x + width + Phaser.Math.Between(-3, 3), y: y + height * 0.7 + Phaser.Math.Between(-8, 8) });
+    bubblePoints.push({ x: x + width + Phaser.Math.Between(-5, 2), y: y + height * 0.3 + Phaser.Math.Between(-8, 8) });
+    
+    // Top-right to tail connection (tail now points up) with NEW random values
+    bubblePoints.push({ x: x + width * 0.8 + Phaser.Math.Between(-5, 5), y: y + Phaser.Math.Between(-3, 3) });
+    
+    // Speech bubble tail pointing UP (flipped from down) with NEW random values
+    bubblePoints.push({ x: x + width * 0.7 + Phaser.Math.Between(-8, 8), y: y - 15 + Phaser.Math.Between(-5, 5) });
+    bubblePoints.push({ x: x + width * 0.6 + Phaser.Math.Between(-5, 5), y: y - 25 + Phaser.Math.Between(-7, -3) });
+    bubblePoints.push({ x: x + width * 0.65 + Phaser.Math.Between(-8, 8), y: y + Phaser.Math.Between(-2, 2) });
+    
+    // Top edge (was bottom) - left side with NEW random values
+    bubblePoints.push({ x: x + width * 0.3 + Phaser.Math.Between(-5, 5), y: y + Phaser.Math.Between(-3, 3) });
+    bubblePoints.push({ x: x + 20 + Phaser.Math.Between(-5, 5), y: y + Phaser.Math.Between(-3, 3) });
+    
+    // Left edge - 2-3 points with NEW random values
+    bubblePoints.push({ x: x + Phaser.Math.Between(-3, 3), y: y + height * 0.3 + Phaser.Math.Between(-8, 8) });
+    bubblePoints.push({ x: x + Phaser.Math.Between(-5, 2), y: y + height * 0.7 + Phaser.Math.Between(-8, 8) });
+    
+    // Back to bottom (was top) with NEW random values
+    bubblePoints.push({ x: x + Phaser.Math.Between(-3, 3), y: y + height - 20 + Phaser.Math.Between(-5, 5) });
+    
+    // Draw shadow first
+    const shadowOffset = 6;
+    graphics.fillStyle(0x222222, 1.0);
+    graphics.beginPath();
+    graphics.moveTo(bubblePoints[0].x + shadowOffset, bubblePoints[0].y + shadowOffset);
+    for (let i = 1; i < bubblePoints.length; i++) {
+      graphics.lineTo(bubblePoints[i].x + shadowOffset, bubblePoints[i].y + shadowOffset);
+    }
+    graphics.closePath();
+    graphics.fillPath();
+    
+    // Draw main speech bubble
+    graphics.lineStyle(strokeWidth, strokeColor);
+    graphics.fillStyle(fillColor, fillAlpha);
+    graphics.beginPath();
+    graphics.moveTo(bubblePoints[0].x, bubblePoints[0].y);
+    for (let i = 1; i < bubblePoints.length; i++) {
+      graphics.lineTo(bubblePoints[i].x, bubblePoints[i].y);
+    }
+    graphics.closePath();
+    graphics.fillPath();
+    graphics.strokePath();
+  }
+
+  /**
+   * Get count of actively tracked speech bubbles
+   */
+  getActiveSpeechBubbleCount(): number {
+    return this.activeSpeechBubbles.size;
+  }
+
+  /**
+   * Register any shape to be animated with subtle movements
+   */
+  registerAnimatedShape(id: string, graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
+    // No timer needed - animations are now driven by half-step events
+    this.activeAnimatedShapes.set(id, { graphics, shapeType, x, y, width, height });
+  }
+
+  /**
+   * Unregister an animated shape
+   */
+  unregisterAnimatedShape(id: string): void {
+    this.activeAnimatedShapes.delete(id);
+  }
+
+  /**
+   * Regenerate any shape with subtle animations (smaller variations than speech bubbles)
+   */
+  private regenerateShapeWithSubtleAnimation(graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
+    // Clear the existing graphics
+    graphics.clear();
+
+    // Use the same logic as createCollageRect but with smaller variations
+    const strokeWidth = 2;
+    const strokeColor = 0x000000; // Black
+    // Set fill color based on shape type
+    let fillColor = 0xd0d0d0; // Default darker grey for backgrounds
+    if (shapeType === 'button') {
+      fillColor = 0xffffff; // White for buttons
+    }
+    const fillAlpha = 1.0;
+    
+    // Create polygon points with same structure as original but smaller variations
+    const offset = 5; // Same offset as original
+    const polygonPoints = [];
+    
+    // Reduce variation for subtle animation (was -5 to 5, now -2 to 2)
+    const subtleVariation = 2;
+    
+    // Add random extra points (same count as original)
+    const extraPointCount = Phaser.Math.Between(2, 5);
+    
+    // Create arrays for points along each edge (same as original)
+    const topEdgePoints = [];
+    const rightEdgePoints = [];
+    const bottomEdgePoints = [];
+    const leftEdgePoints = [];
+    
+    // Always include corners with small random movement
+    topEdgePoints.push({ 
+      x: x - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation), 
+      y: y - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation)  
+    }); // Top-left corner
+    rightEdgePoints.push({ 
+      x: x + width + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3), 
+      y: y - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation)  
+    }); // Top-right corner
+    bottomEdgePoints.push({ 
+      x: x + width + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3), 
+      y: y + height + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3) 
+    }); // Bottom-right corner
+    leftEdgePoints.push({ 
+      x: x - offset + Phaser.Math.Between(-subtleVariation-3, -subtleVariation), 
+      y: y + height + offset + Phaser.Math.Between(subtleVariation, subtleVariation+3) 
+    }); // Bottom-left corner
+    
+    // Add random extra points to edges (same logic as original)
+    for (let i = 0; i < extraPointCount; i++) {
+      const edgeIndex = Phaser.Math.Between(0, 3);
+      
+      switch (edgeIndex) {
+        case 0: // Top edge
+          topEdgePoints.push({
+            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation),
+            y: y - offset + Phaser.Math.Between(-subtleVariation-4, -subtleVariation)
+          });
+          break;
+        case 1: // Right edge
+          rightEdgePoints.push({
+            x: x + width + offset + Phaser.Math.Between(subtleVariation, subtleVariation+4),
+            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation)
+          });
+          break;
+        case 2: // Bottom edge
+          bottomEdgePoints.push({
+            x: Phaser.Math.Between(x - offset + 10, x + width + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation),
+            y: y + height + offset + Phaser.Math.Between(subtleVariation, subtleVariation+4)
+          });
+          break;
+        case 3: // Left edge
+          leftEdgePoints.push({
+            x: x - offset + Phaser.Math.Between(-subtleVariation-4, -subtleVariation),
+            y: Phaser.Math.Between(y - offset + 10, y + height + offset - 10) + Phaser.Math.Between(-subtleVariation, subtleVariation)
+          });
+          break;
+      }
+    }
+    
+    // Sort points along each edge to maintain proper order (same as original)
+    topEdgePoints.sort((a, b) => a.x - b.x); // Left to right
+    rightEdgePoints.sort((a, b) => a.y - b.y); // Top to bottom
+    bottomEdgePoints.sort((a, b) => b.x - a.x); // Right to left
+    leftEdgePoints.sort((a, b) => b.y - a.y); // Bottom to top
+    
+    // Combine all points in clockwise order
+    polygonPoints.push(...topEdgePoints);
+    polygonPoints.push(...rightEdgePoints);
+    polygonPoints.push(...bottomEdgePoints);
+    polygonPoints.push(...leftEdgePoints);
+
+    // Draw shadow first (same as original)
+    const shadowOffset = 6;
+    graphics.fillStyle(0x222222, 1.0);
+    graphics.beginPath();
+    graphics.moveTo(polygonPoints[0].x + shadowOffset, polygonPoints[0].y + shadowOffset);
+    for (let i = 1; i < polygonPoints.length; i++) {
+      graphics.lineTo(polygonPoints[i].x + shadowOffset, polygonPoints[i].y + shadowOffset);
+    }
+    graphics.closePath();
+    graphics.fillPath();
+
+    // Draw main polygon (same as original)
+    graphics.lineStyle(strokeWidth, strokeColor);
+    graphics.fillStyle(fillColor, fillAlpha);
+    graphics.beginPath();
+    graphics.moveTo(polygonPoints[0].x, polygonPoints[0].y);
+    for (let i = 1; i < polygonPoints.length; i++) {
+      graphics.lineTo(polygonPoints[i].x, polygonPoints[i].y);
+    }
+    graphics.closePath();
+    graphics.fillPath();
+    graphics.strokePath();
+    
+    // Draw the filled rectangle on top (same as original)
+    graphics.fillStyle(fillColor, fillAlpha);
+    graphics.fillRect(x, y, width, height);
+  }
+
+  /**
    * Create a basic Dialog composition - main window with close button
    */
   createDialogComposition(x: number, y: number, width: number, height: number): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y);
     
-    // Main dialog window - darker grey background
+    // Main dialog window - darker grey background with animation
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    });
+    }, true, 'dialog'); // Enable animation
     container.add(mainWindow);
     
     // Close button (X) in top-right corner - white for interaction
     const closeButton = this.createCollageButton(width - 35, 5, 25, 25);
     container.add(closeButton);
+    
+    // Add cleanup when container is destroyed
+    container.on('destroy', () => {
+      if ((mainWindow as any).animationId) {
+        this.unregisterAnimatedShape((mainWindow as any).animationId);
+      }
+    });
     
     return container;
   }
@@ -486,11 +764,11 @@ export class WindowShapes {
   createConfirmDialogComposition(x: number, y: number, width: number, height: number): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y);
     
-    // Main dialog window - darker grey background
+    // Main dialog window - darker grey background with animation
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    });
+    }, true, 'confirmDialog'); // Enable animation
     container.add(mainWindow);
     
     // Close button in top-right - white for interaction
@@ -501,10 +779,18 @@ export class WindowShapes {
     const buttonWidth = (width - 30) / 2;
     const buttonY = height - 40;
     
-    const cancelButton = this.createCollageButton(10, buttonY, buttonWidth, 30);
-    const confirmButton = this.createCollageButton(20 + buttonWidth, buttonY, buttonWidth, 30);
+    const leftButton = this.createCollageButton(10, buttonY, buttonWidth, 30);
+    const rightButton = this.createCollageButton(width - buttonWidth - 10, buttonY, buttonWidth, 30);
     
-    container.add([cancelButton, confirmButton]);
+    container.add(leftButton);
+    container.add(rightButton);
+    
+    // Add cleanup when container is destroyed
+    container.on('destroy', () => {
+      if ((mainWindow as any).animationId) {
+        this.unregisterAnimatedShape((mainWindow as any).animationId);
+      }
+    });
     
     return container;
   }
@@ -515,11 +801,11 @@ export class WindowShapes {
   createMenuComposition(x: number, y: number, width: number, height: number, buttonCount: number = 3): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y);
     
-    // Main menu window - darker grey background
+    // Main menu window - darker grey background with animation
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    });
+    }, true, 'menu'); // Enable animation
     container.add(mainWindow);
     
     // Close button in top-left - white for interaction
@@ -538,6 +824,13 @@ export class WindowShapes {
       container.add(menuButton);
     }
     
+    // Add cleanup when container is destroyed
+    container.on('destroy', () => {
+      if ((mainWindow as any).animationId) {
+        this.unregisterAnimatedShape((mainWindow as any).animationId);
+      }
+    });
+    
     return container;
   }
 
@@ -547,31 +840,39 @@ export class WindowShapes {
   createPanelComposition(x: number, y: number, width: number, height: number): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y);
     
-    // Main panel window - darker grey background
+    // Main panel window - darker grey background with animation
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    });
+    }, true, 'panel'); // Enable animation
     container.add(mainWindow);
     
-    // Four corner buttons - all white for interaction
+    // Four corner buttons - white for interaction
     const buttonSize = 30;
+    const offset = 5;
     
-    // Top-left: Menu/Settings
-    const menuButton = this.createCollageButton(5, 5, buttonSize, buttonSize);
-    container.add(menuButton);
+    // Top-left
+    const topLeftButton = this.createCollageButton(offset, offset, buttonSize, buttonSize);
+    container.add(topLeftButton);
     
-    // Top-right: Close
-    const closeButton = this.createCollageButton(width - buttonSize - 5, 5, buttonSize, buttonSize);
-    container.add(closeButton);
+    // Top-right
+    const topRightButton = this.createCollageButton(width - buttonSize - offset, offset, buttonSize, buttonSize);
+    container.add(topRightButton);
     
-    // Bottom-left: Help
-    const helpButton = this.createCollageButton(5, height - buttonSize - 5, buttonSize, buttonSize);
-    container.add(helpButton);
+    // Bottom-left
+    const bottomLeftButton = this.createCollageButton(offset, height - buttonSize - offset, buttonSize, buttonSize);
+    container.add(bottomLeftButton);
     
-    // Bottom-right: Action/OK
-    const actionButton = this.createCollageButton(width - buttonSize - 5, height - buttonSize - 5, buttonSize, buttonSize);
-    container.add(actionButton);
+    // Bottom-right
+    const bottomRightButton = this.createCollageButton(width - buttonSize - offset, height - buttonSize - offset, buttonSize, buttonSize);
+    container.add(bottomRightButton);
+    
+    // Add cleanup when container is destroyed
+    container.on('destroy', () => {
+      if ((mainWindow as any).animationId) {
+        this.unregisterAnimatedShape((mainWindow as any).animationId);
+      }
+    });
     
     return container;
   }
@@ -582,17 +883,24 @@ export class WindowShapes {
   createMessageBoxComposition(x: number, y: number, width: number, height: number): Phaser.GameObjects.Container {
     const container = this.scene.add.container(x, y);
     
-    // Main message window - darker grey background
+    // Main message window - darker grey background with animation
     const mainWindow = this.createCollageRect({ 
       x: 0, y: 0, width, height,
       fillColor: 0xd0d0d0 // Darker grey background
-    });
+    }, true, 'messageBox'); // Enable animation
     container.add(mainWindow);
     
     // Single OK button centered at bottom - white for interaction
     const buttonWidth = 80;
     const okButton = this.createCollageButton((width - buttonWidth) / 2, height - 40, buttonWidth, 30);
     container.add(okButton);
+    
+    // Add cleanup when container is destroyed
+    container.on('destroy', () => {
+      if ((mainWindow as any).animationId) {
+        this.unregisterAnimatedShape((mainWindow as any).animationId);
+      }
+    });
     
     return container;
   }
@@ -607,6 +915,18 @@ export class WindowShapes {
     const bubbleHeight = height - 40; // Leave space for the tail at top
     const mainBubble = this.createCollageSpeechBubble(0, 40, width, bubbleHeight); // Start 40px down to leave space for upward tail
     container.add(mainBubble);
+    
+    // Register this speech bubble for half-step-based point regeneration
+    const speechBubbleId = `speechbubble_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.registerSpeechBubble(speechBubbleId, mainBubble, 0, 40, width, bubbleHeight);
+    
+    // Store the ID on the container for later cleanup if needed
+    (container as any).speechBubbleId = speechBubbleId;
+    
+    // Add cleanup when container is destroyed
+    container.on('destroy', () => {
+      this.unregisterSpeechBubble(speechBubbleId);
+    });
     
     // No button - just the clean white bubble as requested
     

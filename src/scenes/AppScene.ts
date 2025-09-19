@@ -21,10 +21,12 @@ import Phaser from 'phaser';
 export class AppScene extends Phaser.Scene {
   // Game state tracking
   private step: number = 0;
+  private halfStep: number = 0;
   private stepText!: Phaser.GameObjects.Text;
   private gameStarted: boolean = false;
   private isPaused: boolean = false;
   private stepTimer!: Phaser.Time.TimerEvent;
+  private halfStepTimer!: Phaser.Time.TimerEvent;
 
   constructor() {
     super({ key: 'AppScene' });
@@ -162,6 +164,15 @@ export class AppScene extends Phaser.Scene {
       paused: true // Start paused, will be unpaused when game starts
     });
 
+    // Start the half-step timer (every 500ms = 0.5 seconds) for UI animations
+    this.halfStepTimer = this.time.addEvent({
+      delay: 500,
+      callback: this.incrementHalfStep,
+      callbackScope: this,
+      loop: true,
+      paused: true // Start paused, will be unpaused when game starts
+    });
+
     // Listen for game events from other scenes
     this.events.on('gameResumed', this.onGameResumed, this);
   }
@@ -196,6 +207,23 @@ export class AppScene extends Phaser.Scene {
     }
   }
 
+  private incrementHalfStep() {
+    if (!this.gameStarted || this.isPaused) return; // Don't increment if game hasn't started or is paused
+    
+    this.halfStep++;
+    
+    // Emit half-step event to GameScene for UI animations
+    const gameScene = this.scene.get('GameScene');
+    if (gameScene) {
+      gameScene.events.emit('halfStep', this.halfStep);
+    }
+    // Also emit half-step to MenuScene for UI animations
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('halfStep', this.halfStep);
+    }
+  }
+
   /**
    * Handle scene pause - stop timers to prevent accumulation
    */
@@ -204,6 +232,9 @@ export class AppScene extends Phaser.Scene {
     // Pause the step timer to prevent accumulation
     if (this.stepTimer) {
       this.stepTimer.paused = true;
+    }
+    if (this.halfStepTimer) {
+      this.halfStepTimer.paused = true;
     }
   }
 
@@ -216,6 +247,9 @@ export class AppScene extends Phaser.Scene {
     if (this.gameStarted && !this.isPaused && this.stepTimer) {
       this.stepTimer.paused = false;
     }
+    if (this.gameStarted && !this.isPaused && this.halfStepTimer) {
+      this.halfStepTimer.paused = false;
+    }
   }
 
   /**
@@ -227,6 +261,10 @@ export class AppScene extends Phaser.Scene {
     if (this.stepTimer) {
       this.stepTimer.paused = false;
       console.log('AppScene: Step timer unpaused');
+    }
+    if (this.halfStepTimer) {
+      this.halfStepTimer.paused = false;
+      console.log('AppScene: Half-step timer unpaused');
     }
   }
 
@@ -284,6 +322,10 @@ export class AppScene extends Phaser.Scene {
     // Resume the step timer
     if (this.stepTimer) {
       this.stepTimer.paused = false;
+    }
+    // Resume the half-step timer
+    if (this.halfStepTimer) {
+      this.halfStepTimer.paused = false;
     }
     
     // Also start the GameScene

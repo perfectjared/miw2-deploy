@@ -252,6 +252,15 @@ export class GameScene extends Phaser.Scene {
         this.createDebugSpeechBubble();
       });
 
+      // Debug: Add 'T' key to manually trigger speech bubble regeneration
+      const keyT = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.T, true, false);
+      keyT?.on('down', () => {
+        console.log('🔄 Manual speech bubble regeneration triggered');
+        if (this.windowShapes) {
+          this.windowShapes.onStep();
+        }
+      });
+
       // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability
       const openPetStoryByIndex = (index: number) => {
         const menuScene = this.scene.get('MenuScene');
@@ -784,6 +793,7 @@ export class GameScene extends Phaser.Scene {
 
     // Scene events
     this.events.on('step', this.onStepEvent, this);
+    this.events.on('halfStep', this.onHalfStepEvent, this);
     this.events.on('gamePaused', this.onGamePaused, this);
     this.events.on('gameResumed', this.onGameResumed, this);
     this.events.on('turnKey', this.onTurnKey, this);
@@ -1917,6 +1927,7 @@ export class GameScene extends Phaser.Scene {
     if ((this.tutorialSystem as any).handleStep) {
       (this.tutorialSystem as any).handleStep(step);
     }
+    
     // Step-based countdown: only when game and car have both started, and every fourth step
     const state = this.gameState.getState();
     if (state.gameStarted && carOn && state.gameTime > 0) {
@@ -2049,6 +2060,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Exit overlay removed - we now have the exit menu that opens immediately
+  }
+
+  /**
+   * Handle half-step events for UI animations (every 0.5 seconds)
+   */
+  private onHalfStepEvent(halfStep: number) {
+    // Update all registered shapes for animated appearance on half-steps
+    if (this.windowShapes) {
+      this.windowShapes.onHalfStep(halfStep);
+    }
   }
 
   private onGamePaused() {
@@ -2214,6 +2235,7 @@ export class GameScene extends Phaser.Scene {
     
     // Remove event listeners
     this.events.off('step', this.onStepEvent, this);
+    this.events.off('halfStep', this.onHalfStepEvent, this);
     this.events.off('gamePaused', this.onGamePaused, this);
     this.events.off('gameResumed', this.onGameResumed, this);
     this.events.off('turnKey', this.onTurnKey, this);
