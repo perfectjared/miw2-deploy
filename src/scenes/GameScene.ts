@@ -2403,13 +2403,7 @@ export class GameScene extends Phaser.Scene {
       
       const carInRightmostArea = carX >= rightmostThreshold;
       
-      // Debug logging for position detection (suppressed during menus)
-      const menuScene = this.scene.get('MenuScene');
-      const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
-      
-      if (!hasOpenMenu) {
-        console.log('Position detection - Internal carX:', carX, 'Car bounds X (visual):', carBounds.x, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
-      }
+      // Position detection logging removed to reduce console spam
       
       // Also check if car is horizontally aligned with the exit
       // Use internal car position for alignment since visual car is always centered

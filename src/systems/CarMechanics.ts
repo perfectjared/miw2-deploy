@@ -1697,10 +1697,7 @@ export class CarMechanics {
     // Map steering position (-1 to 1) to car position range
     const targetCarX = centerX + (normalizedValue * maxOffset);
     
-    // Debug logging every 30 steps to show position changes
-    if (this.scene.time.now % 500 < 16) { // Roughly every 500ms
-      console.log(`🚗 Position Debug: Steering: ${this.currentSteeringValue.toFixed(1)} → Normalized: ${normalizedValue.toFixed(2)} → Target: ${targetCarX.toFixed(1)} → Current: ${this.carX.toFixed(1)} → MaxOffset: ${maxOffset.toFixed(1)}`);
-    }
+    // Position debug logging removed to reduce console spam
     
     // Smooth movement towards target position - much faster and speed-independent
     const moveSpeed = 0.15; // How fast car moves towards target (higher = more responsive)
@@ -1929,11 +1926,7 @@ export class CarMechanics {
       carBounds = new Phaser.Geom.Rectangle(carX - 30, carY - 30, 60, 60);
     }
     
-    // Debug: Log the actual car position vs expected position
-    if (this.scene.time.now % 1000 < 16) { // Log every 1000ms
-      const expectedY = Math.floor(gameHeight * 0.85);
-      console.log(`🚗 Car Position Debug: Actual Y=${carBounds.centerY.toFixed(1)}, Expected Y=${expectedY}, Container Scale=${this.drivingContainer.scaleY}, Container Y=${this.drivingContainer.y}, Container X=${this.drivingContainer.x}`);
-    }
+    // Car position debug logging removed to reduce console spam
     
     this.obstacles.forEach(obstacle => {
       // Skip exit previews - they shouldn't trigger collisions
