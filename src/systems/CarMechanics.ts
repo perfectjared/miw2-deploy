@@ -169,6 +169,9 @@ export class CarMechanics {
     triggerStep: number;
     triggered: boolean;
   } | null = null;
+
+  // Pending Exit Menu to show after a 'before' CYOA is closed
+  private pendingExitAfterCyoa: { shopCount: number; exitNumber: number } | null = null;
   
   private currentSequenceProgress: number = 0;
   private lastPotholeSpawnStep: number = 0;
@@ -803,16 +806,12 @@ export class CarMechanics {
       }
     });
     
-    // Check if any planned CYOA should be triggered
+    // Check if any planned non-exit CYOA should be triggered by progress
     this.plannedCyoa.forEach(plannedCyoa => {
-      // Skip bundled CYOAs - they only trigger when exit is taken
+      // Exit-related CYOA are coordinated with exit interactions (before at collision, after on close)
       if (plannedCyoa.isExitRelated && plannedCyoa.exitNumber) {
-        // For bundled CYOA: trigger 'before' ones on progress, skip 'after' ones (scheduled on close)
-        if (plannedCyoa.exitTiming !== 'before') {
-          return;
-        }
+        return;
       }
-      
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
         console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%`);
         this.triggerCyoa(plannedCyoa);
@@ -1226,6 +1225,18 @@ export class CarMechanics {
   public onStepEvent(currentStep: number) {
     if (!this.drivingMode || this.drivingPaused) return;
     
+    // If a 'before' CYOA just finished and we resumed, show the deferred exit menu now
+    if (this.pendingExitAfterCyoa) {
+      const menuScene = this.scene.scene.get('MenuScene');
+      if (menuScene) {
+        const { shopCount, exitNumber } = this.pendingExitAfterCyoa;
+        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+        this.scene.scene.bringToTop('MenuScene');
+        this.pendingExitAfterCyoa = null;
+        // Exit menu will handle pausing via MenuManager
+      }
+    }
+
     // Check for scheduled exit CYOA
     if (this.scheduledExitCyoa && !this.scheduledExitCyoa.triggered) {
       if (currentStep >= this.scheduledExitCyoa.triggerStep) {
@@ -1971,8 +1982,22 @@ export class CarMechanics {
           exitNumber = this.activeExits[this.activeExits.length - 1].exitNumber;
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
-        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
-        this.scene.scene.bringToTop('MenuScene');
+
+        // If there is a bundled BEFORE CYOA for this exit, trigger it now before the exit menu
+        if (exitNumber != null) {
+          const beforeCyoa = this.plannedCyoa.find(c => c.isExitRelated && c.exitNumber === exitNumber && c.exitTiming === 'before' && !c.triggered);
+          if (beforeCyoa) {
+            console.log(`🎭 Triggering BEFORE CYOA ${beforeCyoa.id} for Exit ${exitNumber} prior to showing exit menu`);
+            this.triggerCyoa(beforeCyoa); // normal guard allows 'before'
+            beforeCyoa.triggered = true;
+            // Defer exit menu until CYOA closes and gameplay resumes
+            this.pendingExitAfterCyoa = { shopCount, exitNumber };
+          } else {
+            // No before CYOA; show the exit menu immediately
+            (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+            this.scene.scene.bringToTop('MenuScene');
+          }
+        }
       }
     }
     obstacle.destroy();
