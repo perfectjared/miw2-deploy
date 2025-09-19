@@ -679,6 +679,54 @@ export class CarMechanics {
         // Sort by threshold to ensure proper order
         this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
       }
+    } else if (numCyoa === 3) {
+      if (isFirstTwoSequencesInMidwest) {
+        // First two sequences in midwest-1: start CYOA + 2 random CYOAs
+        const randomThreshold1 = Phaser.Math.Between(20, 80);
+        const randomThreshold2 = Phaser.Math.Between(20, 80);
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: 2, // Start CYOA
+          triggered: false
+        });
+        this.plannedCyoa.push({
+          id: 2,
+          cyoaThreshold: randomThreshold1, // Random CYOA 1
+          triggered: false
+        });
+        this.plannedCyoa.push({
+          id: 3,
+          cyoaThreshold: randomThreshold2, // Random CYOA 2
+          triggered: false
+        });
+        console.log(`🎭 First sequence CYOAs: Start CYOA at 2% + random CYOAs at ${randomThreshold1}% and ${randomThreshold2}% (midwest-1 special)`);
+      } else {
+        // Regular three CYOAs: two random + one at start OR end
+        const randomThreshold1 = Phaser.Math.Between(20, 80);
+        const randomThreshold2 = Phaser.Math.Between(20, 80);
+        const useStartPosition = Math.random() < 0.5; // 50% chance for start vs end
+        
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: randomThreshold1,
+          triggered: false
+        });
+        
+        this.plannedCyoa.push({
+          id: 2,
+          cyoaThreshold: randomThreshold2,
+          triggered: false
+        });
+        
+        this.plannedCyoa.push({
+          id: 3,
+          cyoaThreshold: useStartPosition ? 2 : 98, // Start (2%) or End (98%)
+          triggered: false
+        });
+        
+        // Sort by threshold to ensure proper order
+        this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+      }
     }
     
     console.log('Planned CYOA:', this.plannedCyoa.map(c => 
