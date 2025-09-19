@@ -52,6 +52,7 @@ export interface GameStateData {
   currentRegion: string;
   showsInCurrentRegion: number;
   regionHistory: string[];
+  sequencesInCurrentRegion: number; // Store the sequence count for current region
   
   // Car State
   carStarted: boolean;
@@ -495,6 +496,7 @@ export class GameState {
       currentRegion: this.config.initialRegion,
       showsInCurrentRegion: 0,
       regionHistory: [this.config.initialRegion],
+      sequencesInCurrentRegion: this.calculateSequencesForRegion(this.config.initialRegion, 1),
       
       // Car State
       carStarted: false,
@@ -623,12 +625,16 @@ export class GameState {
    */
   public changeRegion(newRegion: string): void {
     const oldRegion = this.state.currentRegion;
+    const newVisitCount = this.getRegionVisitCount(newRegion) + 1; // +1 because we're about to add it to history
+    const newSequences = this.calculateSequencesForRegion(newRegion, newVisitCount);
+    
     this.updateState({
       currentRegion: newRegion,
       showsInCurrentRegion: 0, // Reset to 0 (will display as 1/3, 2/3, etc.)
-      regionHistory: [...this.state.regionHistory, newRegion]
+      regionHistory: [...this.state.regionHistory, newRegion],
+      sequencesInCurrentRegion: newSequences
     });
-    console.log(`Region changed from ${oldRegion} to ${newRegion} - sequence count reset to 0`);
+    console.log(`Region changed from ${oldRegion} to ${newRegion} - sequence count reset to 0, total sequences: ${newSequences}`);
   }
 
   /**
@@ -639,19 +645,40 @@ export class GameState {
   }
 
   /**
-   * Get the number of driving sequences for the current region
+   * Calculate the number of driving sequences for a region (deterministic)
    * 2-3 sequences normally, 4 possible if region visited 3+ times
    */
-  public getSequencesForCurrentRegion(): number {
-    const regionVisitCount = this.getRegionVisitCount(this.state.currentRegion);
-    
-    if (regionVisitCount >= 3) {
+  private calculateSequencesForRegion(region: string, visitCount: number): number {
+    if (visitCount >= 3) {
       // Region visited 3+ times: 2-4 sequences (4 is unlikely)
-      return Math.random() < 0.15 ? 4 : Phaser.Math.Between(2, 3);
+      // Use a deterministic seed based on region name and visit count
+      const seed = this.hashString(`${region}-${visitCount}`);
+      return (seed % 100) < 15 ? 4 : ((seed % 2) + 2); // 15% chance of 4, otherwise 2 or 3
     } else {
       // Normal regions: 2-3 sequences
-      return Phaser.Math.Between(2, 3);
+      const seed = this.hashString(`${region}-${visitCount}`);
+      return (seed % 2) + 2; // Either 2 or 3
     }
+  }
+
+  /**
+   * Simple hash function for deterministic random-like behavior
+   */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+  }
+
+  /**
+   * Get the number of driving sequences for the current region (cached)
+   */
+  public getSequencesForCurrentRegion(): number {
+    return this.state.sequencesInCurrentRegion;
   }
 
   /**
