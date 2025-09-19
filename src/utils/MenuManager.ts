@@ -568,10 +568,10 @@ export class MenuManager {
     if (!petXY) return;
     const cam = this.scene.cameras.main;
     const uiWidth = 160;
-    const uiHeight = 80;
+    const uiHeight = 120; // Increased height for 3 meters
     let petX = Phaser.Math.Clamp(petXY.x, uiWidth / 2, cam.width - uiWidth / 2);
-    let petY = petXY.y - 80; // Default above
-    if (petY - uiHeight / 2 < 0) petY = petXY.y + 80; // Flip below
+    let petY = petXY.y - 100; // Moved up more to accommodate taller UI
+    if (petY - uiHeight / 2 < 0) petY = petXY.y + 100; // Flip below
     
     try { this.scene.scene.bringToTop('MenuScene'); } catch {}
     
@@ -588,8 +588,9 @@ export class MenuManager {
     dialogBackground.setScrollFactor(0);
     this.currentDialog.add(dialogBackground);
     
-    const foodLabel = this.scene.add.text(0, -20, 'FOOD', {
-      fontSize: '14px',
+    // Food meter
+    const foodLabel = this.scene.add.text(0, -40, 'FOOD', {
+      fontSize: '12px',
       color: '#ffffff',
       fontStyle: 'bold',
       align: 'center'
@@ -597,18 +598,56 @@ export class MenuManager {
     foodLabel.setScrollFactor(0);
     
     const foodBarWidth = 100;
-    const foodBarHeight = 12;
-    const foodBarBG = this.scene.add.rectangle(0, 5, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    const foodBarHeight = 10;
+    const foodBarBG = this.scene.add.rectangle(0, -25, foodBarWidth, foodBarHeight, 0x000000, 0.6);
     foodBarBG.setStrokeStyle(1, 0xffffff, 0.8);
     foodBarBG.setScrollFactor(0);
     
     const foodValue = pet.getFoodValue?.() || 0;
-    const fillWidth = Math.floor(foodBarWidth * (foodValue / 10));
-    const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, 5, fillWidth, foodBarHeight - 2, 0x2ecc71, 1);
+    const foodFillWidth = Math.floor(foodBarWidth * (foodValue / 10));
+    const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, -25, foodFillWidth, foodBarHeight - 2, 0x2ecc71, 1);
     foodBarFill.setOrigin(0, 0.5);
     foodBarFill.setScrollFactor(0);
     
-    this.currentDialog.add([foodLabel, foodBarBG, foodBarFill]);
+    // Bathroom meter
+    const bathroomLabel = this.scene.add.text(0, -5, 'BATH', {
+      fontSize: '12px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
+    bathroomLabel.setScrollFactor(0);
+    
+    const bathroomBarBG = this.scene.add.rectangle(0, 10, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    bathroomBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+    bathroomBarBG.setScrollFactor(0);
+    
+    const bathroomValue = pet.getBathroomValue?.() || 0;
+    const bathroomFillWidth = Math.floor(foodBarWidth * (bathroomValue / 10));
+    const bathroomBarFill = this.scene.add.rectangle(-foodBarWidth/2, 10, bathroomFillWidth, foodBarHeight - 2, 0x3498db, 1);
+    bathroomBarFill.setOrigin(0, 0.5);
+    bathroomBarFill.setScrollFactor(0);
+    
+    // Bored meter
+    const boredLabel = this.scene.add.text(0, 30, 'BORED', {
+      fontSize: '12px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
+    boredLabel.setScrollFactor(0);
+    
+    const boredBarBG = this.scene.add.rectangle(0, 45, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    boredBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+    boredBarBG.setScrollFactor(0);
+    
+    const boredValue = pet.getBoredValue?.() || 0;
+    const boredFillWidth = Math.floor(foodBarWidth * (boredValue / 10));
+    const boredBarFill = this.scene.add.rectangle(-foodBarWidth/2, 45, boredFillWidth, foodBarHeight - 2, 0x9b59b6, 1);
+    boredBarFill.setOrigin(0, 0.5);
+    boredBarFill.setScrollFactor(0);
+    
+    this.currentDialog.add([foodLabel, foodBarBG, foodBarFill, bathroomLabel, bathroomBarBG, bathroomBarFill, boredLabel, boredBarBG, boredBarFill]);
     
     (this.currentDialog as any).stepsRemaining = 3;
     (this.currentDialog as any).isStory = true;
@@ -1031,30 +1070,7 @@ export class MenuManager {
       }
     }));
     
-    // Add close button
-    buttons.push({ 
-      text: 'Close', 
-      onClick: () => {
-        // Resolve exit number from multiple sources for robustness
-        const persistedExitNumber = (this as any)._lastExitNumber;
-        const stackExitNumber = this.menuStack[this.menuStack.length - 1]?.config?.exitNumber;
-        const dialogExitNumber = (this.currentDialog as any)?.exitNumber;
-        let finalExitNumber = dialogExitNumber ?? exitNumForMenu ?? persistedExitNumber ?? stackExitNumber;
-        if (finalExitNumber == null) {
-          // Final fallback: if first sequence, assume Exit 1
-          try {
-            const gameScene = this.scene.scene.get('GameScene') as any;
-            const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
-            if (isFirstSequence) finalExitNumber = 1;
-          } catch {}
-        }
-        // Debug line intentionally minimized
-        
-        // Exit menu closed - no more exit-related CYOAs to trigger
-        
-        this.closeDialog();
-      }
-    });
+    // No close button - user must choose a shop
     
     const menuConfig: MenuConfig = {
       title: 'EXIT',
@@ -2027,8 +2043,7 @@ export class MenuManager {
         { text: 'Shop 1', onClick: () => {} },
         { text: 'Shop 2', onClick: () => {} },
         { text: 'Shop 3', onClick: () => {} },
-        { text: 'Go', onClick: () => { /* TODO: handle go selection */ this.closeDialog(); } },
-        { text: 'Close', onClick: () => this.closeDialog() }
+        { text: 'Go', onClick: () => { /* TODO: handle go selection */ this.closeDialog(); } }
       ]
     };
     this.createDialog(menuConfig, 'DESTINATION');

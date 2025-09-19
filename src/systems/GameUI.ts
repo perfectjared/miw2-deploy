@@ -1302,24 +1302,26 @@ export class GameUI {
     const listenersY = gameHeight * 0.7; // Same Y as steering wheel
     
     // Monthly listeners text
-    this.monthlyListenersText = this.scene.add.text(listenersX, listenersY - 20, '2,000', {
+    this.monthlyListenersText = this.scene.add.text(listenersX, listenersY - 20, 'MONTHLY LISTENERS:\n2,000', {
       fontSize: '16px',
       color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
-      padding: { x: 8, y: 4 }
+      padding: { x: 8, y: 4 },
+      align: 'center'
     }).setOrigin(0.5);
     
     this.monthlyListenersText.setScrollFactor(0);
     this.monthlyListenersText.setDepth(10000);
     
     // Buzz text (below listeners)
-    this.buzzText = this.scene.add.text(listenersX, listenersY + 20, 'Buzz: 0', {
+    this.buzzText = this.scene.add.text(listenersX, listenersY + 20, 'BUZZ\n0', {
       fontSize: '14px',
       color: `#${GREYSCALE_PALETTE.lightGray.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
-      padding: { x: 6, y: 3 }
+      padding: { x: 6, y: 3 },
+      align: 'center'
     }).setOrigin(0.5);
     
     this.buzzText.setScrollFactor(0);
@@ -1333,7 +1335,7 @@ export class GameUI {
     if (this.monthlyListenersText) {
       // Format with commas for readability
       const formattedListeners = listeners.toLocaleString();
-      this.monthlyListenersText.setText(formattedListeners);
+      this.monthlyListenersText.setText(`MONTHLY LISTENERS:\n${formattedListeners}`);
     }
   }
 
@@ -1342,7 +1344,7 @@ export class GameUI {
    */
   private updateBuzz(buzz: number) {
     if (this.buzzText) {
-      this.buzzText.setText(`Buzz: ${buzz}`);
+      this.buzzText.setText(`BUZZ\n${buzz}`);
       
       // Change color based on buzz value
       let buzzColorHex: string;

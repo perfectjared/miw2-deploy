@@ -52,9 +52,9 @@ export class VirtualPet {
 	private baseRect!: Phaser.GameObjects.Rectangle;
 	private pet!: Phaser.GameObjects.Ellipse;
 	private faceSVG!: Phaser.GameObjects.Sprite; // Face emotion overlay
-	private foodValue: number = 0; // 0..10
-	private bathroomValue: number = 10; // 0..10 (10 = empty bladder)
-	private boredValue: number = 5; // 0..10 (higher = having fun)
+	private foodValue: number = 0; // 0..10 (10 = well fed, counts down)
+	private bathroomValue: number = 10; // 0..10 (10 = empty bladder, counts down)
+	private boredValue: number = 0; // 0..10 (10 = entertained, counts down)
 	private foodBarBG!: Phaser.GameObjects.Rectangle;
 	private foodBarFill!: Phaser.GameObjects.Rectangle;
 	private foodLabel!: Phaser.GameObjects.Text;
@@ -83,6 +83,11 @@ export class VirtualPet {
 	constructor(scene: Phaser.Scene, config: VirtualPetConfig = {}) {
 		this.scene = scene;
 		this.config = config;
+		
+		// Initialize meters to random values between 77-100% (7.7-10.0)
+		this.foodValue = Phaser.Math.FloatBetween(7.7, 10.0);
+		this.bathroomValue = Phaser.Math.FloatBetween(7.7, 10.0);
+		this.boredValue = Phaser.Math.FloatBetween(7.7, 10.0);
 	}
 
 	public initialize() {
@@ -265,7 +270,8 @@ export class VirtualPet {
 			delay: 2000,
 			loop: true,
 			callback: () => {
-				this.setFood(this.foodValue - 1);
+				// Food decreases over time (lower value = hungry)
+				this.setFood(this.foodValue - 0.1);
 			}
 		});
 		this.bathroomDecayTimer = this.scene.time.addEvent({
@@ -273,7 +279,7 @@ export class VirtualPet {
 			loop: true,
 			callback: () => {
 				// bathroom fills over time (lower value = needs bathroom)
-				this.setBathroom(this.bathroomValue - 1);
+				this.setBathroom(this.bathroomValue - 0.1);
 			}
 		});
 		this.boredDecayTimer = this.scene.time.addEvent({
@@ -281,7 +287,7 @@ export class VirtualPet {
 			loop: true,
 			callback: () => {
 				// boredom increases over time (lower value = bored)
-				this.setBored(this.boredValue - 1);
+				this.setBored(this.boredValue - 0.1);
 			}
 		});
 	}
@@ -528,6 +534,14 @@ export class VirtualPet {
 				const eased = Phaser.Math.Easing.Quadratic.Out(t);
 				const value = Phaser.Math.Linear(start, target, eased);
 				this.setFood(value);
+				
+				// Also reduce bathroom value (feeding helps with bathroom needs)
+				const bathroomReduction = amount * 0.5; // Half the food amount
+				const bathroomStart = this.bathroomValue;
+				const bathroomTarget = Phaser.Math.Clamp(bathroomStart - bathroomReduction, 0, 10);
+				const bathroomValue = Phaser.Math.Linear(bathroomStart, bathroomTarget, eased);
+				this.setBathroom(bathroomValue);
+				
 				if (onTick) onTick(eased);
 				if (t >= 1) {
 					timer.remove(false);
@@ -572,6 +586,20 @@ export class VirtualPet {
 	}
 
 	/**
+	 * Get current bathroom value
+	 */
+	public getBathroomValue(): number {
+		return this.bathroomValue;
+	}
+
+	/**
+	 * Get current bored value
+	 */
+	public getBoredValue(): number {
+		return this.boredValue;
+	}
+
+	/**
 	 * Get the pet body screen-space position (x, y) for anchoring UI.
 	 * Since the pet uses setScrollFactor(0), its x/y are already in screen coords.
 	 */
@@ -601,7 +629,7 @@ export class VirtualPet {
 
 		let faceTexture: string;
 		if (this.foodValue <= 3) {
-			faceTexture = 'face-frown'; // Sad - low food
+			faceTexture = 'face-frown'; // Sad - low food (still correct since low food = sad)
 		} else if (this.foodValue <= 6) {
 			faceTexture = 'face-neutral'; // Neutral - middle food
 		} else {

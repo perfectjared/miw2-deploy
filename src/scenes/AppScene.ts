@@ -106,7 +106,7 @@ export class AppScene extends Phaser.Scene {
     // Add pause and save buttons - positioned in top left corner, stacked vertically
     const buttonX = 10; // Left margin
     const buttonSpacing = 35; // Vertical spacing between buttons
-    const buttonY1 = 20; // Top button (pause)
+    const buttonY1 = 5; // Top button (pause) - moved higher
     const buttonY2 = buttonY1 + buttonSpacing; // Bottom button (save)
     
     const pauseButton = this.add.text(buttonX, buttonY1, 'PAUSE', {

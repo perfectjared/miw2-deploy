@@ -396,22 +396,19 @@ export class CarMechanics {
   }
 
   /**
-   * Generate shop count (1-4 shops, with 1 and 4 being rare)
+   * Generate shop count (2-4 shops)
    */
   private generateShopCount(): number {
     const rand = Math.random();
     
-    // 1 shop: 10% chance (rare)
-    if (rand < 0.1) return 1;
+    // 2 shops: 40% chance
+    if (rand < 0.4) return 2;
     
-    // 4 shops: 10% chance (rare)
-    if (rand < 0.2) return 4;
+    // 3 shops: 40% chance
+    if (rand < 0.8) return 3;
     
-    // 2 shops: 40% chance (common)
-    if (rand < 0.6) return 2;
-    
-    // 3 shops: 40% chance (common)
-    return 3;
+    // 4 shops: 20% chance
+    return 4;
   }
 
   /**
@@ -1115,7 +1112,7 @@ export class CarMechanics {
       } else {
         // Regular story: pick random storyline (excluding fauxchella)
         const storylines = storyManager.getAvailableStorylines();
-        const nonFauxchellaStorylines = storylines.filter(s => s !== 'fauxchella');
+        const nonFauxchellaStorylines = storylines.filter((s: string) => s !== 'fauxchella');
         selectedStoryline = nonFauxchellaStorylines[Math.floor(Math.random() * nonFauxchellaStorylines.length)];
         console.log(`📖 Starting storyline: ${selectedStoryline}`);
       }
@@ -1181,7 +1178,7 @@ export class CarMechanics {
    */
   private hasSkippedStory(): boolean {
     // Only check for actual story events, not CYOA events
-    return this.plannedStory && !this.plannedStory.triggered;
+    return !!(this.plannedStory && !this.plannedStory.triggered);
   }
 
   /**
@@ -2093,7 +2090,7 @@ export class CarMechanics {
         if (this.hasSkippedStory()) {
           console.log(`📖 CarMechanics: Skipped story detected, storing destination menu and showing story first`);
           // Store the destination menu data to show after story completion
-          this.pendingDestinationMenu = { shopCount, exitNumber };
+          this.pendingDestinationMenu = { shopCount, exitNumber: exitNumber || 1 };
           this.triggerSkippedStory();
         } else {
           // Show the exit menu immediately (no more exit-related CYOAs)

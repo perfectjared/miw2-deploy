@@ -60,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private petLabels: Phaser.GameObjects.Text[] = [];
   private dragOverlay?: Phaser.GameObjects.Container;
   private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
+  private itemsCamera?: Phaser.Cameras.Scene2D.Camera;
   private dragOverlayCamera?: Phaser.Cameras.Scene2D.Camera;
   private feedingDebug?: Phaser.GameObjects.Graphics;
   // Cache to avoid redrawing magnetic target every frame
@@ -374,9 +375,31 @@ export class GameScene extends Phaser.Scene {
       }
     } catch {}
 
+    // Create items camera - renders items above steering wheel/virtual pets but below UI
+    this.itemsCamera = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
+    this.itemsCamera.setScroll(0, 0);
+    this.itemsCamera.setName('itemsCamera');
+    
+    // Items camera should render everything EXCEPT steering wheel/virtual pets
+    // This ensures items render above those elements while maintaining input handling
+    const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
+    
+    // Get control objects (steering wheel, etc.) to ignore on items camera
+    const controlObjsForItems = (this.gameUI as any).getControlObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
+    const virtualPetObjects = this.virtualPets.map(pet => (pet as any).container).filter(Boolean);
+    
+    const objectsToIgnoreOnItemsCamera = [
+      ...(controlObjsForItems || []),
+      ...virtualPetObjects
+    ];
+    
+    if (objectsToIgnoreOnItemsCamera.length > 0) {
+      this.itemsCamera.ignore(objectsToIgnoreOnItemsCamera);
+    }
+
     // Create a dedicated overlay container for dragged items (always above HUD/pet)
     this.dragOverlay = this.add.container(0, 0);
-    this.dragOverlay.setDepth(60001);
+    this.dragOverlay.setDepth(110001);
     this.dragOverlay.setScrollFactor(0);
     // Ensure drag overlay renders above the pet HUD via a dedicated camera
     // Exclude drag overlay from main camera to avoid double draw
@@ -591,7 +614,7 @@ export class GameScene extends Phaser.Scene {
     this.keySVG.setScale(0.08); // Scaled to match key physics object (radius 15)
     this.keySVG.setOrigin(0.5, 0.5);
     this.keySVG.setAlpha(0.8); // Semi-transparent overlay
-    this.keySVG.setDepth(10001); // Above most UI elements but below speed display
+    this.keySVG.setDepth(60001); // Above steering wheel (60000)
     
     // Apply white fill and black stroke styling
     this.keySVG.setTint(0xffffff); // White fill
@@ -602,7 +625,7 @@ export class GameScene extends Phaser.Scene {
     this.hotdogSVG.setScale(0.1); // Scaled to match smaller physics object (radius 40)
     this.hotdogSVG.setOrigin(0.5, 0.5);
     this.hotdogSVG.setAlpha(0.8); // Semi-transparent overlay
-    this.hotdogSVG.setDepth(1001); // Above the food item circle
+    this.hotdogSVG.setDepth(60001); // Above steering wheel (60000)
     
     // Apply white fill and black stroke styling
     this.hotdogSVG.setTint(0xffffff); // White fill
@@ -858,6 +881,7 @@ export class GameScene extends Phaser.Scene {
   private createGameContentContainer() {
     this.gameContentContainer = this.add.container(0, 0);
     this.gameContentContainer.setName('gameContentContainer');
+    // No depth needed - items will be rendered by dedicated items camera
     
     // Add physics objects to container
     this.gameContentContainer.add(this.frontseatTrash.gameObject);
@@ -1187,9 +1211,9 @@ export class GameScene extends Phaser.Scene {
       // Update SVG depth to match physics object depth during drag
       const isDragging = (this.frontseatKeys.gameObject as any).isDragging;
       if (isDragging) {
-        this.keySVG.setDepth(11001); // Above the physics object (11000)
+        this.keySVG.setDepth(110001); // Above the physics object (110000)
       } else {
-        this.keySVG.setDepth(10001); // Back to normal depth
+        this.keySVG.setDepth(60001); // Above steering wheel (60000)
       }
     }
     
@@ -1208,9 +1232,9 @@ export class GameScene extends Phaser.Scene {
       // Update SVG depth to match physics object depth during drag
       const isDragging = (this.frontseatTrash.gameObject as any).isDragging;
       if (isDragging) {
-        this.hotdogSVG.setDepth(11001); // Above the physics object (11000)
+        this.hotdogSVG.setDepth(110001); // Above the physics object (110000)
       } else {
-        this.hotdogSVG.setDepth(1001); // Back to normal depth
+        this.hotdogSVG.setDepth(60001); // Above steering wheel (60000)
       }
     }
 

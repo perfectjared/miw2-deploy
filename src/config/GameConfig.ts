@@ -134,12 +134,12 @@ export const UI_LAYOUT = {
   healthY: 0.12,              // 12% from top edge
   
   // Top-right corner elements
-  managerValuesX: 0.98,       // 98% from left edge (right-aligned)
+  managerValuesX: 0.85,       // 85% from left edge (moved closer to center)
   managerValuesY: 0.02,       // 2% from top edge
   
   // Center elements
   countdownX: 0.5,            // 50% from left edge (centered)
-  countdownY: 0.15,           // 15% from top edge (moved up from 20%)
+  countdownY: 0.25,           // 25% from top edge (moved down from 15%)
   
   // Bottom elements
   progressX: 0.02,            // 2% from left edge
