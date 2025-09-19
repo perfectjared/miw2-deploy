@@ -66,6 +66,9 @@ export class GameScene extends Phaser.Scene {
   private keysAttractionUntil: number = 0;
   private lastMagneticAttractionLog: number = 0; // For throttled debugging
   
+  // Physics object safety system
+  private physicsSafetyTimer?: Phaser.Time.TimerEvent;
+  
   // ============================================================================
   // PHYSICS OBJECTS
   // ============================================================================
@@ -152,6 +155,9 @@ export class GameScene extends Phaser.Scene {
     
     // Create physics objects
     this.createPhysicsObjects();
+    
+    // Initialize physics safety system
+    this.initializePhysicsSafetySystem();
     
     // Create game content container
     this.createGameContentContainer();
@@ -592,6 +598,96 @@ export class GameScene extends Phaser.Scene {
     // Set references for tutorial system
     this.tutorialSystem.setPhysicsObjects(this.frontseatKeys);
     this.tutorialSystem.setGameUI(this.gameUI);
+  }
+
+  /**
+   * Initialize physics safety system to prevent items from falling out of world
+   */
+  private initializePhysicsSafetySystem() {
+    // Start safety check timer - runs every 1000ms (1 second)
+    this.physicsSafetyTimer = this.time.addEvent({
+      delay: 1000,
+      callback: this.checkPhysicsObjectSafety,
+      callbackScope: this,
+      loop: true
+    });
+    
+    console.log('🛡️ Physics safety system initialized - checking every 1 second');
+  }
+
+  /**
+   * Check if physics objects have fallen out of bounds and respawn them
+   */
+  private checkPhysicsObjectSafety() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Define safety bounds (with some padding)
+    const safetyBounds = {
+      left: -100,
+      right: gameWidth + 100,
+      top: -100,
+      bottom: gameHeight + 100
+    };
+    
+    // Check each physics object
+    const physicsObjects = [
+      { name: 'frontseatTrash', obj: this.frontseatTrash },
+      { name: 'backseatItem', obj: this.backseatItem },
+      { name: 'frontseatKeys', obj: this.frontseatKeys }
+    ];
+    
+    physicsObjects.forEach(({ name, obj }) => {
+      if (!obj || !obj.gameObject || !obj.gameObject.body) {
+        return;
+      }
+      
+      const body = obj.gameObject.body as any;
+      const x = body.position.x;
+      const y = body.position.y;
+      
+      // Check if object is out of bounds
+      const isOutOfBounds = x < safetyBounds.left || 
+                           x > safetyBounds.right || 
+                           y < safetyBounds.top || 
+                           y > safetyBounds.bottom;
+      
+      if (isOutOfBounds) {
+        console.log(`🚨 ${name} fell out of bounds at (${x.toFixed(1)}, ${y.toFixed(1)}) - respawning`);
+        this.respawnPhysicsObject(name, obj);
+      }
+    });
+  }
+
+  /**
+   * Respawn a physics object to a safe position
+   */
+  private respawnPhysicsObject(objectName: string, obj: any) {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Generate random X position (but keep it reasonable)
+    const randomX = Phaser.Math.Between(50, gameWidth - 50);
+    
+    // Position at halfway up the screen
+    const respawnY = gameHeight * 0.5;
+    
+    // Reset physics body position
+    if (obj.gameObject && obj.gameObject.body) {
+      const body = obj.gameObject.body as any;
+      
+      // Stop any existing velocity
+      body.velocity = { x: 0, y: 0 };
+      body.angularVelocity = 0;
+      
+      // Set new position
+      body.position = { x: randomX, y: respawnY };
+      
+      // Update visual position
+      obj.gameObject.setPosition(randomX, respawnY);
+      
+      console.log(`✅ ${objectName} respawned at (${randomX}, ${respawnY})`);
+    }
   }
 
   /**
@@ -2183,6 +2279,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   destroy() {
+    // Clean up physics safety timer
+    if (this.physicsSafetyTimer) {
+      this.physicsSafetyTimer.destroy();
+      this.physicsSafetyTimer = undefined;
+    }
+    
     // Clean up all systems
     this.carMechanics.destroy();
     this.tutorialSystem.destroy();
