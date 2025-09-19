@@ -1113,7 +1113,8 @@ export class CarMechanics {
   public getPlannedExits() {
     const result = this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
       progressThreshold: exit.exitThreshold,
-      spawned: exit.exitSpawned
+      spawned: exit.exitSpawned,
+      number: exit.number
     }));
     
     return result;

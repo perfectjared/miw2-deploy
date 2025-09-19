@@ -266,7 +266,7 @@ export class GameUI {
   /**
    * Update threshold indicators based on planned exits, CYOA, and story
    */
-  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean; isExitRelated?: boolean; exitNumber?: number; exitTiming?: 'before' | 'after' }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
+  public updateThresholdIndicators(plannedExits: Array<{ progressThreshold: number; spawned: boolean; number?: number }>, plannedCyoa?: Array<{ progressThreshold: number; triggered: boolean; isExitRelated?: boolean; exitNumber?: number; exitTiming?: 'before' | 'after' }>, plannedStory?: { progressThreshold: number; triggered: boolean } | null) {
     // Clear existing indicators
     this.progressThresholdIndicators.forEach(indicator => indicator.destroy());
     this.progressThresholdIndicators = [];
@@ -306,7 +306,13 @@ export class GameUI {
         if (cyoa.isExitRelated && cyoa.exitNumber) {
           // Show bundled CYOA with different color for testing
           if (!cyoa.triggered) {
-            const triangleX = barX + (cyoa.progressThreshold / 100) * barWidth;
+            // For 'before' events, align the marker with the associated exit's threshold for simultaneity
+            let markerThreshold = cyoa.progressThreshold;
+            if (cyoa.exitTiming === 'before' && cyoa.exitNumber != null) {
+              const targetExit = plannedExits.find(e => e.number === cyoa.exitNumber);
+              if (targetExit) markerThreshold = targetExit.progressThreshold;
+            }
+            const triangleX = barX + (markerThreshold / 100) * barWidth;
             const triangleY = barY - 16; // Above the exit indicators
             
             const triangle = this.scene.add.graphics();
