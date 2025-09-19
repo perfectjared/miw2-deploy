@@ -55,15 +55,15 @@ export interface GameUIConfig {
   gameLayerPositionX: number;
   gameLayerPositionY: number;
   gameLayerFontSize: string;
-  gameLayerColor: string;
-  gameLayerBackgroundColor: string;
+  gameLayerColor: number;
+  gameLayerBackgroundColor: number;
   gameLayerDepth: number;
   
   // Countdown Parameters
   countdownPositionX: number;
   countdownPositionY: number;
   countdownFontSize: string;
-  countdownColor: string;
+  countdownColor: number;
   
   // Money/Health Parameters
   moneyPositionX: number;
@@ -71,40 +71,40 @@ export interface GameUIConfig {
   healthPositionX: number;
   healthPositionY: number;
   moneyHealthFontSize: string;
-  moneyColor: string;
-  healthColor: string;
+  moneyColor: number;
+  healthColor: number;
   
   // Progress Parameters
   progressPositionX: number;
   progressPositionY: number;
   progressFontSize: string;
-  progressColor: string;
+  progressColor: number;
   
   // Manager Values Parameters
   managerValuesFontSize: string;
-  managerValuesBackgroundColor: string;
+  managerValuesBackgroundColor: number;
   managerValuesPadding: { x: number; y: number };
   managerValuesOpacity: number;
-  managerValuesSkillColor: string;
-  managerValuesDifficultyColor: string;
-  managerValuesMomentumColor: string;
-  managerValuesPlotAColor: string;
-  managerValuesPlotBColor: string;
-  managerValuesPlotCColor: string;
-  managerValuesStopsColor: string;
+  managerValuesSkillColor: number;
+  managerValuesDifficultyColor: number;
+  managerValuesMomentumColor: number;
+  managerValuesPlotAColor: number;
+  managerValuesPlotBColor: number;
+  managerValuesPlotCColor: number;
+  managerValuesStopsColor: number;
   
   // Navigation Button Parameters
   frontseatText: string;
   frontseatPositionX: number;
   frontseatPositionY: number;
   frontseatFontSize: string;
-  frontseatColor: string;
+  frontseatColor: number;
   
   backseatText: string;
   backseatPositionX: number;
   backseatPositionY: number;
   backseatFontSize: string;
-  backseatColor: string;
+  backseatColor: number;
   
   // Speed Crank Parameters
   speedCrankOffsetX: number;
@@ -128,7 +128,7 @@ export interface GameUIConfig {
   speedCrankIndicatorRadius: number;
   speedCrankTextOffsetX: number;
   speedCrankTextFontSize: string;
-  speedCrankTextColor: string;
+  speedCrankTextColor: number;
   speedCrankSnapPositions: number[];
   speedCrankDepthTrack: number;
   speedCrankDepthHandle: number;
@@ -333,7 +333,7 @@ export class GameUI {
      
     this.countdownText = this.scene.add.text(countdownX, countdownY, '0', {
       fontSize: this.config.countdownFontSize,
-      color: this.config.countdownColor,
+      color: `#${this.config.countdownColor.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: '#000000',
       padding: { x: 4, y: 2 }
@@ -413,7 +413,7 @@ export class GameUI {
     
     this.moneyText = this.scene.add.text(moneyX, moneyY, '$0', {
       fontSize: this.config.moneyHealthFontSize,
-      color: this.config.moneyColor,
+      color: `#${this.config.moneyColor.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: '#000000',
       padding: { x: 4, y: 2 }
@@ -435,7 +435,7 @@ export class GameUI {
     this.managerValuesText = this.scene.add.text(gameWidth - 10, 10, '', {
       fontSize: this.config.managerValuesFontSize,
       color: '#ffffff',
-      backgroundColor: this.config.managerValuesBackgroundColor,
+      backgroundColor: `#${this.config.managerValuesBackgroundColor.toString(16).padStart(6, '0')}`,
       padding: this.config.managerValuesPadding
     }).setOrigin(1, 0);
     
