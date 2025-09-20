@@ -1399,6 +1399,26 @@ export class WindowShapes {
     // Track this as the active narrative window
     this.activeNarrativeWindow = container;
     
+    // Add an invisible interactive rectangle to handle click-to-advance
+    const invisibleOverlay = this.scene.add.rectangle(width/2, height/2, width, height, 0x000000, 0);  // Completely transparent
+    invisibleOverlay.setDepth(10);  // Low depth so it doesn't interfere with text/buttons
+    invisibleOverlay.setName('invisibleClickArea');
+    container.add(invisibleOverlay);
+    console.log(`👻 Invisible click area added: ${width}x${height}`);
+    
+    // Make the invisible overlay interactive for click-to-advance
+    invisibleOverlay.setInteractive();
+    invisibleOverlay.on('pointerup', () => {
+      console.log('🎯 Invisible overlay clicked - checking if should advance story');
+      // Only advance if dialog isn't complete (buttons not yet shown)
+      if (!(container as any).isComplete) {
+        console.log('➡️ Advancing story dialog from invisible overlay click');
+        this.advanceStoryDialog(container as any);
+      } else {
+        console.log('⏹️ Dialog already complete, buttons should handle interactions');
+      }
+    });
+    
     return container;
   }
   
