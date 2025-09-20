@@ -44,8 +44,10 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showTutorialInterrupt', this.showTutorialInterrupt, this);
     this.events.on('showDestinationMenu', this.showDestinationMenu, this);
     this.events.on('showRegionChoiceMenu', this.showRegionChoiceMenu, this);
-    this.events.on('showCYOA', this.showCYOA, this);
+    // this.events.on('showCYOA', this.showCYOA, this); // REMOVED: Old event listener causing double-triggering
     this.events.on('showCyoaMenu', this.showCyoaMenu, this);
+    this.events.on('showStoryMenu', this.showStoryMenu, this);
+    this.events.on('showNovelStory', this.showNovelStory, this);
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
     this.events.on('showMoralDecision', this.showMoralDecision, this);
     this.events.on('showPetStoryUI', this.showPetStoryUI, this);
@@ -98,11 +100,11 @@ export class MenuScene extends Phaser.Scene {
     this.menuManager.showGameOverMenu();
   }
 
-  private showObstacleMenu(obstacleType: string, shopCount?: number) {
+  private showObstacleMenu(obstacleType: string, shopCount?: number, exitNumber?: number) {
     if (obstacleType === 'pothole') {
       this.menuManager.showPotholeMenu();
     } else if (obstacleType === 'exit') {
-      this.menuManager.showExitMenu(shopCount || 3);
+      this.menuManager.showExitMenu(shopCount || 3, exitNumber);
     }
   }
 
@@ -128,6 +130,22 @@ export class MenuScene extends Phaser.Scene {
 
   private showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number }) {
     this.menuManager.showCyoaMenu(cyoaData);
+  }
+
+  private showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
+    this.menuManager.showStoryMenu(storyData);
+  }
+
+  private showNovelStory(storyData: { 
+    storyline: string; 
+    event: number; 
+    eventData: any; 
+    storylineData: any 
+  }) {
+    console.log('MenuScene: showNovelStory called with data:', storyData);
+    console.log('MenuScene: Calling menuManager.showNovelStory');
+    this.menuManager.showNovelStory(storyData);
+    console.log('MenuScene: showNovelStory completed');
   }
 
   private showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {

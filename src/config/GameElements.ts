@@ -66,25 +66,25 @@ export interface GameElementsConfig {
 const DEFAULT_CONFIG: GameElementsConfig = {
   ui: {
     rearviewMirror: {
-      position: { x: 0.55, y: 0.035 },
+      position: { x: 0.55, y: -0.1 },
       size: { width: 0.92, height: 0.4 }
     },
     steeringWheel: {
-      position: { x: 0.5, y: 0.7 },
+      position: { x: 0.25, y: 0.8 },
       scale: 1.0
     },
-    magneticTarget: {
-      position: { x: 200, y: 550 },
-      radius: 25
-    }
+        magneticTarget: {
+          position: { x: 213, y: 550 },
+          radius: 25
+        }
   },
   virtualPets: {
     positions: [
-      { x: 0.15, y: 0.1, scale: 0.8 },
-      { x: 0.35, y: 0.1, scale: 0.8 },
-      { x: 0.55, y: 0.1, scale: 0.8 },
-      { x: 0.75, y: 0.1, scale: 0.8 },
-      { x: 0.95, y: 0.1, scale: 0.8 }
+      { x: 0.15, y: 0.93, scale: 0.8 },
+      { x: 0.35, y: 0.88, scale: 0.8 },
+      { x: 0.55, y: 0.98, scale: 0.8 },
+      { x: 0.75, y: 0.90, scale: 0.8 },
+      { x: 0.95, y: 0.96, scale: 0.8 }
     ]
   },
   itemSizes: {

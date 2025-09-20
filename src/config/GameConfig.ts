@@ -57,7 +57,8 @@ export const CAR_CONFIG = {
   lateralFriction: 0.99,     // Lateral friction/drag (higher = less slidey)
   
   // Visual Appearance - using greyscale palette
-  roadColor: GREYSCALE_PALETTE.darkGray,
+  skyColor: GREYSCALE_PALETTE.black,
+  roadColor: GREYSCALE_PALETTE.mediumGray,
   boundaryPadding: 50, // Increased to allow more car movement range
   roadDepth: -1000,
   lineWidth: 4,
@@ -75,7 +76,7 @@ export const CAR_CONFIG = {
   potholeMinPos: 0.45,
   potholeMaxPos: 0.55,
   potholeSpawnY: 0.2,
-  potholeColor: GREYSCALE_PALETTE.mediumDarkGray,
+  potholeColor: GREYSCALE_PALETTE.black,
   potholeSpeed: 1.2,
   
   // Exit Settings
@@ -83,7 +84,7 @@ export const CAR_CONFIG = {
   exitHeight: 60,
   exitPosition: 0.9,
   exitSpawnY: 0.1,
-  exitColor: GREYSCALE_PALETTE.lightGray,
+  exitColor: GREYSCALE_PALETTE.white,
   exitSpeed: 1.0,
   
   // Debug/Radar Settings
@@ -105,7 +106,7 @@ export const CAR_CONFIG = {
 
 export const TUTORIAL_CONFIG = {
   overlayColor: GREYSCALE_PALETTE.black,
-  overlayAlpha: 0.7,
+  overlayAlpha: 0.2, // Reduced from 0.7 to match tutorial interrupt opacity
   overlayDepth: 90000,
   maskColor: GREYSCALE_PALETTE.white,
   keysHoleRadius: 30,
@@ -133,12 +134,12 @@ export const UI_LAYOUT = {
   healthY: 0.12,              // 12% from top edge
   
   // Top-right corner elements
-  managerValuesX: 0.98,       // 98% from left edge (right-aligned)
+  managerValuesX: 0.85,       // 85% from left edge (moved closer to center)
   managerValuesY: 0.02,       // 2% from top edge
   
   // Center elements
   countdownX: 0.5,            // 50% from left edge (centered)
-  countdownY: 0.15,           // 15% from top edge (moved up from 20%)
+  countdownY: 0.20,           // 20% from top edge (moved up from 25%)
   
   // Bottom elements
   progressX: 0.02,            // 2% from left edge
@@ -441,6 +442,14 @@ export const GAME_STATE_CONFIG = {
   initialKnobValue: 0,
   initialPosition: 0,
   initialRegion: 'midwest',
+  
+  // Monthly Listeners System
+  initialMonthlyListeners: 2000,
+  initialBuzz: 0,
+  minBuzz: -3,
+  maxBuzz: 3,
+  minMonthlyListeners: 0,
+  maxMonthlyListeners: 100000,
   
   // Validation Ranges
   minMoney: 0,

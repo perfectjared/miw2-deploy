@@ -50,16 +50,20 @@ export class Trash implements PhysicsObject {
       0xff0000 // color (red)
     );
     // Set initial depth above steering wheel and keys
-    this.gameObject.setDepth(10002);
+    this.gameObject.setDepth(60000);
   }
 
   private setupPhysics() {
     this.scene.matter.add.gameObject(this.gameObject, {
       shape: 'circle',
-      restitution: 0.3,
-      friction: 0.1,
-      density: 0.005 // Increased from 0.001 to make items heavier
+      restitution: 0.15, // less bouncy
+      friction: 0.2, // more ground friction
+      density: 0.01 // heavier
     });
+    // Add air friction to reduce drift
+    if (this.gameObject.body) {
+      (this.gameObject.body as any).frictionAir = 0.03;
+    }
   }
 
   setupDragInteraction() {
@@ -93,7 +97,7 @@ export class Trash implements PhysicsObject {
         if (parent) parent.remove(this.gameObject);
         (gameScene as any).dragOverlay.add(this.gameObject);
       } else {
-        this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
+        this.gameObject.setDepth(110000); // Above all UI elements including steering wheel
         this.scene.children.bringToTop(this.gameObject);
       }
       
@@ -199,22 +203,25 @@ export class Item implements PhysicsObject {
     const radius = itemSize.width / 2; // Convert width to radius
     
     this.gameObject = this.scene.add.circle(
-      1200, // x position
-      200,  // y position
+      150, // x position - further left to avoid exits
+      320, // y position - backseat area
       radius,   // radius from config
       0x00ff00 // color (green)
     );
     // Set initial depth above steering wheel and keys
-    this.gameObject.setDepth(10002);
+    this.gameObject.setDepth(60000);
   }
 
   private setupPhysics() {
     this.scene.matter.add.gameObject(this.gameObject, {
       shape: 'circle',
-      restitution: 0.3,
-      friction: 0.1,
-      density: 0.005 // Increased from 0.001 to make items heavier
+      restitution: 0.15,
+      friction: 0.2,
+      density: 0.01
     });
+    if (this.gameObject.body) {
+      (this.gameObject.body as any).frictionAir = 0.03;
+    }
   }
 
   setupDragInteraction() {
@@ -244,7 +251,7 @@ export class Item implements PhysicsObject {
         if (parent) parent.remove(this.gameObject);
         (gameScene as any).dragOverlay.add(this.gameObject);
       } else {
-        this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
+        this.gameObject.setDepth(110000); // Above all UI elements including steering wheel
         this.scene.children.bringToTop(this.gameObject);
       }
       
@@ -315,7 +322,7 @@ export class Item implements PhysicsObject {
         // If the item still exists (not fed/destroyed), keep it in main scene at high depth for a moment
         if (this.gameObject && this.gameObject.scene) {
           const od = (this.gameObject as any)._originalDepth;
-          this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
+          this.gameObject.setDepth(110000); // Above all UI elements including steering wheel
           // Restore original depth after short delay
           this.scene.time.delayedCall(100, () => {
             if (this.gameObject && this.gameObject.scene) {
@@ -385,23 +392,30 @@ export class Keys implements PhysicsObject {
     const itemSize = gameElements.getItemSize('small');
     const radius = itemSize.width / 2; // Convert width to radius
     
+    // Position keys on right side but still visible (80% of screen width)
+    const gameWidth = this.scene.cameras.main.width;
+    const keysX = gameWidth * 0.8; // 80% from left edge (right side but visible)
+    
     this.gameObject = this.scene.add.circle(
-      200, // x position
+      keysX, // x position - right side but visible
       300, // y position
       radius,  // radius from config
       0x0000ff // color (blue)
     );
     // Set initial depth above steering wheel and keys
-    this.gameObject.setDepth(10002);
+    this.gameObject.setDepth(60000);
   }
 
   private setupPhysics() {
     this.scene.matter.add.gameObject(this.gameObject, {
       shape: 'circle',
-      restitution: 0.3,
-      friction: 0.1,
-      density: 0.005 // Increased from 0.001 to make items heavier
+      restitution: 0.15,
+      friction: 0.2,
+      density: 0.01
     });
+    if (this.gameObject.body) {
+      (this.gameObject.body as any).frictionAir = 0.03;
+    }
   }
 
   setupDragInteraction() {
@@ -432,7 +446,7 @@ export class Keys implements PhysicsObject {
         if (parent) parent.remove(this.gameObject);
         (gameScene as any).dragOverlay.add(this.gameObject);
       } else {
-        this.gameObject.setDepth(11000); // Above all UI elements (steering wheel, keys, crank)
+        this.gameObject.setDepth(110000); // Above all UI elements including steering wheel
         this.scene.children.bringToTop(this.gameObject);
       }
       

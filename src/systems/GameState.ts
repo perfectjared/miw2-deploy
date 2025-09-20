@@ -23,9 +23,10 @@ export interface GameStateData {
   gameStarted: boolean;
   gameTime: number;
   step: number;
+  countdownStepCounter: number;
   
   // Tutorial State
-  tutorialPhase: 'none' | 'initial_driving' | 'countdown' | 'interrupt' | 'normal';
+  tutorialPhase: 'none' | 'keys_placement' | 'initial_driving' | 'countdown' | 'interrupt' | 'normal';
   tutorialStep: number;
   
   // Player Stats
@@ -34,6 +35,10 @@ export interface GameStateData {
   playerSkill: number;
   difficulty: number;
   momentum: number;
+  
+  // Monthly Listeners System
+  monthlyListeners: number;
+  buzz: number;
   
   // Plot Progress
   plotA: number;
@@ -52,6 +57,7 @@ export interface GameStateData {
   currentRegion: string;
   showsInCurrentRegion: number;
   regionHistory: string[];
+  sequencesInCurrentRegion: number; // Store the sequence count for current region
   
   // Car State
   carStarted: boolean;
@@ -83,6 +89,14 @@ export interface GameStateConfig {
   initialKnobValue: number;
   initialPosition: number;
   initialRegion: string;
+  
+  // Monthly Listeners System
+  initialMonthlyListeners: number;
+  initialBuzz: number;
+  minBuzz: number;
+  maxBuzz: number;
+  minMonthlyListeners: number;
+  maxMonthlyListeners: number;
   
   // Validation
   minMoney: number;
@@ -184,11 +198,11 @@ export class GameState {
    */
   public startTutorial() {
     this.updateState({
-      tutorialPhase: 'initial_driving',
+      tutorialPhase: 'keys_placement',
       tutorialStep: 0
     });
     
-    console.log('🎓 Tutorial started: initial driving phase');
+    console.log('Tutorial started: keys placement phase');
   }
   
   /**
@@ -200,6 +214,15 @@ export class GameState {
     let nextStep = this.state.tutorialStep + 1;
     
     switch (currentPhase) {
+      case 'keys_placement':
+        // Only advance when keys are placed in ignition
+        if (this.state.keysInIgnition) {
+          nextPhase = 'initial_driving';
+          nextStep = 0;
+        } else {
+          nextPhase = 'keys_placement';
+        }
+        break;
       case 'initial_driving':
         if (nextStep >= 4) {
           nextPhase = 'countdown';
@@ -226,7 +249,7 @@ export class GameState {
       tutorialStep: nextStep
     });
     
-    console.log(`🎓 Tutorial advanced: ${currentPhase} → ${nextPhase} (step: ${nextStep})`);
+    console.log(`Tutorial advanced: ${currentPhase} -> ${nextPhase} (step: ${nextStep})`);
   }
   
   /**
@@ -457,6 +480,7 @@ export class GameState {
       gameStarted: false,
       gameTime: this.config.initialGameTime,
       step: 0,
+      countdownStepCounter: 0,
       
       // Tutorial State
       tutorialPhase: 'none',
@@ -468,6 +492,10 @@ export class GameState {
       playerSkill: this.config.initialPlayerSkill,
       difficulty: this.config.initialDifficulty,
       momentum: this.config.initialMomentum,
+      
+      // Monthly Listeners System
+      monthlyListeners: this.config.initialMonthlyListeners,
+      buzz: this.config.initialBuzz,
       
       // Plot Progress
       plotA: this.config.initialPlotA,
@@ -486,6 +514,7 @@ export class GameState {
       currentRegion: this.config.initialRegion,
       showsInCurrentRegion: 0,
       regionHistory: [this.config.initialRegion],
+      sequencesInCurrentRegion: this.calculateSequencesForRegion(this.config.initialRegion, 1),
       
       // Car State
       carStarted: false,
@@ -525,6 +554,10 @@ export class GameState {
         return Phaser.Math.Clamp(value, this.config.minPlot, this.config.maxPlot);
       case 'knobValue':
         return Phaser.Math.Clamp(value, this.config.minKnobValue, this.config.maxKnobValue);
+      case 'monthlyListeners':
+        return Phaser.Math.Clamp(value, this.config.minMonthlyListeners, this.config.maxMonthlyListeners);
+      case 'buzz':
+        return Phaser.Math.Clamp(value, this.config.minBuzz, this.config.maxBuzz);
       case 'currentPosition':
         return ['frontseat', 'backseat'].includes(value) ? value : 'frontseat';
       case 'currentView':
@@ -614,12 +647,16 @@ export class GameState {
    */
   public changeRegion(newRegion: string): void {
     const oldRegion = this.state.currentRegion;
+    const newVisitCount = this.getRegionVisitCount(newRegion) + 1; // +1 because we're about to add it to history
+    const newSequences = this.calculateSequencesForRegion(newRegion, newVisitCount);
+    
     this.updateState({
       currentRegion: newRegion,
-      showsInCurrentRegion: 0,
-      regionHistory: [...this.state.regionHistory, newRegion]
+      showsInCurrentRegion: 0, // Reset to 0 (will display as 1/3, 2/3, etc.)
+      regionHistory: [...this.state.regionHistory, newRegion],
+      sequencesInCurrentRegion: newSequences
     });
-    console.log(`Region changed from ${oldRegion} to ${newRegion}`);
+    console.log(`Region changed from ${oldRegion} to ${newRegion} - sequence count reset to 0, total sequences: ${newSequences}`);
   }
 
   /**
@@ -630,9 +667,89 @@ export class GameState {
   }
 
   /**
-   * Check if player should choose next region (after 3 shows)
+   * Calculate the number of driving sequences for a region (deterministic)
+   * All regions: 2-3 sequences (randomized but deterministic)
+   */
+  private calculateSequencesForRegion(region: string, visitCount: number): number {
+    // Use a deterministic seed based on region name and visit count
+    const seed = this.hashString(`${region}-${visitCount}`);
+    return (seed % 2) + 2; // Either 2 or 3 sequences
+  }
+
+  /**
+   * Simple hash function for deterministic random-like behavior
+   */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+  }
+
+  /**
+   * Get the number of driving sequences for the current region (cached)
+   */
+  public getSequencesForCurrentRegion(): number {
+    return this.state.sequencesInCurrentRegion;
+  }
+
+  /**
+   * Get how many times a region has been visited
+   */
+  private getRegionVisitCount(region: string): number {
+    return this.state.regionHistory.filter(r => r === region).length;
+  }
+
+  /**
+   * Check if current sequence is the final one for this region
+   */
+  public isFinalSequenceForRegion(): boolean {
+    const totalSequences = this.getSequencesForCurrentRegion();
+    return this.state.showsInCurrentRegion >= totalSequences - 1;
+  }
+
+  /**
+   * Update buzz value
+   */
+  public updateBuzz(buzzChange: number): void {
+    const newBuzz = this.state.buzz + buzzChange;
+    this.updateState({ buzz: newBuzz });
+  }
+
+  /**
+   * Update monthly listeners based on buzz during countdown
+   */
+  public updateListenersOnCountdown(): void {
+    const buzzMultiplier = this.state.buzz;
+    const listenerChange = Math.floor(buzzMultiplier * 10); // Buzz affects listeners by 10x
+    const newListeners = this.state.monthlyListeners + listenerChange;
+    this.updateState({ monthlyListeners: newListeners });
+    
+    console.log(`Buzz: ${this.state.buzz}, Listener change: ${listenerChange}, New total: ${newListeners}`);
+  }
+
+  /**
+   * Get current monthly listeners
+   */
+  public getMonthlyListeners(): number {
+    return this.state.monthlyListeners;
+  }
+
+  /**
+   * Get current buzz value
+   */
+  public getBuzz(): number {
+    return this.state.buzz;
+  }
+
+  /**
+   * Check if player should choose next region (after completing all sequences)
    */
   public shouldChooseNextRegion(): boolean {
-    return this.state.showsInCurrentRegion >= 3;
+    const totalSequences = this.getSequencesForCurrentRegion();
+    return this.state.showsInCurrentRegion >= totalSequences;
   }
 }

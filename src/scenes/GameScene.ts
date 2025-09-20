@@ -26,6 +26,7 @@ import { GameUI, GameUIConfig } from '../systems/GameUI';
 import { InputHandlers, InputHandlersConfig } from '../systems/InputHandlers';
 import { GameState, GameStateConfig } from '../systems/GameState';
 import { WindowShapes } from '../utils/WindowShapes';
+import { StoryManager } from '../systems/StoryManager';
 import { CAR_CONFIG, TUTORIAL_CONFIG, UI_CONFIG, GAME_STATE_CONFIG, PHYSICS_CONFIG, UI_LAYOUT, PET_CONFIG, REGION_CONFIG, gameElements } from '../config/GameConfig';
 
 // Tunable scene constants (for quick tweaking)
@@ -50,22 +51,29 @@ export class GameScene extends Phaser.Scene {
   // SYSTEM MODULES
   // ============================================================================
   
-  private carMechanics!: CarMechanics;
+  private carMechanics!: CarMechanics
+  private lastPlannedData: string = ''; // Track planned events to avoid unnecessary updates;
   private tutorialSystem!: TutorialSystem;
   private gameUI!: GameUI;
   private inputHandlers!: InputHandlers;
   private gameState!: GameState;
   private windowShapes!: WindowShapes;
+  private storyManager!: StoryManager;
   private virtualPets: VirtualPet[] = [];
   private petLabels: Phaser.GameObjects.Text[] = [];
   private dragOverlay?: Phaser.GameObjects.Container;
   private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
+  private itemsCamera?: Phaser.Cameras.Scene2D.Camera;
   private dragOverlayCamera?: Phaser.Cameras.Scene2D.Camera;
   private feedingDebug?: Phaser.GameObjects.Graphics;
   // Cache to avoid redrawing magnetic target every frame
   private magneticVisualState: 'default' | 'near' | 'snap' = 'default';
   // Only allow ignition magnet to attract keys for a brief window after release
   private keysAttractionUntil: number = 0;
+  private lastMagneticAttractionLog: number = 0; // For throttled debugging
+  
+  // Physics object safety system
+  private physicsSafetyTimer?: Phaser.Time.TimerEvent;
   
   // Debug variables
   private debugWindows: Phaser.GameObjects.Container[] = [];
@@ -86,6 +94,8 @@ export class GameScene extends Phaser.Scene {
   private magneticTarget!: Phaser.GameObjects.Graphics;
   private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay for keys
   private hotdogSVG!: Phaser.GameObjects.Sprite; // SVG overlay for food item
+  private nightTimeOverlay?: Phaser.GameObjects.Rectangle; // Night time visual overlay
+  private nightModeEnabled: boolean = false;
   private keysConstraint: any = null;
   
   // Game state flags
@@ -130,12 +140,8 @@ export class GameScene extends Phaser.Scene {
    */
   async create() {
     try {
-      console.log('🎯 === GAMESCENE CREATE CALLED ===');
-      console.log('GameScene: Initializing modular systems...');
-      
       // Load game elements configuration first
       await gameElements.loadConfig();
-      console.log('🎯 Game elements config loaded');
       
       // Favor topmost hit-test only to reduce pointerover processing cost
       this.input.topOnly = true;
@@ -143,30 +149,29 @@ export class GameScene extends Phaser.Scene {
       // Debug key for spawning potholes
       this.input.keyboard?.on('keydown-P', () => {
         if (this.carMechanics && this.carMechanics.isDriving()) {
-          console.log('🐛 DEBUG: Spawning pothole manually');
           this.carMechanics.spawnDebugPothole();
-        } else {
-          console.log('🐛 DEBUG: Cannot spawn pothole - car not driving');
         }
       });
       
       // Navigation UI will be initialized when needed
       
       // Initialize game state
-      console.log('🎯 About to initialize game state');
       this.initializeGameState();
-      console.log('🎯 Game state initialized');
       
       // Initialize all system modules
-      console.log('🎯 About to initialize systems');
       this.initializeSystems();
-      console.log('🎯 Systems initialized');
     } catch (error) {
-      console.error('🎯 ERROR in GameScene.create():', error);
+      console.error('ERROR in GameScene.create():', error);
     }
     
     // Create physics objects
     this.createPhysicsObjects();
+    
+    // Initialize physics safety system
+    this.initializePhysicsSafetySystem();
+    
+    // Add dev button for testing
+    this.addDevSequenceButton();
     
     // Create game content container
     this.createGameContentContainer();
@@ -179,14 +184,10 @@ export class GameScene extends Phaser.Scene {
     
     // Initialize UI
     try {
-      console.log('🎯 About to call gameUI.initialize()');
-      console.log('🎯 GameUI object exists:', !!this.gameUI);
       this.gameUI.initialize();
-      console.log('🎯 GameUI.initialize() completed successfully');
     } catch (error) {
       const err = error as any;
-      console.error('🎯 ERROR calling gameUI.initialize():', err);
-      try { console.error('🎯 Error stack:', err?.stack); } catch {}
+      console.error('ERROR calling gameUI.initialize():', err);
     }
     
     // Initialize tutorial system
@@ -208,21 +209,22 @@ export class GameScene extends Phaser.Scene {
           this.scene.bringToTop('MenuScene');
         }
       });
-      const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
-      keyC?.on('down', () => {
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showCYOA', {
-            imageKey: undefined,
-            text: 'You approach a fork in the road.',
-            optionA: 'Take the left path',
-            optionB: 'Take the right path',
-            followA: 'The left path was serene and quiet.',
-            followB: 'The right path was lively and bustling.'
-          });
-          this.scene.bringToTop('MenuScene');
-        }
-      });
+      // REMOVED: Debug keyboard shortcut for old showCYOA event (was causing double-triggering)
+      // const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
+      // keyC?.on('down', () => {
+      //   const menuScene = this.scene.get('MenuScene');
+      //   if (menuScene) {
+      //     menuScene.events.emit('showCYOA', {
+      //       imageKey: undefined,
+      //       text: 'You approach a fork in the road.',
+      //       optionA: 'Take the left path',
+      //       optionB: 'Take the right path',
+      //       followA: 'The left path was serene and quiet.',
+      //       followB: 'The right path was lively and bustling.'
+      //     });
+      //     this.scene.bringToTop('MenuScene');
+      //   }
+      // });
       const keyP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
       keyP?.on('down', () => {
         const menuScene = this.scene.get('MenuScene');
@@ -412,9 +414,31 @@ export class GameScene extends Phaser.Scene {
       }
     } catch {}
 
+    // Create items camera - renders items above steering wheel/virtual pets but below UI
+    this.itemsCamera = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
+    this.itemsCamera.setScroll(0, 0);
+    this.itemsCamera.setName('itemsCamera');
+    
+    // Items camera should render everything EXCEPT steering wheel/virtual pets
+    // This ensures items render above those elements while maintaining input handling
+    const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
+    
+    // Get control objects (steering wheel, etc.) to ignore on items camera
+    const controlObjsForItems = (this.gameUI as any).getControlObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
+    const virtualPetObjects = this.virtualPets.map(pet => (pet as any).container).filter(Boolean);
+    
+    const objectsToIgnoreOnItemsCamera = [
+      ...(controlObjsForItems || []),
+      ...virtualPetObjects
+    ];
+    
+    if (objectsToIgnoreOnItemsCamera.length > 0) {
+      this.itemsCamera.ignore(objectsToIgnoreOnItemsCamera);
+    }
+
     // Create a dedicated overlay container for dragged items (always above HUD/pet)
     this.dragOverlay = this.add.container(0, 0);
-    this.dragOverlay.setDepth(60001);
+    this.dragOverlay.setDepth(110001);
     this.dragOverlay.setScrollFactor(0);
     // Ensure drag overlay renders above the pet HUD via a dedicated camera
     // Exclude drag overlay from main camera to avoid double draw
@@ -553,7 +577,6 @@ export class GameScene extends Phaser.Scene {
     // Set up event listeners
     this.setupEventListeners();
     
-    console.log('GameScene: All systems initialized successfully');
   }
 
   /**
@@ -589,17 +612,13 @@ export class GameScene extends Phaser.Scene {
     // Window Shapes utility for menu boundaries
     this.windowShapes = new WindowShapes(this);
     
+    // Story Manager Configuration
+    this.storyManager = new StoryManager(this);
+    this.storyManager.initialize();
+    
     // Tutorial System Configuration - using centralized config
     const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
-    console.log('Creating TutorialSystem with config:', tutorialConfig);
     this.tutorialSystem = new TutorialSystem(this, tutorialConfig);
-    console.log('TutorialSystem created:', this.tutorialSystem);
-    
-    // Test tutorial system after a delay
-    this.time.delayedCall(5000, () => {
-      console.log('Testing tutorial system after 5 seconds...');
-      // console.log('isPlayerInExitCollisionPath result:', this.isPlayerInExitCollisionPath());
-    });
     
     // Game UI Configuration - using centralized config
     const uiConfig: GameUIConfig = {
@@ -607,7 +626,6 @@ export class GameScene extends Phaser.Scene {
       speedCrankSnapPositions: [...UI_CONFIG.speedCrankSnapPositions] // Convert readonly to mutable
     };
     this.gameUI = new GameUI(this, uiConfig);
-    console.log('🎯 GameUI created in GameScene');
     
     // Input Handlers Configuration
     const inputConfig: InputHandlersConfig = {
@@ -632,11 +650,13 @@ export class GameScene extends Phaser.Scene {
     this.frontseatKeys = new Keys(this);
     
     // Create key SVG overlay that will follow the key's position
-    this.keySVG = this.add.sprite(200, 300, 'key-white'); // Start at key's initial position
+    const gameWidth = this.cameras.main.width;
+    const keysX = gameWidth * 0.8; // Match the keys position (80% from left edge)
+    this.keySVG = this.add.sprite(keysX, 300, 'key-white'); // Start at key's initial position (right side)
     this.keySVG.setScale(0.08); // Scaled to match key physics object (radius 15)
     this.keySVG.setOrigin(0.5, 0.5);
     this.keySVG.setAlpha(0.8); // Semi-transparent overlay
-    this.keySVG.setDepth(10001); // Above most UI elements but below speed display
+    this.keySVG.setDepth(60001); // Above steering wheel (60000)
     
     // Apply white fill and black stroke styling
     this.keySVG.setTint(0xffffff); // White fill
@@ -647,7 +667,7 @@ export class GameScene extends Phaser.Scene {
     this.hotdogSVG.setScale(0.1); // Scaled to match smaller physics object (radius 40)
     this.hotdogSVG.setOrigin(0.5, 0.5);
     this.hotdogSVG.setAlpha(0.8); // Semi-transparent overlay
-    this.hotdogSVG.setDepth(1001); // Above the food item circle
+    this.hotdogSVG.setDepth(60001); // Above steering wheel (60000)
     
     // Apply white fill and black stroke styling
     this.hotdogSVG.setTint(0xffffff); // White fill
@@ -658,11 +678,252 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Initialize physics safety system to prevent items from falling out of world
+   */
+  private initializePhysicsSafetySystem() {
+    // Start safety check timer - runs every 1000ms (1 second)
+    this.physicsSafetyTimer = this.time.addEvent({
+      delay: 1000,
+      callback: this.checkPhysicsObjectSafety,
+      callbackScope: this,
+      loop: true
+    });
+    
+    console.log('🛡️ Physics safety system initialized - checking every 1 second');
+  }
+
+  /**
+   * Check if physics objects have fallen out of bounds and respawn them
+   */
+  private checkPhysicsObjectSafety() {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Define safety bounds (with some padding)
+    const safetyBounds = {
+      left: -100,
+      right: gameWidth + 100,
+      top: -100,
+      bottom: gameHeight + 100
+    };
+    
+    // Check each physics object
+    const physicsObjects = [
+      { name: 'frontseatTrash', obj: this.frontseatTrash },
+      { name: 'backseatItem', obj: this.backseatItem },
+      { name: 'frontseatKeys', obj: this.frontseatKeys }
+    ];
+    
+    physicsObjects.forEach(({ name, obj }) => {
+      if (!obj || !obj.gameObject || !obj.gameObject.body) {
+        return;
+      }
+      
+      const body = obj.gameObject.body as any;
+      const x = body.position.x;
+      const y = body.position.y;
+      
+      // Check if object is out of bounds
+      const isOutOfBounds = x < safetyBounds.left || 
+                           x > safetyBounds.right || 
+                           y < safetyBounds.top || 
+                           y > safetyBounds.bottom;
+      
+      if (isOutOfBounds) {
+        console.log(`🚨 ${name} fell out of bounds at (${x.toFixed(1)}, ${y.toFixed(1)}) - respawning`);
+        this.respawnPhysicsObject(name, obj);
+      }
+    });
+  }
+
+  /**
+   * Respawn a physics object to a safe position
+   */
+  private respawnPhysicsObject(objectName: string, obj: any) {
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    // Define specific respawn positions for each object type
+    let respawnX: number;
+    let respawnY: number;
+    
+    switch (objectName) {
+      case 'frontseatTrash':
+        respawnX = 100; // Left side
+        respawnY = 200;
+        break;
+      case 'backseatItem':
+        respawnX = 230; // Backseat area
+        respawnY = 320;
+        break;
+      case 'frontseatKeys':
+        respawnX = gameWidth * 0.8; // Right side
+        respawnY = 200;
+        break;
+      default:
+        // Fallback: random position
+        respawnX = Phaser.Math.Between(50, gameWidth - 50);
+        respawnY = gameHeight * 0.5;
+    }
+    
+    // Reset physics body position
+    if (obj.gameObject && obj.gameObject.body) {
+      const body = obj.gameObject.body as any;
+      
+      // Stop any existing velocity
+      body.velocity = { x: 0, y: 0 };
+      body.angularVelocity = 0;
+      
+      // Set new position
+      body.position = { x: respawnX, y: respawnY };
+      
+      // Update visual position
+      obj.gameObject.setPosition(respawnX, respawnY);
+      
+      console.log(`✅ ${objectName} respawned at (${respawnX}, ${respawnY})`);
+    }
+  }
+
+  /**
+   * Handle region selection from menu
+   */
+  public selectRegion(regionId: string) {
+    console.log(`Region selected: ${regionId}`);
+    
+    // Change region in game state
+    this.gameState.changeRegion(regionId);
+    
+    // Reset driving state and restart driving
+    this.stopMenuOpen = false;
+    this.carStarted = true; // Ensure car is started
+    this.gameState.updateState({ carStarted: true });
+    
+    // Restart driving mechanics
+    const currentStep = this.gameState.getState().step || 0;
+    this.carMechanics.startDriving(currentStep);
+    
+    // Resume game
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+      this.events.emit('gameResumed');
+    }
+    
+    // Check if night mode should be enabled for this region's final sequence
+    if (this.gameState.isFinalSequenceForRegion()) {
+      this.enableNightTimeMode();
+    } else {
+      this.disableNightTimeMode();
+    }
+    
+    console.log(`✅ Region changed to ${regionId} - driving restarted`);
+  }
+
+  /**
+   * Enable night time mode for final driving sequence
+   */
+  private enableNightTimeMode() {
+    if (this.nightModeEnabled) return; // Already enabled, skip
+    
+    this.nightModeEnabled = true;
+    
+    // Check if any menu is currently open - suppress logs during menus
+    const menuScene = this.scene.get('MenuScene');
+    const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+    
+    if (!hasOpenMenu) {
+      console.log('🌙 Enabling night time mode');
+    }
+    
+    // Add night time visual effects - create overlay instead of tinting container
+    if (!this.nightTimeOverlay) {
+      this.nightTimeOverlay = this.add.rectangle(
+        this.cameras.main.width / 2, 
+        this.cameras.main.height / 2, 
+        this.cameras.main.width, 
+        this.cameras.main.height, 
+        0x000000, 
+        0.3
+      );
+      this.nightTimeOverlay.setScrollFactor(0);
+      this.nightTimeOverlay.setDepth(20000); // Above driving but below UI
+    }
+    this.nightTimeOverlay.setVisible(true);
+    
+    // Update sky color to darker
+    if (this.carMechanics) {
+      this.carMechanics.setNightTimeMode(true);
+    }
+  }
+
+  /**
+   * Disable night time mode
+   */
+  private disableNightTimeMode() {
+    // Remove night time visual effects
+    if (this.nightTimeOverlay) {
+      this.nightTimeOverlay.setVisible(false);
+    }
+    
+    // Update sky color to normal
+    if (this.carMechanics) {
+      this.carMechanics.setNightTimeMode(false);
+    }
+  }
+
+  /**
+   * Dev button to change driving sequence to last one for testing
+   */
+  private addDevSequenceButton() {
+    // Add dev button for testing sequence changes
+    const devButton = this.add.text(10, 10, 'DEV: Last Sequence', {
+      fontSize: '14px',
+      color: '#ff0000',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    });
+    devButton.setScrollFactor(0);
+    devButton.setDepth(50000);
+    devButton.setInteractive();
+    
+    devButton.on('pointerdown', () => {
+      const totalSequences = this.gameState.getSequencesForCurrentRegion();
+      const lastSequence = totalSequences - 1; // 0-based index
+      this.gameState.updateState({ showsInCurrentRegion: lastSequence });
+      console.log(`🔧 DEV: Set sequence to ${lastSequence + 1}/${totalSequences}`);
+    });
+  }
+
+  /**
+   * Generate a countdown value using bell curve probability (6-12)
+   * Bell curve centered around 9, with 6 and 12 being least likely
+   */
+  private generateCountdownValue(): number {
+    // Generate two random numbers and use Box-Muller transform for bell curve
+    const u1 = Math.random();
+    const u2 = Math.random();
+    
+    // Box-Muller transform to get normal distribution
+    const z0 = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    
+    // Scale and shift to get values roughly in range 6-12
+    // Mean = 9, Standard deviation = 1.5
+    const normalValue = z0 * 1.5 + 9;
+    
+    // Clamp to range 6-12 and round
+    const clampedValue = Math.max(6, Math.min(12, Math.round(normalValue)));
+    
+    console.log(`🎲 Generated countdown value: ${clampedValue} (from normal distribution)`);
+    return clampedValue;
+  }
+
+  /**
    * Create game content container
    */
   private createGameContentContainer() {
     this.gameContentContainer = this.add.container(0, 0);
     this.gameContentContainer.setName('gameContentContainer');
+    // No depth needed - items will be rendered by dedicated items camera
     
     // Add physics objects to container
     this.gameContentContainer.add(this.frontseatTrash.gameObject);
@@ -744,8 +1005,6 @@ export class GameScene extends Phaser.Scene {
     const floorVisual = this.add.rectangle(gameWidth/2, raisedFloorHeight, gameWidth, 4, 0x333333);
     floorVisual.setDepth(999);
     floorVisual.setAlpha(0.8);
-    
-    console.log(`Created raised floor at height: ${raisedFloorHeight}, screen height: ${gameHeight}`);
   }
 
   /**
@@ -756,19 +1015,38 @@ export class GameScene extends Phaser.Scene {
     this.gameState.setEventCallbacks({
       onStateChange: (state) => {
         this.gameUI.updateUI(state);
-        // Update threshold indicators based on planned exits and CYOA
+        
+        // Update region info with total sequences
+        const totalSequences = this.gameState.getSequencesForCurrentRegion();
+        this.gameUI.updateRegionInfoWithTotal(state.currentRegion, state.showsInCurrentRegion, totalSequences);
+        
+        // Check if this is the final sequence for night time
+        if (this.gameState.isFinalSequenceForRegion()) {
+          this.enableNightTimeMode();
+        } else {
+          this.disableNightTimeMode();
+        }
+        
+        // Update threshold indicators based on planned exits, CYOA, and story
+        // Only update if the planned events have actually changed
         const plannedExits = this.carMechanics.getPlannedExits();
         const plannedCyoa = this.carMechanics.getPlannedCyoa();
-        this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa);
+        const plannedStory = this.carMechanics.getPlannedStory();
+        
+        // Check if planned events have changed since last update
+        const currentPlannedData = JSON.stringify({ plannedExits, plannedCyoa, plannedStory });
+        if (this.lastPlannedData !== currentPlannedData) {
+          this.lastPlannedData = currentPlannedData;
+          this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
+        }
         // Auto-snap crank to 0 when keys are out of ignition
         // Speed crank removed - no need to reset
         this.scheduleTutorialUpdate(0);
       },
       onSaveComplete: (success) => {
-        console.log('Save completed:', success);
+        // Save completed
       },
       onLoadComplete: (success, state) => {
-        console.log('Load completed:', success);
         if (success && state) {
           this.gameUI.updateUI(state);
         }
@@ -799,8 +1077,6 @@ export class GameScene extends Phaser.Scene {
       // Apply large bump effect and screen shake for pothole collision
       this.applyLargeBumpEffectToAllMatterObjects();
       this.applyScreenShake(15, 300); // Strong shake for pothole impact
-      
-      console.log('💥 Pothole collision detected - applied bump effect and screen shake!');
     });
 
     // Scene events
@@ -817,6 +1093,9 @@ export class GameScene extends Phaser.Scene {
     this.events.on('steeringInput', this.onSteeringInput, this);
     // Speed crank removed - using automatic speed progression
     this.events.on('cameraAngleChanged', this.onCameraAngleChanged, this);
+    
+    // Story events
+    this.events.on('storyCompleted', this.onStoryCompleted, this);
     
     // Handle window blur (game loses focus) - show pause menu
     this.game.events.on('hidden', () => {
@@ -881,14 +1160,11 @@ export class GameScene extends Phaser.Scene {
    * Schedule a tutorial update with simple debouncing to avoid floods/loops
    */
   private scheduleTutorialUpdate(delayMs: number = 0) {
-    // console.log('scheduleTutorialUpdate called with delay:', delayMs);
     if (this.tutorialUpdateScheduled) {
-      // console.log('Tutorial update already scheduled, skipping');
       return;
     }
     this.tutorialUpdateScheduled = true;
     this.time.delayedCall(delayMs, () => {
-      // console.log('Tutorial update delayed call executing');
       this.tutorialUpdateScheduled = false;
       this.updateTutorialSystem();
     });
@@ -905,7 +1181,6 @@ export class GameScene extends Phaser.Scene {
    * Scene pause handler
    */
   pause() {
-    console.log('GameScene: Scene paused by Phaser');
     this.carMechanics.pauseDriving();
     this.inputHandlers.resetInputState();
   }
@@ -914,7 +1189,6 @@ export class GameScene extends Phaser.Scene {
    * Scene resume handler
    */
   resume() {
-    console.log('GameScene: Scene resumed by Phaser');
     if (this.shouldAutoRestartDriving && this.drivingMode) {
       this.carMechanics.resumeDriving();
     }
@@ -926,7 +1200,6 @@ export class GameScene extends Phaser.Scene {
   update() {
     // Safety check: ensure gameState is initialized
     if (!this.gameState) {
-      console.warn('GameScene.update(): gameState not initialized yet, skipping update');
       return;
     }
     
@@ -988,9 +1261,9 @@ export class GameScene extends Phaser.Scene {
       // Update SVG depth to match physics object depth during drag
       const isDragging = (this.frontseatKeys.gameObject as any).isDragging;
       if (isDragging) {
-        this.keySVG.setDepth(11001); // Above the physics object (11000)
+        this.keySVG.setDepth(110001); // Above the physics object (110000)
       } else {
-        this.keySVG.setDepth(10001); // Back to normal depth
+        this.keySVG.setDepth(60001); // Above steering wheel (60000)
       }
     }
     
@@ -1009,9 +1282,9 @@ export class GameScene extends Phaser.Scene {
       // Update SVG depth to match physics object depth during drag
       const isDragging = (this.frontseatTrash.gameObject as any).isDragging;
       if (isDragging) {
-        this.hotdogSVG.setDepth(11001); // Above the physics object (11000)
+        this.hotdogSVG.setDepth(110001); // Above the physics object (110000)
       } else {
-        this.hotdogSVG.setDepth(1001); // Back to normal depth
+        this.hotdogSVG.setDepth(60001); // Above steering wheel (60000)
       }
     }
 
@@ -1059,7 +1332,7 @@ export class GameScene extends Phaser.Scene {
   private applyMagneticAttraction() {
     // Only apply magnetic attraction after game has started
     if (!this.gameState.isGameStarted()) {
-          return;
+      return;
     }
     
     if (!this.frontseatKeys || !this.frontseatKeys.gameObject || !this.frontseatKeys.gameObject.body) {
@@ -1124,10 +1397,33 @@ export class GameScene extends Phaser.Scene {
         damping: magneticConfig.constraintDamping
       });
       
+      console.log('🔑 Keys constraint created successfully:', !!this.keysConstraint);
+      
       // Track that keys are now in the ignition
       this.keysInIgnition = true;
       this.gameState.updateState({ keysInIgnition: true });
       console.log('Keys snapped to ignition');
+      
+      // Immediately pause game and show ignition menu
+      const appScene = this.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = true;
+        this.events.emit('gamePaused');
+      }
+      
+      // Emit showTurnKeyMenu event and bring MenuScene to top
+      this.events.emit('showTurnKeyMenu');
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.scene.bringToTop();
+      }
+      
+      console.log('✅ Turn key menu event emitted and MenuScene brought to top');
+      
+      // Advance tutorial if we're in keys_placement phase
+      if (this.gameState.getTutorialPhase() === 'keys_placement') {
+        this.gameState.advanceTutorial();
+      }
       
       // Disable physics body for the key when it's constrained & prevent collisions
       if (this.frontseatKeys.gameObject.body) {
@@ -1155,12 +1451,18 @@ export class GameScene extends Phaser.Scene {
     
     // If in tutorial, start the initial driving phase
     if (this.gameState.isInTutorial()) {
-      console.log('🎓 Tutorial: Car started, beginning initial driving phase');
+      // Tutorial: Car started, beginning initial driving phase
     }
       
       // Show turn key menu only if car hasn't been started yet AND key is in ignition
+      console.log('Checking ignition menu conditions - carStarted:', this.carStarted, 'keysConstraint:', !!this.keysConstraint, 'keysInIgnition:', this.keysInIgnition);
       if (!this.carStarted && this.keysConstraint) {
+        console.log('✅ Showing turn key menu - conditions met');
         this.showTurnKeyMenu();
+      } else {
+        console.log('❌ Not showing turn key menu - conditions not met');
+        if (this.carStarted) console.log('  - Reason: car already started');
+        if (!this.keysConstraint) console.log('  - Reason: no keys constraint');
       }
       
       // Make Keys move vertically with camera when snapped
@@ -1214,11 +1516,15 @@ export class GameScene extends Phaser.Scene {
    * Show turn key menu
    */
   public showTurnKeyMenu() {
-     const menuScene = this.scene.get('MenuScene');
-     if (menuScene) {
+    console.log('showTurnKeyMenu() called - emitting showTurnKeyMenu event');
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
       menuScene.events.emit('showTurnKeyMenu');
-       this.scene.bringToTop('MenuScene');
-     }
+      this.scene.bringToTop('MenuScene');
+      console.log('✅ Turn key menu event emitted and MenuScene brought to top');
+    } else {
+      console.log('❌ MenuScene not found!');
+    }
   }
 
   /**
@@ -1235,23 +1541,37 @@ export class GameScene extends Phaser.Scene {
    * Handle turn key event
    */
   private onTurnKey() {
+    console.log('GameScene: onTurnKey called - carStarted:', this.carStarted);
+    
     // Prevent multiple calls - if car is already started, ignore
     if (this.carStarted) {
       console.log('Turn Key ignored: car already started');
       return;
     }
 
-    console.log('🚗 TURN KEY: Car is now started.');
+    console.log('GameScene: Starting car - setting carStarted to true');
+    // Car is now started
     this.carStarted = true;
     this.gameState.updateState({ carStarted: true });
     
     // Start driving mode when car is started
     if (!this.carMechanics.isDriving()) {
       const currentStep = this.gameState.getState().step || 0;
+      console.log('GameScene: Starting driving mechanics at step:', currentStep);
       this.carMechanics.startDriving(currentStep);
-      console.log('🚗 TURN KEY: Driving mode started with car ignition, drivingMode:', this.carMechanics.isDriving());
+      console.log('GameScene: Driving mechanics started');
+      
+      // Update threshold indicators after driving mechanics are started
+      const plannedExits = this.carMechanics.getPlannedExits();
+      const plannedCyoa = this.carMechanics.getPlannedCyoa();
+      const plannedStory = this.carMechanics.getPlannedStory();
+      console.log('🔺 GameScene: Updating threshold indicators after startDriving');
+      this.gameUI.updateThresholdIndicators(plannedExits, plannedCyoa, plannedStory);
+      
+      // Driving mode started with car ignition
     } else {
-      console.log('🚗 TURN KEY: CarMechanics was already driving');
+      console.log('GameScene: CarMechanics was already driving');
+      // CarMechanics was already driving
     }
     
     // Animate rearview mirror sliding down on first car start
@@ -1274,20 +1594,26 @@ export class GameScene extends Phaser.Scene {
               this.virtualPets.forEach((pet, index) => {
                 const petContainer = pet.getRoot?.();
                 if (petContainer) {
-                  this.tweens.add({
-                    targets: petContainer,
-                    alpha: 1,
-                    duration: 800, // 0.8 seconds fade-in
-                    ease: 'Cubic.easeOut',
-                    delay: index * 100 // Stagger each pet by 100ms for elegant appearance
-                  });
+                this.tweens.add({
+                  targets: petContainer,
+                  alpha: 1,
+                  duration: 800, // 0.8 seconds fade-in
+                  ease: 'Cubic.easeOut',
+                  delay: index * 100, // Stagger each pet by 100ms for elegant appearance
+                  onComplete: () => {
+                    // Fade in regional UI after the last pet finishes fading in
+                    if (index === this.virtualPets.length - 1) {
+                      this.gameUI.fadeInRegionalUI();
+                    }
+                  }
+                });
                 }
               });
             }
           });
         }
       } else {
-        console.log('🎓 Tutorial mode: Skipping rearview mirror animation - will be revealed after interrupt');
+        // Tutorial mode: Skipping rearview mirror animation - will be revealed after interrupt
       }
     }
 
@@ -1355,6 +1681,16 @@ export class GameScene extends Phaser.Scene {
     console.log('Ignition menu hidden');
     // Re-enable gameplay input when menu closes
     this.input.enabled = true;
+    
+    // Resume game when ignition menu is closed
+    const appScene = this.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = false;
+    }
+    
+    // Emit game resumed event to resume driving
+    this.events.emit('gameResumed');
+    console.log('Game resumed after ignition menu closed');
   }
 
   /**
@@ -1378,9 +1714,11 @@ export class GameScene extends Phaser.Scene {
     this.restoreKeyPhysics();
     
     // Reset target color
+    // Use GameElements config for magnetic target position
+    const magneticTargetConfig = gameElements.getMagneticTarget();
     this.magneticTarget.clear();
     this.magneticTarget.lineStyle(3, 0xff0000, 1);
-    this.magneticTarget.strokeCircle(200, 520, 25);
+    this.magneticTarget.strokeCircle(magneticTargetConfig.position.x, magneticTargetConfig.position.y, magneticTargetConfig.radius);
     
     // Snap speed crank to 0% when keys are removed
     this.resetCrankToZero();
@@ -1447,19 +1785,18 @@ export class GameScene extends Phaser.Scene {
    * Start the game
    */
   public startGame() {
-    console.log('🎯 startGame() called');
+    // Generate initial countdown value with bell curve distribution
+    const initialCountdown = this.generateCountdownValue();
+    this.gameState.updateState({ gameTime: initialCountdown });
+    
     this.gameState.startGame();
     this.gameState.startTutorial(); // Start tutorial sequence
-    console.log('🎯 Tutorial started, phase:', this.gameState.getTutorialPhase());
     this.carMechanics.enableTutorialMode(); // Enable tutorial mode
-    console.log('🎯 Tutorial mode enabled');
     // Don't set carStarted = true here - car is not started yet
     this.scheduleTutorialUpdate(0);
     
     // Activate magnetic target when game starts
     this.activateMagneticTarget();
-    
-    console.log('🎯 Game started with tutorial sequence');
   }
 
   /**
@@ -1467,10 +1804,12 @@ export class GameScene extends Phaser.Scene {
    */
   private activateMagneticTarget() {
     if (this.magneticTarget) {
+      // Use GameElements config for magnetic target position
+      const magneticTargetConfig = gameElements.getMagneticTarget();
       this.magneticTarget.clear();
       this.magneticTarget.lineStyle(3, 0xff0000, 1);
-      this.magneticTarget.strokeCircle(200, 520, 25);
-      console.log('Magnetic target activated - keys can now be attracted');
+      this.magneticTarget.strokeCircle(magneticTargetConfig.position.x, magneticTargetConfig.position.y, magneticTargetConfig.radius);
+    // Magnetic target activated - keys can now be attracted
     }
   }
 
@@ -1524,19 +1863,16 @@ export class GameScene extends Phaser.Scene {
     console.log('GameScene: Exit taken');
   }
 
-  /** Handle region selection */
-  public selectRegion(regionId: string): void {
-    console.log(`GameScene: Region selected: ${regionId}`);
-    this.gameState.changeRegion(regionId);
-    
-    // Resume gameplay
+  /** Resume gameplay after CYOA (Choose Your Own Adventure) menu */
+  public resumeAfterCyoa(): void {
+    // Resume driving and unpause app if it was paused
+    this.carMechanics.resumeDriving();
     const appScene = this.scene.get('AppScene');
     if (appScene) {
       (appScene as any).isPaused = false;
     }
     this.events.emit('gameResumed');
-    this.carMechanics.resumeDriving();
-    this.stopMenuOpen = false;
+    console.log('GameScene: Resumed after CYOA');
   }
 
   /**
@@ -1602,7 +1938,7 @@ export class GameScene extends Phaser.Scene {
       
       // Apply screen shake to game cameras
       camera.shake(intensity, duration);
-      console.log(`📳 Applied screen shake to camera: ${cameraName || 'unnamed'} (intensity: ${intensity}, duration: ${duration}ms)`);
+      // Applied screen shake to camera
     });
   }
 
@@ -1616,13 +1952,13 @@ export class GameScene extends Phaser.Scene {
     // Get all bodies in the matter world
     const allBodies = matterWorld.getAllBodies();
     
-    console.log(`🔍 Found ${allBodies.length} total bodies in matter world`);
+    // Found total bodies in matter world
     
-    // Apply large upward bump force to each body
+    // Apply large upward bump force to each body (reduced overall strength)
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
-        console.log(`⏭️ Skipping static body ${index}: ${body.label}`);
+        // Skipping static body
         return;
       }
       
@@ -1632,15 +1968,15 @@ export class GameScene extends Phaser.Scene {
       
       // Apply much stronger force for pothole collision
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.8 } : // Reduced vertical force for virtual pets
-        { x: 0, y: -0.5 }; // Strong force for other objects
+        { x: 0, y: -0.10 } : // Further reduced vertical force for virtual pets
+        { x: 0, y: -0.06 }; // Further reduced force for other objects
       
-      console.log(`💥 Applying bump to body ${index}: ${body.label} (isVirtualPet: ${isVirtualPet}, force: ${JSON.stringify(bumpForce)})`);
+      // Applying bump to body
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add larger random horizontal variation for more dramatic effect
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.5 : 0.2);
+      // Add minimal random horizontal variation
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.04 : 0.02);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
@@ -1649,13 +1985,13 @@ export class GameScene extends Phaser.Scene {
         const currentVelocity = (this.matter as any).body.getVelocity(body);
         const dampedVelocity = {
           x: currentVelocity.x,
-          y: currentVelocity.y * 0.1 // Very strong vertical damping (90% reduction)
+          y: currentVelocity.y * 0.3 // Stronger vertical damping (70% reduction)
         };
         (this.matter as any).body.setVelocity(body, dampedVelocity);
       }
     });
     
-    console.log(`💥 Applied LARGE bump effect to ${allBodies.length} matter physics objects (pothole collision)`);
+    // Applied LARGE bump effect to matter physics objects (pothole collision)
   }
 
   /**
@@ -1668,7 +2004,7 @@ export class GameScene extends Phaser.Scene {
     // Get all bodies in the matter world
     const allBodies = matterWorld.getAllBodies();
     
-    // Apply very small upward bump force to each body
+    // Apply very small upward bump force to each body (reduced further)
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
@@ -1681,13 +2017,13 @@ export class GameScene extends Phaser.Scene {
       
       // Apply very small force for subtle step-by-step movement
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.01 } : // Very small force for virtual pets
-        { x: 0, y: -0.005 }; // Tiny force for other objects
+        { x: 0, y: -0.006 } : // Very small force for virtual pets
+        { x: 0, y: -0.002 }; // Tinier force for other objects
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add tiny random horizontal variation for subtle movement
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.01 : 0.005);
+      // Add tiny random horizontal variation (reduced)
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.006 : 0.003);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
@@ -1713,7 +2049,7 @@ export class GameScene extends Phaser.Scene {
     // Get all bodies in the matter world
     const allBodies = matterWorld.getAllBodies();
     
-    // Apply upward bump force to each body
+    // Apply upward bump force to each body (reduced)
     allBodies.forEach((body: any, index: number) => {
       // Skip static bodies (like anchors) but NOT sensors
       if (body.isStatic) {
@@ -1726,13 +2062,13 @@ export class GameScene extends Phaser.Scene {
       
       // Apply stronger force to virtual pets since they're constrained
       const bumpForce = isVirtualPet ? 
-        { x: 0, y: -0.2 } : // Reduced vertical force for virtual pets
-        { x: 0, y: -0.05 }; // Stronger force for other objects
+        { x: 0, y: -0.08 } : // Reduced vertical force for virtual pets
+        { x: 0, y: -0.02 }; // Reduced force for other objects
       
       (this.matter as any).body.applyForce(body, body.position, bumpForce);
       
-      // Add slight random horizontal variation for more natural feel
-      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.1 : 0.02);
+      // Add slight random horizontal variation (reduced)
+      const randomX = (Math.random() - 0.5) * (isVirtualPet ? 0.04 : 0.01);
       const randomForce = { x: randomX, y: bumpForce.y };
       (this.matter as any).body.applyForce(body, body.position, randomForce);
       
@@ -1747,7 +2083,7 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
-    console.log(`🚗 Applied bump effect to ${allBodies.length} matter physics objects`);
+    // Applied bump effect to matter physics objects
   }
 
   /**
@@ -1757,10 +2093,14 @@ export class GameScene extends Phaser.Scene {
     const tutorialPhase = this.gameState.getTutorialPhase();
     const tutorialStep = this.gameState.getTutorialStep();
     
-    console.log(`🎓 Tutorial step ${step}: phase=${tutorialPhase}, tutorialStep=${tutorialStep}`);
-    console.log(`🎓 Game state: carStarted=${this.carStarted}, keysInIgnition=${this.keysInIgnition}`);
+    // Tutorial step processing
     
     switch (tutorialPhase) {
+      case 'keys_placement':
+        // Wait for keys to be placed in ignition
+        // Tutorial system will show keys-and-ignition overlay
+        break;
+        
       case 'initial_driving':
         // Show countdown after 4 steps
         if (tutorialStep >= 4) {
@@ -1783,7 +2123,7 @@ export class GameScene extends Phaser.Scene {
         break;
         
       default:
-        console.warn('🎓 Unknown tutorial phase:', tutorialPhase);
+        console.warn('Unknown tutorial phase:', tutorialPhase);
     }
   }
   
@@ -1791,52 +2131,49 @@ export class GameScene extends Phaser.Scene {
    * Show tutorial countdown
    */
   private showTutorialCountdown() {
-    console.log('🎓 Showing tutorial countdown');
-    // TODO: Show countdown UI
+    // Show countdown UI
   }
   
   /**
    * Show tutorial interrupt (virtual pet care)
    */
   private showTutorialInterrupt() {
-    console.log('🎓 Showing tutorial interrupt - virtual pet care');
-    console.log('🎓 MenuScene exists:', !!this.scene.get('MenuScene'));
-    
     // Show interrupt menu
     const menuScene = this.scene.get('MenuScene');
     if (menuScene) {
-      console.log('🎓 Emitting showTutorialInterrupt event to MenuScene');
       menuScene.events.emit('showTutorialInterrupt');
       this.scene.bringToTop('MenuScene');
-      console.log('🎓 MenuScene brought to top');
     } else {
-      console.error('🎓 ERROR: MenuScene not found!');
+      console.error('ERROR: MenuScene not found!');
     }
     
-    // Schedule menu to disappear after 8 steps
-    this.tutorialInterruptStep = this.gameState.getState().step + 8;
-    console.log(`🎓 Tutorial interrupt scheduled to end at step ${this.tutorialInterruptStep}`);
+    // Schedule menu to disappear after 2 steps
+    this.tutorialInterruptStep = this.gameState.getState().step + 2;
   }
   
   /**
    * Handle tutorial interrupt closed event
    */
   private onTutorialInterruptClosed() {
-    console.log('🎓 GameScene: Tutorial interrupt closed event received!');
-    console.log('🎓 Tutorial interrupt closed - revealing rearview mirror');
+    // Tutorial interrupt closed - revealing rearview mirror
     
     // Advance tutorial phase to normal
     this.gameState.advanceTutorial();
-    console.log('🎓 Tutorial phase advanced to:', this.gameState.getTutorialPhase());
+    
+    // Ensure car is in driving mode before disabling tutorial mode
+    if (!this.carMechanics.isDriving()) {
+      const currentStep = this.gameState.getState().step || 0;
+      this.carMechanics.startDriving(currentStep);
+    }
     
     // Disable tutorial mode so progress can start
     this.carMechanics.disableTutorialMode();
-    console.log('🎓 Tutorial mode disabled - progress can now start');
     
     // Wait a moment for menu to fully close, then reveal rearview mirror
     this.time.delayedCall(200, () => {
-      console.log('🎓 Starting rearview mirror reveal animation');
       this.revealRearviewMirror();
+      // Also ensure triangles fade in after rearview mirror is revealed
+      this.gameUI.ensureTrianglesFadeIn();
     });
     
     // Clear the interrupt step
@@ -1847,16 +2184,12 @@ export class GameScene extends Phaser.Scene {
    * Reveal rearview mirror with animation
    */
   private revealRearviewMirror() {
-    console.log('🎓 Revealing rearview mirror');
-    
     // Reveal rearview mirror by moving it down
     const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
-    console.log('🎓 Rearview container found:', !!rearviewContainer);
     
     if (rearviewContainer) {
       const cam = this.cameras.main;
       const targetY = Math.floor(cam.height * gameElements.getRearviewMirror().position.y);
-      console.log('🎓 Target Y position:', targetY, 'Current Y:', rearviewContainer.y);
       
       // Animate rearview mirror sliding down
       this.tweens.add({
@@ -1865,7 +2198,7 @@ export class GameScene extends Phaser.Scene {
         duration: 1000,
         ease: 'Power2',
         onComplete: () => {
-          console.log('🎓 Rearview mirror revealed');
+          // Rearview mirror revealed
           
           // Fade in the virtual pets smoothly when rearview container reaches final position
           this.virtualPets.forEach((pet, index) => {
@@ -1876,14 +2209,20 @@ export class GameScene extends Phaser.Scene {
                 alpha: 1,
                 duration: 800, // 0.8 seconds fade-in
                 ease: 'Cubic.easeOut',
-                delay: index * 100 // Stagger each pet by 100ms for elegant appearance
+                delay: index * 100, // Stagger each pet by 100ms for elegant appearance
+                onComplete: () => {
+                  // Fade in regional UI after the last pet finishes fading in
+                  if (index === this.virtualPets.length - 1) {
+                    this.gameUI.fadeInRegionalUI();
+                  }
+                }
               });
             }
           });
         }
       });
     } else {
-      console.error('🎓 ERROR: Rearview container not found!');
+      console.error('ERROR: Rearview container not found!');
     }
   }
 
@@ -1904,7 +2243,6 @@ export class GameScene extends Phaser.Scene {
     
     // Handle tutorial sequence
     if (this.gameState.isInTutorial()) {
-      console.log(`🎓 Step ${step}: Processing tutorial step`);
       this.handleTutorialStep(step);
       
       // Update tutorial interrupt countdown if menu is open
@@ -1940,21 +2278,27 @@ export class GameScene extends Phaser.Scene {
       (this.tutorialSystem as any).handleStep(step);
     }
     
-    // Step-based countdown: only when game and car have both started, and every fourth step
+    // Step-based countdown: only when game and car have both started, and every sixteenth step
     const state = this.gameState.getState();
     if (state.gameStarted && carOn && state.gameTime > 0) {
       this.countdownStepCounter++;
-      // Only decrement countdown every fourth step
-      if (this.countdownStepCounter >= 4) {
+      // Update countdownStepCounter in state every step
+      this.gameState.updateState({ countdownStepCounter: this.countdownStepCounter });
+      
+      // Only decrement countdown every sixteenth step (changed from every eighth)
+      if (this.countdownStepCounter >= 16) {
         this.countdownStepCounter = 0; // Reset counter
         const newTime = state.gameTime - 1;
-        this.gameState.updateState({ gameTime: newTime });
+        this.gameState.updateState({ gameTime: newTime, countdownStepCounter: this.countdownStepCounter });
         // Notify systems (e.g., driving scene) that countdown changed
         this.events.emit('countdownChanged', {
           time: newTime,
           keysInIgnition: state.keysInIgnition,
           // Speed crank removed - using automatic speed progression
         });
+        
+        // Update monthly listeners based on buzz
+        this.gameState.updateListenersOnCountdown();
       }
     }
 
@@ -1974,7 +2318,7 @@ export class GameScene extends Phaser.Scene {
       // Debug logging every 10 steps to show speed-progress relationship
       if (state.step && state.step % 10 === 0) {
         const speedPercent = Math.round(speedMultiplier * 100);
-        console.log(`🚗 Speed: ${speedPercent}% → Progress: +${progressIncrement.toFixed(2)} (${cur.toFixed(1)}% → ${next.toFixed(1)}%)`);
+        // Speed progress calculation
       }
       
       // Update car mechanics with progress for exit planning
@@ -1999,22 +2343,25 @@ export class GameScene extends Phaser.Scene {
             this.scene.bringToTop('MenuScene');
           }
         } else {
-          // Show regular destination menu
-          const menuScene = this.scene.get('MenuScene');
-          if (menuScene) {
-            menuScene.events.emit('showDestinationMenu', true);
-            this.scene.bringToTop('MenuScene');
-          }
+        // Show regular destination menu
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          console.log('Showing destination menu - pausing game');
+          menuScene.events.emit('showDestinationMenu', true);
+          this.scene.bringToTop('MenuScene');
         }
-        
-        // Reset progress and countdown
-        this.gameState.updateState({ stops: newStops, progress: 0, gameTime: 8 });
-        this.countdownStepCounter = 0; // Reset countdown step counter
-        const appScene = this.scene.get('AppScene');
-        if (appScene) {
-          (appScene as any).isPaused = true;
-          this.events.emit('gamePaused');
-        }
+      }
+      
+      // Reset progress and countdown with bell curve distribution
+      const newCountdownValue = this.generateCountdownValue();
+      this.gameState.updateState({ stops: newStops, progress: 0, gameTime: newCountdownValue, countdownStepCounter: 0 });
+      this.countdownStepCounter = 0; // Reset countdown step counter
+      const appScene = this.scene.get('AppScene');
+      if (appScene) {
+        console.log('Setting app paused and emitting gamePaused');
+        (appScene as any).isPaused = true;
+        this.events.emit('gamePaused');
+      }
       }
     }
 
@@ -2085,7 +2432,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onGamePaused() {
+    console.log('Game paused - calling pauseDriving()');
     this.carMechanics.pauseDriving();
+    console.log('Driving paused:', this.carMechanics.isDrivingPaused());
   }
 
   private onGameResumed() {
@@ -2127,6 +2476,19 @@ export class GameScene extends Phaser.Scene {
     this.carMechanics.handleSteering(value);
   }
 
+  private onStoryCompleted(storyData: { storyline: string; outcome: string; choices: string[] }) {
+    console.log(`📖 Story completed: ${storyData.storyline} with outcome: ${storyData.outcome}`);
+    
+    // Check if there's a pending destination menu to show
+    if (this.carMechanics.hasPendingDestinationMenu()) {
+      console.log(`📖 Story completed, now showing pending destination menu`);
+      this.carMechanics.showPendingDestinationMenu();
+    } else {
+      // Resume driving after story completion
+      this.resumeAfterCyoa();
+    }
+  }
+
   // Speed crank input handler removed - using automatic speed progression
 
   /**
@@ -2137,22 +2499,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.exitDetectionLogCounter) this.exitDetectionLogCounter = 0;
     this.exitDetectionLogCounter++;
     
-    if (this.exitDetectionLogCounter % 30 === 0) {
-      console.log(`isPlayerInExitCollisionPath called (${this.exitDetectionLogCounter} times)`);
-    }
-    
     if (!this.carMechanics) {
-      if (this.exitDetectionLogCounter % 30 === 0) {
-        console.log('No carMechanics');
-      }
       return false;
     }
     
     // Get all obstacles that are exits
     const obstacles = (this.carMechanics as any).obstacles || [];
-    if (this.exitDetectionLogCounter % 30 === 0) {
-      console.log('Total obstacles:', obstacles.length);
-    }
     
     const exits = obstacles.filter((obstacle: any) => {
       const isExit = obstacle.getData('isExit');
@@ -2160,25 +2512,15 @@ export class GameScene extends Phaser.Scene {
       return isExit && !isPreview;
     });
     
-    if (this.exitDetectionLogCounter % 30 === 0) {
-      console.log('Found exits:', exits.length);
-    }
-    
     if (exits.length === 0) {
-      if (this.exitDetectionLogCounter % 30 === 0) {
-        console.log('No exits found');
-      }
       return false;
     }
     
     // Check if any exit is close enough to the car's position
     const carBounds = (this.carMechanics as any).drivingCar?.getBounds();
     if (!carBounds) {
-      console.log('No car bounds');
       return false;
     }
-    
-    console.log('Car bounds:', carBounds);
     
     // Check if car is approaching any exit from the right
     const inPath = exits.some((exit: any) => {
@@ -2207,8 +2549,7 @@ export class GameScene extends Phaser.Scene {
       
       const carInRightmostArea = carX >= rightmostThreshold;
       
-      // Debug logging for position detection
-      console.log('Position detection - Internal carX:', carX, 'Car bounds X (visual):', carBounds.x, 'Screen width:', screenWidth, 'Rightmost threshold:', rightmostThreshold, 'In rightmost area:', carInRightmostArea);
+      // Position detection logging removed to reduce console spam
       
       // Also check if car is horizontally aligned with the exit
       // Use internal car position for alignment since visual car is always centered
@@ -2229,16 +2570,19 @@ export class GameScene extends Phaser.Scene {
     
     // Only log when we actually find exits and are in collision path
     if (exits.length > 0 && inPath) {
-      console.log('🚨 EXIT COLLISION PATH DETECTED! Exits:', exits.length);
-      console.log('   Car visual X position (carBounds.x):', carBounds.x, 'Rightmost threshold:', this.cameras.main.width * 0.7);
-      console.log('   Car internal X position (carMechanics.getCarX()):', this.carMechanics.getCarX());
-      console.log('   Car bottom:', carBounds.bottom, 'Exit top:', exits[0].getData('visual').getBounds().top);
+      // Exit collision path detected
     }
     // console.log('In exit collision path:', inPath);
     return inPath;
   }
 
   destroy() {
+    // Clean up physics safety timer
+    if (this.physicsSafetyTimer) {
+      this.physicsSafetyTimer.destroy();
+      this.physicsSafetyTimer = undefined;
+    }
+    
     // Clean up all systems
     this.carMechanics.destroy();
     this.tutorialSystem.destroy();
@@ -2264,6 +2608,7 @@ export class GameScene extends Phaser.Scene {
    */
   private turnOffCar() {
     if (!this.carStarted) return;
+    console.log('Turning off car - carStarted was:', this.carStarted);
     this.carStarted = false;
     this.gameState.updateState({ carStarted: false });
     try { 
@@ -2272,6 +2617,7 @@ export class GameScene extends Phaser.Scene {
       console.log('Error calling stopDriving:', e);
     }
     this.gravityXTarget = 0;
+    console.log('Car turned off - carStarted is now:', this.carStarted);
   }
 
   /**
@@ -2358,22 +2704,28 @@ export class GameScene extends Phaser.Scene {
     const y = Math.floor((gameHeight - height) / 2); // Center vertically
     
     const newWindow = this.windowShapes.createStoryDialogComposition(x, y, width, height);
-    this.debugWindows.push(newWindow);
+    
+    // Only proceed if window was created (not queued)
+    if (newWindow) {
+      this.debugWindows.push(newWindow);
 
-    // Set high depth so it appears on top
-    newWindow.setDepth(2000);
+      // Set high depth so it appears on top
+      newWindow.setDepth(2000);
 
-    // Auto-remove after 10 seconds (longer for story dialogs)
-    this.time.delayedCall(10000, () => {
-      if (newWindow && !newWindow.scene) return; // Already destroyed
-      newWindow.destroy();
-      const index = this.debugWindows.indexOf(newWindow);
-      if (index > -1) {
-        this.debugWindows.splice(index, 1);
-      }
-    });
+      // Auto-remove after 10 seconds (longer for story dialogs)
+      this.time.delayedCall(10000, () => {
+        if (newWindow && !newWindow.scene) return; // Already destroyed
+        newWindow.destroy();
+        const index = this.debugWindows.indexOf(newWindow);
+        if (index > -1) {
+          this.debugWindows.splice(index, 1);
+        }
+      });
 
-    console.log('Debug story dialog created! Click to advance the story, or press H again to generate a new one.');
+      console.log('Debug story dialog created! Click to advance the story, or press H again to generate a new one.');
+    } else {
+      console.log('Story dialog was queued because another narrative window is active.');
+    }
   }
   
   /**

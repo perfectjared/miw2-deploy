@@ -39,6 +39,7 @@ export interface CarMechanicsConfig {
   lateralFriction: number;
   
   // Road Parameters
+  skyColor: number;
   roadColor: number;
   boundaryPadding: number;
   roadDepth: number;
@@ -144,14 +145,33 @@ export class CarMechanics {
     exitSpawned: boolean;
   }> = [];
 
-  // CYOA Planning System - random choose-your-own-adventure events during driving
+  // CYOA Planning System - simple choose-your-own-adventure events during driving
   private plannedCyoa: Array<{
-    id: number; // CYOA ID (1, 2, 3, etc.)
+    id: number; // CYOA ID (1, 2, etc.)
     cyoaThreshold: number; // When to trigger CYOA (0-100)
-    isExitRelated: boolean; // True if this CYOA is related to an exit
-    exitNumber?: number; // Which exit this CYOA is related to (if isExitRelated)
     triggered: boolean; // Whether CYOA has been triggered
   }> = [];
+
+  // Story Planning System - one story event per driving sequence
+  private plannedStory: {
+    storyThreshold: number; // When to trigger story (0-100)
+    isExitRelated: boolean; // True if this story is related to an exit
+    exitNumber?: number; // Which exit this story is related to (if isExitRelated)
+    triggered: boolean; // Whether story has been triggered
+  } | null = null;
+
+  // Pending destination menu - stored when story is skipped
+  private pendingDestinationMenu: {
+    shopCount: number;
+    exitNumber: number;
+  } | null = null;
+  
+  // Scheduled Exit CYOA System - REMOVED (now using direct triggering)
+
+  // Night mode state tracking
+  private nightModeEnabled: boolean = false;
+  // Suppress regular (non-exit) CYOA around exit collisions to avoid accidental co-trigger
+
   
   private currentSequenceProgress: number = 0;
   private lastPotholeSpawnStep: number = 0;
@@ -212,11 +232,11 @@ export class CarMechanics {
     
     // Listen for step changes to update obstacle visuals
     this.scene.events.on('step', this.onStepChanged, this);
-    console.log('CarMechanics: Registered step event listener');
+    // Registered step event listener
 
     // Add 'E' key handler for testing exit spawning
     this.scene.input.keyboard?.on('keydown-E', () => {
-      console.log('E key pressed - test exit spawning disabled');
+      // E key pressed - test exit spawning disabled
     });
   }
 
@@ -227,9 +247,21 @@ export class CarMechanics {
     const minSpacing = 12; // Minimum spacing between any events (12%)
     const totalEvents = numExits + numCyoa;
     
+    // Check if this is the first driving sequence (for testing)
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    
     // Define ranges for different event types
-    const exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
-    const cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+    let exitRange, cyoaRange;
+    if (isFirstSequence) {
+      // For first sequence testing: exit very early
+      exitRange = { min: 15, max: 25 }; // First exit at 15-25% for testing
+      cyoaRange = { min: 35, max: 90 }; // CYOA in 35-90% range (moved later to avoid conflict)
+      console.log('First sequence: Exit range 15-25% for testing');
+    } else {
+      exitRange = { min: 30, max: 85 }; // Exits in 30-85% range
+      cyoaRange = { min: 20, max: 90 }; // CYOA in 20-90% range
+    }
     
     // Generate all possible positions
     const allPositions: Array<{ value: number, type: 'exit' | 'cyoa', index: number }> = [];
@@ -315,9 +347,7 @@ export class CarMechanics {
       cyoa.push(0); // Placeholder - will be replaced with actual post-exit threshold
     }
     
-    console.log(`🎯 Generated ${exits.length} exits and ${cyoa.length} CYOA with improved spacing`);
-    console.log(`🎯 Exit thresholds: [${exits.join(', ')}]`);
-    console.log(`🎯 CYOA thresholds: [${cyoa.join(', ')}]`);
+    // Generated exits and CYOA with improved spacing
     
     return { exits, cyoa };
   }
@@ -342,27 +372,15 @@ export class CarMechanics {
         const next = this.plannedCyoa[i + 1];
         const spacing = next.cyoaThreshold - current.cyoaThreshold;
         
+        // All CYOAs are regular now, so check spacing normally
+        
         if (spacing < minSpacing) {
           needsAdjustment = true;
           
-          // Adjust the non-exit-related CYOA first
-          if (!current.isExitRelated && !next.isExitRelated) {
-            // Both are regular CYOA - move them apart
-            const adjustment = (minSpacing - spacing) / 2;
-            current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
-            next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
-          } else if (!current.isExitRelated) {
-            // Current is regular, next is exit-related - move current
-            current.cyoaThreshold = Math.max(20, next.cyoaThreshold - minSpacing);
-          } else if (!next.isExitRelated) {
-            // Current is exit-related, next is regular - move next
-            next.cyoaThreshold = Math.min(90, current.cyoaThreshold + minSpacing);
-          } else {
-            // Both are exit-related - this shouldn't happen, but adjust anyway
-            const adjustment = (minSpacing - spacing) / 2;
-            current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
-            next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
-          }
+          // Both are regular CYOA - move them apart
+          const adjustment = (minSpacing - spacing) / 2;
+          current.cyoaThreshold = Math.max(20, current.cyoaThreshold - adjustment);
+          next.cyoaThreshold = Math.min(90, next.cyoaThreshold + adjustment);
         }
       }
       
@@ -371,29 +389,26 @@ export class CarMechanics {
     }
     
     if (attempts >= maxAttempts) {
-      console.warn('⚠️ Could not achieve proper CYOA spacing after maximum attempts');
+      console.warn('Could not achieve proper CYOA spacing after maximum attempts');
     } else {
-      console.log('✅ CYOA spacing verified');
+      // CYOA spacing verified
     }
   }
 
   /**
-   * Generate shop count (1-4 shops, with 1 and 4 being rare)
+   * Generate shop count (2-4 shops)
    */
   private generateShopCount(): number {
     const rand = Math.random();
     
-    // 1 shop: 10% chance (rare)
-    if (rand < 0.1) return 1;
+    // 2 shops: 40% chance
+    if (rand < 0.4) return 2;
     
-    // 4 shops: 10% chance (rare)
-    if (rand < 0.2) return 4;
+    // 3 shops: 40% chance
+    if (rand < 0.8) return 3;
     
-    // 2 shops: 40% chance (common)
-    if (rand < 0.6) return 2;
-    
-    // 3 shops: 40% chance (common)
-    return 3;
+    // 4 shops: 20% chance
+    return 4;
   }
 
   /**
@@ -452,7 +467,7 @@ export class CarMechanics {
    */
   public enableTutorialMode() {
     this.tutorialMode = true;
-    console.log('🎓 Tutorial mode enabled - no obstacles, no progress, no speed increase');
+    // Tutorial mode enabled - no obstacles, no progress, no speed increase
   }
   
   /**
@@ -460,7 +475,7 @@ export class CarMechanics {
    */
   public disableTutorialMode() {
     this.tutorialMode = false;
-    console.log('🎓 Tutorial mode disabled - normal gameplay resumed');
+    // Tutorial mode disabled - normal gameplay resumed
   }
   
   /**
@@ -486,7 +501,7 @@ export class CarMechanics {
     // Keep visual car fixed; do not set X here
     
     // Plan exits for this driving sequence
-    console.log('🚗 Starting driving - planning exits...');
+    // Starting driving - planning exits
     this.planExitsForSequence();
     
     // Start automatic speed progression
@@ -508,14 +523,25 @@ export class CarMechanics {
    * Plan exits for the current driving sequence
    */
   private planExitsForSequence() {
-    // Clear previous planned exits and CYOA
+    // Clear previous planned exits, CYOA, and story
     this.plannedExits = [];
     this.plannedCyoa = [];
+    this.plannedStory = null;
     this.currentSequenceProgress = 0;
     
-    // Plan 2-3 exits per sequence
-    const numExits = Phaser.Math.Between(2, 3);
-    console.log(`Planning ${numExits} numbered exits for this driving sequence`);
+    // Check if this is the first driving sequence (for testing)
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    
+    // Plan exits per sequence
+    let numExits: number;
+    if (isFirstSequence) {
+      numExits = 2; // Deterministic: 2 exits for first sequence
+      console.log('First driving sequence - deterministic: 2 exits');
+    } else {
+      numExits = Phaser.Math.Between(2, 3); // Random for other sequences
+    }
+    // Planning numbered exits for this driving sequence
     
     const gameWidth = this.scene.cameras.main.width;
     const roadWidthPx = gameWidth;
@@ -526,9 +552,24 @@ export class CarMechanics {
     const exitOffsetLeft = 40; // Move exits 40px left
     const previewOffsetRight = 15; // Move previews 15px right
     
-    // Plan 1-3 CYOA per sequence
-    const numCyoa = Phaser.Math.Between(1, 3);
-    console.log(`Planning ${numCyoa} CYOA for this driving sequence`);
+    // Plan CYOA per sequence
+    let numCyoa: number;
+    const showsInCurrentRegion = gameScene?.gameState?.getState()?.showsInCurrentRegion || 0;
+    
+    if (showsInCurrentRegion === 0) {
+      // First sequence: 2 CYOAs (1 random + 1 at end)
+      numCyoa = 2;
+      console.log('First driving sequence - deterministic: 2 CYOAs (1 random + 1 at end)');
+    } else if (showsInCurrentRegion === 1) {
+      // Second sequence: 2 CYOAs (1 at start + 1 random)
+      numCyoa = 2;
+      console.log('Second driving sequence - deterministic: 2 CYOAs (1 at start + 1 random)');
+    } else {
+      // Third+ sequences: Random scheduling
+      numCyoa = Phaser.Math.Between(1, 3);
+      console.log(`Sequence ${showsInCurrentRegion + 1} - random: ${numCyoa} CYOAs`);
+    }
+    // Planning CYOA for this driving sequence
     
     // Generate all thresholds together with improved spacing
     const allThresholds = this.generateSpacedThresholds(numExits, numCyoa);
@@ -539,9 +580,17 @@ export class CarMechanics {
     const exitNames = this.generateExitNames(exitThresholds.length);
     
     // Create planned exits with proper preview spacing
-    exitThresholds.forEach((exitThreshold, index) => {
-      const exitNumber = index + 1; // Number exits 1, 2, 3, etc.
-      const exitName = exitNames[index]; // Use generated name
+    // Sort exits by threshold to ensure encounter order (Exit 1 = first encountered)
+    const sortedExits = exitThresholds.map((exitThreshold, index) => ({
+      threshold: exitThreshold,
+      name: exitNames[index],
+      originalIndex: index
+    })).sort((a, b) => a.threshold - b.threshold);
+    
+    sortedExits.forEach((exitData, encounterIndex) => {
+      const exitNumber = encounterIndex + 1; // Number exits 1, 2, 3, etc. by encounter order
+      const exitThreshold = exitData.threshold;
+      const exitName = exitData.name;
       
       // Preview spawns 20-45% before the exit, but not less than 1%, and not within 8 steps of another preview/exit
       let previewThreshold: number;
@@ -577,73 +626,195 @@ export class CarMechanics {
       });
     });
     
-    console.log('🎯 Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
-    console.log('🎯 Total planned exits:', this.plannedExits.length);
+    console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
+    console.log('Total planned exits:', this.plannedExits.length);
     
-    // Create planned CYOA
-    cyoaThresholds.forEach((threshold, index) => {
-      const cyoaId = index + 1;
-      let isExitRelated = false;
-      let exitNumber: number | undefined;
-      let cyoaThreshold = threshold;
-      
-      // If we have 3 CYOA, one should be exit-related and occur after leaving an exit
-      if (numCyoa === 3 && cyoaId === 3) {
-        isExitRelated = true;
-        // Pick a random exit to be related to
-        exitNumber = Phaser.Math.Between(1, numExits);
+    // Create planned CYOA - SMART SCHEDULING: 1-2 CYOAs with smart positioning
+    this.plannedCyoa = [];
+    
+    // DETERMINISTIC SCHEDULING: First two sequences have specific rules
+    if (showsInCurrentRegion === 0) {
+      // First sequence: 2 CYOAs (1 random + 1 at end)
+      const randomThreshold = Phaser.Math.Between(20, 80);
+      this.plannedCyoa.push({
+        id: 1,
+        cyoaThreshold: randomThreshold,
+        triggered: false
+      });
+      this.plannedCyoa.push({
+        id: 2,
+        cyoaThreshold: 98, // End CYOA
+        triggered: false
+      });
+      console.log(`🎭 First sequence CYOAs: Random CYOA at ${randomThreshold}% + End CYOA at 98%`);
+    } else if (showsInCurrentRegion === 1) {
+      // Second sequence: 2 CYOAs (1 at start + 1 random)
+      const randomThreshold = Phaser.Math.Between(20, 80);
+      this.plannedCyoa.push({
+        id: 1,
+        cyoaThreshold: 2, // Start CYOA
+        triggered: false
+      });
+      this.plannedCyoa.push({
+        id: 2,
+        cyoaThreshold: randomThreshold, // Random CYOA
+        triggered: false
+      });
+      console.log(`🎭 Second sequence CYOAs: Start CYOA at 2% + Random CYOA at ${randomThreshold}%`);
+    } else {
+      // Third+ sequences: Random scheduling
+      if (numCyoa === 1) {
+        // Single CYOA: random progress point
+        const randomThreshold = Phaser.Math.Between(20, 80);
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: randomThreshold,
+          triggered: false
+        });
+      } else if (numCyoa === 2) {
+        // Two CYOAs: one random + one at start OR end
+        const randomThreshold = Phaser.Math.Between(20, 80);
+        const useStartPosition = Math.random() < 0.5; // 50% chance for start vs end
         
-        // Find the chosen exit and schedule CYOA to occur after leaving it
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: randomThreshold,
+          triggered: false
+        });
+        
+        this.plannedCyoa.push({
+          id: 2,
+          cyoaThreshold: useStartPosition ? 2 : 98, // Start (2%) or End (98%)
+          triggered: false
+        });
+        
+        // Sort by threshold to ensure proper order
+        this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+      } else if (numCyoa === 3) {
+        // Three CYOAs: two random + one at start OR end
+        const randomThreshold1 = Phaser.Math.Between(20, 80);
+        const randomThreshold2 = Phaser.Math.Between(20, 80);
+        const useStartPosition = Math.random() < 0.5; // 50% chance for start vs end
+        
+        this.plannedCyoa.push({
+          id: 1,
+          cyoaThreshold: randomThreshold1,
+          triggered: false
+        });
+        
+        this.plannedCyoa.push({
+          id: 2,
+          cyoaThreshold: randomThreshold2,
+          triggered: false
+        });
+        
+        this.plannedCyoa.push({
+          id: 3,
+          cyoaThreshold: useStartPosition ? 2 : 98, // Start (2%) or End (98%)
+          triggered: false
+        });
+        
+        // Sort by threshold to ensure proper order
+        this.plannedCyoa.sort((a, b) => a.cyoaThreshold - b.cyoaThreshold);
+      }
+    }
+    
+    console.log('Planned CYOA:', this.plannedCyoa.map(c => 
+      `CYOA ${c.id}: ${c.cyoaThreshold}% (${c.cyoaThreshold === 2 ? 'start' : c.cyoaThreshold === 98 ? 'end' : 'random'})`
+    ));
+    console.log('Total planned CYOA:', this.plannedCyoa.length);
+    
+    // Plan one story event for this driving sequence
+    this.planStoryForSequence(numExits);
+  }
+
+  /**
+   * Plan one story event for the current driving sequence
+   */
+  private planStoryForSequence(numExits: number) {
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    
+    let storyThreshold: number;
+    let isExitRelated: boolean = false;
+    let exitNumber: number | undefined;
+    
+    if (isFirstSequence) {
+      // First driving sequence: always schedule fauxchella-1 at 10%
+      storyThreshold = 10;
+      isExitRelated = false;
+      console.log(`First sequence: Story scheduled at 10% (fauxchella-1)`);
+    } else {
+      // Regular sequence: decide if story should be exit-related (30% chance)
+      isExitRelated = Math.random() < 0.3;
+      
+      if (isExitRelated && numExits > 0) {
+        // Story is related to a random exit - occurs after leaving that exit
+        exitNumber = Phaser.Math.Between(1, numExits);
         const chosenExit = this.plannedExits.find(e => e.number === exitNumber);
+        
         if (chosenExit) {
-          // Schedule CYOA to occur 5-15% after the exit threshold
-          const postExitOffset = Phaser.Math.Between(5, 15);
-          cyoaThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
+          // Schedule story to occur 8-20% after the exit threshold
+          const postExitOffset = Phaser.Math.Between(8, 20);
+          storyThreshold = Math.min(100, chosenExit.exitThreshold + postExitOffset);
           
-          // Ensure this CYOA doesn't conflict with other CYOA events
-          const minSpacing = 12; // Minimum spacing between CYOA events
-          let attempts = 0;
-          const maxAttempts = 20;
-          
-          while (attempts < maxAttempts) {
-            let needsAdjustment = false;
-            
-            // Check spacing against other planned CYOA
-            for (const existingCyoa of this.plannedCyoa) {
-              if (Math.abs(existingCyoa.cyoaThreshold - cyoaThreshold) < minSpacing) {
-                needsAdjustment = true;
-                break;
-              }
-            }
-            
-            if (needsAdjustment) {
-              // Try a different offset
-              const newPostExitOffset = Phaser.Math.Between(5, 15);
-              cyoaThreshold = Math.min(100, chosenExit.exitThreshold + newPostExitOffset);
-              attempts++;
-            } else {
+          console.log(`Story scheduled after Exit ${exitNumber} at ${storyThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+        } else {
+          // Fallback: random threshold if exit not found
+          storyThreshold = Phaser.Math.Between(20, 80);
+          console.log(`Story scheduled at random threshold ${storyThreshold}% (exit-related fallback)`);
+        }
+      } else {
+        // Story is independent - occurs at a random threshold
+        storyThreshold = Phaser.Math.Between(15, 85);
+        console.log(`Story scheduled at independent threshold ${storyThreshold}%`);
+      }
+      
+      // Ensure story doesn't conflict with CYOA events or exits (minimum 10% spacing)
+      const minSpacing = 10;
+      let attempts = 0;
+      const maxAttempts = 20;
+      
+      while (attempts < maxAttempts) {
+        let needsAdjustment = false;
+        
+        // Check spacing against planned CYOA
+        for (const cyoa of this.plannedCyoa) {
+          if (Math.abs(cyoa.cyoaThreshold - storyThreshold) < minSpacing) {
+            needsAdjustment = true;
+            break;
+          }
+        }
+        
+        // Check spacing against planned exits (both preview and exit thresholds)
+        if (!needsAdjustment) {
+          for (const exit of this.plannedExits) {
+            if (Math.abs(exit.previewThreshold - storyThreshold) < minSpacing ||
+                Math.abs(exit.exitThreshold - storyThreshold) < minSpacing) {
+              needsAdjustment = true;
               break;
             }
           }
-          
-          console.log(`🎭 CYOA ${cyoaId} scheduled after Exit ${exitNumber} at ${cyoaThreshold}% (exit was at ${chosenExit.exitThreshold}%)`);
+        }
+        
+        if (needsAdjustment) {
+          // Try a different threshold
+          storyThreshold = Phaser.Math.Between(15, 85);
+          attempts++;
+        } else {
+          break;
         }
       }
-      
-      this.plannedCyoa.push({
-        id: cyoaId,
-        cyoaThreshold: cyoaThreshold,
-        isExitRelated: isExitRelated,
-        exitNumber: exitNumber,
-        triggered: false
-      });
-    });
+    }
     
-    // Final spacing check for all CYOA events
-    this.ensureCyoaSpacing();
+    this.plannedStory = {
+      storyThreshold: storyThreshold,
+      isExitRelated: isExitRelated,
+      exitNumber: exitNumber,
+      triggered: false
+    };
     
-    console.log('🎯 Planned CYOA:', this.plannedCyoa.map(c => `CYOA ${c.id}: ${c.cyoaThreshold}%${c.isExitRelated ? ` (exit-related)` : ''}`));
-    console.log('🎯 Total planned CYOA:', this.plannedCyoa.length);
+    console.log(`Planned story: ${storyThreshold}%${isExitRelated ? ` (exit-related)` : ''}`);
   }
 
   /**
@@ -669,23 +840,31 @@ export class CarMechanics {
     this.plannedExits.forEach(plannedExit => {
       // Spawn preview when preview threshold is reached
       if (!plannedExit.previewSpawned && progress >= plannedExit.previewThreshold) {
-        console.log(`🎯 Spawning preview for Exit ${plannedExit.number} at progress ${progress}%`);
+        console.log(`Spawning preview for Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExitPreview(plannedExit);
         plannedExit.previewSpawned = true;
       }
       
       // Spawn actual exit when exit threshold is reached
       if (!plannedExit.exitSpawned && progress >= plannedExit.exitThreshold) {
-        console.log(`🚪 Spawning Exit ${plannedExit.number} at progress ${progress}%`);
+        console.log(`Spawning Exit ${plannedExit.number} at progress ${progress}%`);
         this.spawnPlannedExit(plannedExit);
         plannedExit.exitSpawned = true;
       }
     });
     
-    // Check if any planned CYOA should be triggered
+    // Check if planned story should be triggered FIRST (stories take priority over CYOA)
+    if (this.plannedStory && !this.plannedStory.triggered && progress >= this.plannedStory.storyThreshold) {
+      console.log(`Triggering story at progress ${progress}%${this.plannedStory.isExitRelated ? ` (exit-related)` : ''}`);
+      this.triggerStory(this.plannedStory);
+      this.plannedStory.triggered = true;
+      return; // Don't trigger CYOA events if story is triggered
+    }
+    
+    // SIMPLE CYOA TRIGGERING: Just trigger when progress threshold is reached
     this.plannedCyoa.forEach(plannedCyoa => {
       if (!plannedCyoa.triggered && progress >= plannedCyoa.cyoaThreshold) {
-        console.log(`🎭 Triggering CYOA ${plannedCyoa.id} at progress ${progress}%${plannedCyoa.isExitRelated ? ` (exit-related)` : ''}`);
+        console.log(`updateProgress: Triggering CYOA ${plannedCyoa.id} at progress ${progress.toFixed(1)}%`);
         this.triggerCyoa(plannedCyoa);
         plannedCyoa.triggered = true;
       }
@@ -849,6 +1028,7 @@ export class CarMechanics {
     obstacle.setData('text', exitText); // Store text reference
     obstacle.setData('laneIndex', plannedExit.laneIndex);
     obstacle.setData('shopCount', plannedExit.shopCount); // Store shop count for menu
+    obstacle.setData('exitNumber', plannedExit.number); // Store exit number for CYOA
     
     // Add to obstacles array for collision detection
     this.obstacles.push(obstacle);
@@ -866,7 +1046,18 @@ export class CarMechanics {
    * Trigger a planned CYOA
    */
   private triggerCyoa(plannedCyoa: any) {
-    console.log(`🎭 Triggering CYOA ${plannedCyoa.id}${plannedCyoa.isExitRelated ? ` (related to exit ${plannedCyoa.exitNumber})` : ''}`);
+    console.log(`🎭 triggerCyoa called for CYOA ${plannedCyoa.id}`);
+    
+    // Prevent double-triggering of the same CYOA
+    if (plannedCyoa.triggered) {
+      console.warn(`🎭 Guard: CYOA ${plannedCyoa.id} already triggered, preventing double-trigger`);
+      return;
+    }
+    
+    console.log(`Triggering CYOA ${plannedCyoa.id}`);
+    
+    // Mark as triggered immediately to prevent double-triggering
+    plannedCyoa.triggered = true;
     
     // Pause driving
     this.pauseDriving();
@@ -876,33 +1067,228 @@ export class CarMechanics {
     if (menuScene) {
       (menuScene as any).events.emit('showCyoaMenu', {
         cyoaId: plannedCyoa.id,
-        isExitRelated: plannedCyoa.isExitRelated,
-        exitNumber: plannedCyoa.exitNumber
+        isExitRelated: false,
+        exitNumber: undefined,
+        exitTiming: undefined
       });
       this.scene.scene.bringToTop('MenuScene');
     }
+  }
+
+
+  // triggerScheduledExitCyoa method removed - now using direct triggering
+
+  /**
+   * Trigger a planned story
+   */
+  private triggerStory(plannedStory: any) {
+    console.log(`📖 Triggering story${plannedStory.isExitRelated ? ` (related to exit ${plannedStory.exitNumber})` : ''}`);
+    
+    // Pause driving
+    this.pauseDriving();
+    
+    // Get available storylines and pick a random one
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene && (gameScene as any).storyManager) {
+      const storyManager = (gameScene as any).storyManager;
+      const gameState = (gameScene as any).gameState;
+      
+      // Check if this is the first story of the playthrough
+      const isFirstStory = gameState && gameState.getState().stops === 0;
+      
+      // Check if we should trigger a fauxchella story based on monthly listeners
+      const shouldTriggerFauxchella = this.shouldTriggerFauxchellaStory(gameState);
+      
+      let selectedStoryline: string;
+      
+      if (isFirstStory) {
+        // First story: always use fauxchella-1
+        selectedStoryline = 'fauxchella';
+        console.log(`📖 First story: Starting fauxchella-1`);
+      } else if (shouldTriggerFauxchella) {
+        // Monthly listener threshold: use next fauxchella story
+        selectedStoryline = 'fauxchella';
+        console.log(`📖 Monthly listener threshold: Starting next fauxchella story`);
+      } else {
+        // Regular story: pick random storyline (excluding fauxchella)
+        const storylines = storyManager.getAvailableStorylines();
+        const nonFauxchellaStorylines = storylines.filter((s: string) => s !== 'fauxchella');
+        selectedStoryline = nonFauxchellaStorylines[Math.floor(Math.random() * nonFauxchellaStorylines.length)];
+        console.log(`📖 Starting storyline: ${selectedStoryline}`);
+      }
+      
+      // Start the story
+      storyManager.startStory(selectedStoryline, 1);
+      
+      // Show story menu
+      const menuScene = this.scene.scene.get('MenuScene');
+      if (menuScene) {
+        this.scene.scene.bringToTop('MenuScene');
+      }
+    } else {
+      // Fallback to old story system
+      const menuScene = this.scene.scene.get('MenuScene');
+      if (menuScene) {
+        (menuScene as any).events.emit('showStoryMenu', {
+          isExitRelated: plannedStory.isExitRelated,
+          exitNumber: plannedStory.exitNumber
+        });
+        this.scene.scene.bringToTop('MenuScene');
+      }
+    }
+  }
+
+  /**
+   * Check if we should trigger a fauxchella story based on monthly listeners
+   */
+  private shouldTriggerFauxchellaStory(gameState: any): boolean {
+    if (!gameState) return false;
+    
+    const state = gameState.getState();
+    const monthlyListeners = state.monthlyListeners || 0;
+    
+    // Define monthly listener thresholds for fauxchella stories
+    const fauxchellaThresholds = [
+      5000,   // fauxchella-2
+      10000,  // fauxchella-3  
+      20000   // fauxchella-4
+    ];
+    
+    // Check if we've crossed any threshold
+    for (const threshold of fauxchellaThresholds) {
+      if (monthlyListeners >= threshold) {
+        // Check if we've already triggered this threshold's story
+        const thresholdKey = `fauxchella_${threshold}`;
+        const hasTriggered = state[thresholdKey] || false;
+        
+        if (!hasTriggered) {
+          // Mark this threshold as triggered
+          gameState.updateState({ [thresholdKey]: true });
+          console.log(`📖 Fauxchella threshold reached: ${monthlyListeners} listeners (threshold: ${threshold})`);
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if there's a skipped story that should be shown
+   */
+  private hasSkippedStory(): boolean {
+    // Only check for actual story events, not CYOA events
+    return !!(this.plannedStory && !this.plannedStory.triggered);
+  }
+
+  /**
+   * Trigger a skipped story before showing destination menu
+   */
+  private triggerSkippedStory(): void {
+    if (!this.plannedStory || this.plannedStory.triggered) {
+      return;
+    }
+
+    console.log(`📖 CarMechanics: Triggering skipped story at ${this.plannedStory.storyThreshold}%`);
+    
+    // Mark the story as triggered
+    this.plannedStory.triggered = true;
+    
+    // Trigger the story using the existing logic
+    this.triggerStory(this.plannedStory);
+  }
+
+  /**
+   * Check if there's a pending destination menu to show after story completion
+   */
+  public hasPendingDestinationMenu(): boolean {
+    return this.pendingDestinationMenu !== null;
+  }
+
+  /**
+   * Show the pending destination menu after story completion
+   */
+  public showPendingDestinationMenu(): void {
+    if (!this.pendingDestinationMenu) {
+      return;
+    }
+
+    const { shopCount, exitNumber } = this.pendingDestinationMenu;
+    
+    console.log(`🎭 CarMechanics: Showing pending destination menu for exit ${exitNumber}`);
+    
+    const menuScene = this.scene.scene.get('MenuScene');
+    if (menuScene && exitNumber != null) {
+      (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+      this.scene.scene.bringToTop('MenuScene');
+    }
+    
+    // Clear the pending menu
+    this.pendingDestinationMenu = null;
   }
 
   /**
    * Get planned exits for UI display (shows exit thresholds, not preview thresholds)
    */
   public getPlannedExits() {
-    return this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
+    const result = this.plannedExits.filter(exit => !exit.exitSpawned).map(exit => ({
       progressThreshold: exit.exitThreshold,
-      spawned: exit.exitSpawned
+      spawned: exit.exitSpawned,
+      number: exit.number
     }));
+    
+    return result;
   }
 
   /**
    * Get planned CYOA for UI display
    */
   public getPlannedCyoa() {
-    return this.plannedCyoa.filter(cyoa => !cyoa.triggered).map(cyoa => ({
+    const result = this.plannedCyoa.filter(cyoa => !cyoa.triggered).map(cyoa => ({
       progressThreshold: cyoa.cyoaThreshold,
-      triggered: cyoa.triggered,
-      isExitRelated: cyoa.isExitRelated,
-      exitNumber: cyoa.exitNumber
+      triggered: cyoa.triggered
     }));
+    
+    return result;
+  }
+
+  /**
+   * Set night time mode for visual effects
+   */
+  public setNightTimeMode(enabled: boolean) {
+    if (enabled && !this.nightModeEnabled) {
+      // Darken the sky color for night time
+      this.config.skyColor = 0x202020; // Very dark grey
+      this.nightModeEnabled = true;
+      
+      // Check if any menu is currently open - suppress logs during menus
+      const menuScene = this.scene.scene.get('MenuScene');
+      const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+      
+      if (!hasOpenMenu) {
+        console.log('🌙 CarMechanics: Night time mode enabled');
+      }
+    } else if (!enabled && this.nightModeEnabled) {
+      // Restore normal sky color
+      this.config.skyColor = 0x000000; // Black (normal)
+      this.nightModeEnabled = false;
+    }
+  }
+
+  /**
+   * Get planned story for UI display
+   */
+  public getPlannedStory() {
+    if (!this.plannedStory || this.plannedStory.triggered) {
+      return null;
+    }
+    
+    return {
+      progressThreshold: this.plannedStory.storyThreshold,
+      triggered: this.plannedStory.triggered,
+      isExitRelated: this.plannedStory.isExitRelated,
+      exitNumber: this.plannedStory.exitNumber
+    };
   }
 
   /**
@@ -956,7 +1342,7 @@ export class CarMechanics {
     if (this.speedProgressionStartStep <= 0) {
       this.speedProgressionStartStep = currentStep;
       this.baseSpeed = this.config.carMaxSpeed; // Use max speed as base
-      console.log(`🚀 Starting automatic speed progression at step ${currentStep}`);
+      console.log(`Starting automatic speed progression at step ${currentStep}`);
     }
   }
 
@@ -965,6 +1351,10 @@ export class CarMechanics {
    */
   public onStepEvent(currentStep: number) {
     if (!this.drivingMode || this.drivingPaused) return;
+    
+    // No more exit-related CYOAs, so no deferred exit menus
+
+    // Scheduled CYOA system removed - now using direct triggering
     
     // Update speed progression on step events only
     this.updateCarSpeedWithProgression(currentStep);
@@ -1030,7 +1420,7 @@ export class CarMechanics {
     if (elapsedSteps > 0 && elapsedSteps % 30 === 0) {
       const currentPercent = Math.round((this.carSpeed / this.baseSpeed) * 100);
       const incrementThisStep = Math.round(incrementPercent * 100 * 100) / 100; // Show as percentage
-      console.log(`🚀 Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
+      console.log(`Speed progression: ${currentPercent}% (+${incrementThisStep}% this step) at step ${currentStep}`);
     }
   }
 
@@ -1068,7 +1458,7 @@ export class CarMechanics {
     
     // Debug logging every 30 steps to show gravity changes
     if (this.scene.time.now % 500 < 16) { // Roughly every 500ms
-      console.log(`🌍 Gravity: ${speedPercentage}% speed → ${gravityMultiplier.toFixed(2)}x multiplier → Y: ${newGravityY.toFixed(2)}`);
+      console.log(`Gravity: ${speedPercentage}% speed -> ${gravityMultiplier.toFixed(2)}x multiplier -> Y: ${newGravityY.toFixed(2)}`);
     }
   }
 
@@ -1372,10 +1762,7 @@ export class CarMechanics {
     // Map steering position (-1 to 1) to car position range
     const targetCarX = centerX + (normalizedValue * maxOffset);
     
-    // Debug logging every 30 steps to show position changes
-    if (this.scene.time.now % 500 < 16) { // Roughly every 500ms
-      console.log(`🚗 Position Debug: Steering: ${this.currentSteeringValue.toFixed(1)} → Normalized: ${normalizedValue.toFixed(2)} → Target: ${targetCarX.toFixed(1)} → Current: ${this.carX.toFixed(1)} → MaxOffset: ${maxOffset.toFixed(1)}`);
-    }
+    // Position debug logging removed to reduce console spam
     
     // Smooth movement towards target position - much faster and speed-independent
     const moveSpeed = 0.15; // How fast car moves towards target (higher = more responsive)
@@ -1604,11 +1991,7 @@ export class CarMechanics {
       carBounds = new Phaser.Geom.Rectangle(carX - 30, carY - 30, 60, 60);
     }
     
-    // Debug: Log the actual car position vs expected position
-    if (this.scene.time.now % 1000 < 16) { // Log every 1000ms
-      const expectedY = Math.floor(gameHeight * 0.85);
-      console.log(`🚗 Car Position Debug: Actual Y=${carBounds.centerY.toFixed(1)}, Expected Y=${expectedY}, Container Scale=${this.drivingContainer.scaleY}, Container Y=${this.drivingContainer.y}, Container X=${this.drivingContainer.x}`);
-    }
+    // Car position debug logging removed to reduce console spam
     
     this.obstacles.forEach(obstacle => {
       // Skip exit previews - they shouldn't trigger collisions
@@ -1636,9 +2019,9 @@ export class CarMechanics {
                           carBounds.top > visualBounds.bottom);
         
         if (collision) {
-          console.log(`💥 COLLISION DETECTED! Car: (${carBounds.left.toFixed(1)}, ${carBounds.top.toFixed(1)}) to (${carBounds.right.toFixed(1)}, ${carBounds.bottom.toFixed(1)})`);
-          console.log(`💥 Obstacle: (${visualBounds.left.toFixed(1)}, ${visualBounds.top.toFixed(1)}) to (${visualBounds.right.toFixed(1)}, ${visualBounds.bottom.toFixed(1)})`);
-          console.log(`💥 Car Visual Position: X=${carBounds.centerX.toFixed(1)}, Y=${carBounds.centerY.toFixed(1)}`);
+          console.log(`COLLISION DETECTED! Car: (${carBounds.left.toFixed(1)}, ${carBounds.top.toFixed(1)}) to (${carBounds.right.toFixed(1)}, ${carBounds.bottom.toFixed(1)})`);
+          console.log(`Obstacle: (${visualBounds.left.toFixed(1)}, ${visualBounds.top.toFixed(1)}) to (${visualBounds.right.toFixed(1)}, ${visualBounds.bottom.toFixed(1)})`);
+          console.log(`Car Visual Position: X=${carBounds.centerX.toFixed(1)}, Y=${carBounds.centerY.toFixed(1)}`);
           const visualToDestroy: Phaser.GameObjects.Rectangle | undefined = obstacle.getData('visual');
           if (visualToDestroy) visualToDestroy.destroy();
           this.handleCollisionWithObstacle(obstacle);
@@ -1688,8 +2071,38 @@ export class CarMechanics {
       const menuScene = this.scene.scene.get('MenuScene');
       if (menuScene) {
         const shopCount = obstacle.getData('shopCount') || 3; // Default to 3 if not set
-        (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount);
-        this.scene.scene.bringToTop('MenuScene');
+        // Resolve exit number robustly
+        let exitNumber: number | undefined = obstacle.getData('exitNumber');
+        if (exitNumber == null) {
+          // Try to find matching active exit by reference
+          try {
+            const match = this.activeExits.find(ae => ae.obstacle === obstacle);
+            if (match) exitNumber = match.exitNumber;
+          } catch {}
+        }
+        if (exitNumber == null && this.activeExits.length > 0) {
+          // Fallback to most recently added active exit
+          exitNumber = this.activeExits[this.activeExits.length - 1].exitNumber;
+        }
+        console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
+
+        // Check for skipped stories before showing destination menu
+        if (this.hasSkippedStory()) {
+          console.log(`📖 CarMechanics: Skipped story detected, storing destination menu and showing story first`);
+          // Store the destination menu data to show after story completion
+          this.pendingDestinationMenu = { shopCount, exitNumber: exitNumber || 1 };
+          this.triggerSkippedStory();
+        } else {
+          // Show the exit menu immediately (no more exit-related CYOAs)
+          if (exitNumber != null) {
+            console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
+            console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
+            console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
+            (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+            console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
+            this.scene.scene.bringToTop('MenuScene');
+          }
+        }
       }
     }
     obstacle.destroy();
@@ -2169,3 +2582,4 @@ export class CarMechanics {
     });
   }
 }
+

@@ -1,28 +1,27 @@
 /**
- * MENU MANAGER - UNIFIED MENU SYSTEM
+ * MENU MANAGER - SIMPLIFIED UNIFIED MENU SYSTEM
  * 
  * This class handles all menu creation, display, and management throughout the game.
  * It provides a consistent interface for creating different types of menus with
  * proper hierarchy, styling, and user interaction handling.
  * 
  * Key Features:
- * - Menu hierarchy system (prevents menu conflicts)
+ * - Simplified menu hierarchy system (prevents menu conflicts)
+ * - Category-based menu management (PERSISTENT, TEMPORARY, ONE_TIME, OVERLAY)
  * - Unified overlay background system (same as tutorial overlays)
  * - Consistent styling and positioning
  * - Event-driven menu creation
  * - Save/load integration
  * - Slider controls for interactive elements
  * 
- * Menu Types:
- * - Start Menu: Game initialization and resume options
- * - Pause Menu: Game pause/resume controls
- * - Save Menu: Save game functionality
- * - Turn Key Menu: Car ignition with slider control
- * - Obstacle Menus: Pothole and exit interactions
- * - Game Over Menu: End game state
+ * Menu Categories:
+ * - PERSISTENT: Menus that should be restored (START, PAUSE, GAME_OVER, TURN_KEY)
+ * - TEMPORARY: Menus that can be restored but are context-dependent (OBSTACLE, EXIT, SHOP, SAVE)
+ * - ONE_TIME: Menus that should never be restored (CYOA, STORY, MORAL_DECISION)
+ * - OVERLAY: Non-blocking overlays (TUTORIAL, PET_STORY)
  * 
- * The system uses a stack-based approach to manage menu priority and
- * ensures only one menu is active at a time with proper cleanup.
+ * The system uses a simplified stack-based approach with clear cleanup rules
+ * and ensures only one menu is active at a time with predictable behavior.
  */
 
 import Phaser from 'phaser';
@@ -43,13 +42,46 @@ export interface MenuConfig {
   height?: number;
 }
 
+/**
+ * MenuManager - Handles all game menus with universal auto-completion system
+ * 
+ * AUTO-COMPLETION SYSTEM:
+ * - Prevents game from getting stuck on functional menus
+ * - Uses step-based counting when game is running, timer-based when paused
+ * - 12-step countdown for all functional menus
+ * 
+ * MENUS WITH AUTO-COMPLETION:
+ * - TURN_KEY (ignition) - Prevents game from getting stuck
+ * - SHOP - Prevents game from getting stuck
+ * - PAUSE - Prevents game from getting stuck
+ * - STORY - Prevents game from getting stuck
+ * 
+ * MENUS WITHOUT AUTO-COMPLETION:
+ * - START - Initial menu, player chooses when to start
+ * - CYOA - Interactive story content that players should engage with
+ * - DESTINATION - Interactive planning content that players should engage with
+ * - EXIT - Interactive shop selection that players should engage with
+ * 
+ * MENU CATEGORIES:
+ * - PERSISTENT: Can be restored (PAUSE, SAVE, LOAD)
+ * - TEMPORARY: Single use, not restored (TURN_KEY, EXIT, SHOP, CYOA, STORY, DESTINATION)
+ * - ONE_TIME: Cleaned up completely (GAME_OVER)
+ * - OVERLAY: Ephemeral, auto-hide (tutorial overlays)
+ */
 export class MenuManager {
   // ============================================================================
   // MENU PARAMETERS - Using centralized configuration
   // ============================================================================
   
   // Text display callbacks for cleanup
-  private textDisplayCallbacks: Phaser.Time.TimerEvent[] = [];
+  private textDisplayCallbacks: Phaser.Time.TimerEvent[] = []
+  
+  // Universal menu auto-completion tracking
+  private menuAutoCompleteStepCount: number = 0
+  private menuAutoCompleteTimer: Phaser.Time.TimerEvent | null = null
+  private menuCountdownText: Phaser.GameObjects.Text | null = null
+  private menuCountdownTimer: Phaser.Time.TimerEvent | null = null
+  private currentMenuAutoCompleteType: string | null = null;
   
   // Slider Parameters
   private readonly SLIDER_WIDTH = MENU_CONFIG.sliderWidth;
@@ -95,9 +127,10 @@ export class MenuManager {
   // CLASS PROPERTIES
   // ============================================================================
   
-  // Menu Hierarchy System
+  // Menu Hierarchy System - Simplified
   private readonly MENU_PRIORITIES = {
-    START: 100,      // Highest priority - start menu
+    TURN_KEY: 110,    // Highest priority - turn key menu (must always show)
+    START: 100,       // High priority - start menu
     PAUSE: 80,        // High priority - pause menu
     GAME_OVER: 70,    // High priority - game over menu
     OBSTACLE: 60,     // Medium priority - obstacle collision menu
@@ -107,10 +140,19 @@ export class MenuManager {
     EXIT: 50,         // Medium priority - exit choice menu
     SHOP: 50,         // Medium priority - shop menu
     CYOA: 50,         // Medium priority - choose-your-own-adventure menu
+    STORY: 50,        // Medium priority - story menu
     VIRTUAL_PET: 50,  // Medium priority -  menu
     MORAL_DECISION: 50, // Medium priority - moral decision menu
     PET_STORY: 40,    // Low priority - pet story UI
-    TURN_KEY: 30      // Lowest priority - ignition menu
+    TUTORIAL: 20      // Lowest priority - tutorial overlay
+  };
+
+  // Menu Categories - Simplified cleanup rules
+  private readonly MENU_CATEGORIES = {
+    PERSISTENT: ['START', 'PAUSE', 'GAME_OVER', 'TURN_KEY'], // Menus that should be restored
+    TEMPORARY: ['OBSTACLE', 'EXIT', 'SHOP', 'SAVE'], // Menus that can be restored but are context-dependent
+    ONE_TIME: ['CYOA', 'STORY', 'MORAL_DECISION'], // Menus that should never be restored
+    OVERLAY: ['TUTORIAL', 'PET_STORY'] // Non-blocking overlays
   };
   
   private scene: Phaser.Scene;
@@ -125,6 +167,182 @@ export class MenuManager {
     this.saveManager = SaveManager.getInstance();
     // Listen for global step events to auto-hide ephemeral overlays
     this.scene.events.on('step', this.onGlobalStep, this);
+    // Listen for CYOA menu events
+    this.scene.events.on('showCyoaMenu', this.showCyoaMenu, this);
+    // Listen for step events for universal menu auto-completion
+    this.scene.events.on('step', this.onStepEvent, this);
+  }
+
+  /**
+   * Start universal menu auto-completion
+   */
+  private startMenuAutoComplete(menuType: string) {
+    // Skip auto-completion for interactive menus that players should engage with
+    if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION' || menuType === 'EXIT') {
+      return;
+    }
+    
+    this.currentMenuAutoCompleteType = menuType;
+    this.menuAutoCompleteStepCount = 0;
+    
+    // Check if steps are being counted (game is running)
+    const appScene = this.scene.scene.get('AppScene');
+    const isGameRunning = appScene && !(appScene as any).isPaused && (appScene as any).gameStarted;
+    
+    if (isGameRunning) {
+      // Use step-based counting
+      this.addMenuCountdown(menuType, 'steps');
+    } else {
+      // Use timer-based counting (step-lengths)
+      this.startMenuCountdownTimer(menuType);
+    }
+  }
+
+  /**
+   * Stop universal menu auto-completion
+   */
+  private stopMenuAutoComplete() {
+    this.currentMenuAutoCompleteType = null;
+    this.menuAutoCompleteStepCount = 0;
+    
+    // Stop timer if running
+    if (this.menuCountdownTimer) {
+      this.menuCountdownTimer.destroy();
+      this.menuCountdownTimer = null;
+    }
+    
+    // Clear countdown text
+    if (this.menuCountdownText) {
+      this.menuCountdownText.destroy();
+      this.menuCountdownText = null;
+    }
+  }
+
+  /**
+   * Step event handler for universal menu auto-completion
+   */
+  private onStepEvent(step: number) {
+    // Only track steps when a menu with auto-completion is open
+    if (this.currentMenuAutoCompleteType && this.currentMenuAutoCompleteType !== 'START') {
+      this.menuAutoCompleteStepCount++;
+      const remainingSteps = 12 - this.menuAutoCompleteStepCount;
+      
+      // Update countdown text
+      if (this.menuCountdownText) {
+        this.menuCountdownText.setText(`Auto-complete in: ${remainingSteps} steps`);
+      }
+      
+      // Auto-complete after 12 steps
+      if (this.menuAutoCompleteStepCount >= 12) {
+        this.autoCompleteCurrentMenu();
+      }
+    }
+  }
+
+  /**
+   * Start timer-based countdown for menus
+   */
+  private startMenuCountdownTimer(menuType: string) {
+    let countdown = 12; // Start with 12 step-lengths (12 seconds)
+    
+    // Add countdown text
+    this.addMenuCountdown(menuType, 'step-lengths');
+    
+    // Create timer that updates every step-length (1000ms = 1 second)
+    this.menuCountdownTimer = this.scene.time.addEvent({
+      delay: 1000, // 1 step-length = 1000ms
+      callback: () => {
+        countdown--;
+        
+        // Update countdown text
+        if (this.menuCountdownText) {
+          this.menuCountdownText.setText(`Auto-complete in: ${countdown} step-lengths`);
+        }
+        
+        // Auto-complete when countdown reaches 0
+        if (countdown <= 0) {
+          this.autoCompleteCurrentMenu();
+        }
+      },
+      loop: true,
+      repeat: 11 // Repeat 11 times (12 total step-lengths)
+    });
+  }
+
+  /**
+   * Add countdown text to current menu
+   */
+  private addMenuCountdown(menuType: string, unit: 'steps' | 'step-lengths') {
+    // Add a small delay to ensure the dialog is fully created and positioned
+    this.scene.time.delayedCall(100, () => {
+      const gameWidth = this.scene.cameras.main.width;
+      const gameHeight = this.scene.cameras.main.height;
+      const centerX = gameWidth / 2;
+      const centerY = gameHeight / 2;
+      
+      // Create countdown text positioned above the menu content
+      this.menuCountdownText = this.scene.add.text(centerX, centerY - 100, `Auto-complete in: 12 ${unit}`, {
+        fontSize: '16px',
+        color: '#ff6b6b',
+        fontStyle: 'bold',
+        backgroundColor: '#000000',
+        padding: { x: 8, y: 4 }
+      });
+      this.menuCountdownText.setOrigin(0.5);
+      this.menuCountdownText.setScrollFactor(0);
+      this.menuCountdownText.setDepth(1000); // High depth to appear above other elements
+      
+      // Store reference for cleanup
+      if (this.currentDialog) {
+        (this.currentDialog as any).countdownText = this.menuCountdownText;
+      }
+    });
+  }
+
+  /**
+   * Auto-complete the current menu
+   */
+  private autoCompleteCurrentMenu() {
+    if (!this.currentMenuAutoCompleteType) {
+      return;
+    }
+    
+    // Store the menu type before stopping auto-completion tracking
+    const menuType = this.currentMenuAutoCompleteType;
+    
+    // Stop auto-completion tracking
+    this.stopMenuAutoComplete();
+    
+    // Handle different menu types using the stored menu type
+    switch (menuType) {
+      case 'TURN_KEY':
+        // For ignition menu, add delay before closing and emitting turnKey event (matches manual completion)
+        this.scene.time.delayedCall(500, () => {
+          this.closeDialog();
+          const gameScene = this.scene.scene.get('GameScene');
+          if (gameScene) {
+            gameScene.events.emit('turnKey');
+          }
+        });
+        break;
+      case 'CYOA':
+        // For CYOA menus, just close and resume
+        this.closeDialog();
+        break;
+      case 'EXIT':
+      case 'SHOP':
+        // For exit/shop menus, close and resume
+        this.closeDialog();
+        break;
+      case 'PAUSE':
+        // For pause menu, resume game
+        this.closeDialog();
+        break;
+      default:
+        // For other menus, just close
+        this.closeDialog();
+        break;
+    }
   }
 
   /**
@@ -136,14 +354,10 @@ export class MenuManager {
     
     // Check if there's a higher priority menu already showing
     const currentMenu = this.menuStack[this.menuStack.length - 1];
-    console.log(`MenuManager: canShowMenu(${menuType}) - newPriority: ${newPriority}, currentMenu:`, currentMenu ? `${currentMenu.type}(${currentMenu.priority})` : 'none');
     
     if (currentMenu && currentMenu.priority > newPriority) {
-      console.log(`MenuManager: Cannot show ${menuType} (priority ${newPriority}) - higher priority menu ${currentMenu.type} (priority ${currentMenu.priority}) is active`);
       return false;
     }
-    
-    console.log(`MenuManager: Can show ${menuType} (priority ${newPriority})`);
     return true;
   }
   
@@ -151,13 +365,11 @@ export class MenuManager {
     const priority = this.MENU_PRIORITIES[menuType as keyof typeof this.MENU_PRIORITIES];
     if (priority) {
       this.menuStack.push({ type: menuType, priority, config });
-      console.log(`MenuManager: Pushed ${menuType} to stack (priority ${priority}). Stack:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
     }
   }
   
   private popMenu(): {type: string, priority: number, config?: any} | null {
     const popped = this.menuStack.pop();
-    console.log(`MenuManager: Popped ${popped?.type} from stack. Remaining:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
     return popped || null;
   }
   
@@ -166,11 +378,57 @@ export class MenuManager {
     const index = this.menuStack.findIndex(menu => menu.type === menuType);
     if (index !== -1) {
       const popped = this.menuStack.splice(index, 1)[0];
-      console.log(`MenuManager: Popped specific ${popped.type} from stack. Remaining:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
       return popped;
     }
-    console.log(`MenuManager: Could not find ${menuType} in stack to pop`);
     return null;
+  }
+
+  // Simplified cleanup methods
+  private clearMenusFromStack(menuType: string) {
+    const initialLength = this.menuStack.length;
+    this.menuStack = this.menuStack.filter(menu => menu.type !== menuType);
+    const removedCount = initialLength - this.menuStack.length;
+    if (removedCount > 0) {
+      console.log(`MenuManager: Cleared ${removedCount} ${menuType} menu(s) from stack. Stack now:`, this.menuStack.map(m => `${m.type}(${m.priority})`));
+    }
+  }
+  
+  private resumeGame() {
+    const appScene = this.scene.scene.get('AppScene');
+    const gameScene = this.scene.scene.get('GameScene');
+    
+    if (appScene) {
+      (appScene as any).isPaused = false;
+      console.log('MenuManager: Game resumed');
+    }
+    
+    if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
+      (gameScene as any).carMechanics.resumeDriving();
+      console.log('MenuManager: Resumed CarMechanics driving');
+    }
+    
+    if (gameScene) {
+      gameScene.events.emit('gameResumed');
+    }
+  }
+
+  private pauseGame() {
+    const appScene = this.scene.scene.get('AppScene');
+    const gameScene = this.scene.scene.get('GameScene');
+    
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused');
+    }
+    
+    if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
+      (gameScene as any).carMechanics.pauseDriving();
+      console.log('MenuManager: Paused CarMechanics driving');
+    }
+    
+    if (gameScene) {
+      gameScene.events.emit('gamePaused');
+    }
   }
 
   // STORY OVERLAY -----------------------------------------------------------
@@ -310,10 +568,10 @@ export class MenuManager {
     if (!petXY) return;
     const cam = this.scene.cameras.main;
     const uiWidth = 160;
-    const uiHeight = 80;
+    const uiHeight = 120; // Increased height for 3 meters
     let petX = Phaser.Math.Clamp(petXY.x, uiWidth / 2, cam.width - uiWidth / 2);
-    let petY = petXY.y - 80; // Default above
-    if (petY - uiHeight / 2 < 0) petY = petXY.y + 80; // Flip below
+    let petY = petXY.y - 100; // Moved up more to accommodate taller UI
+    if (petY - uiHeight / 2 < 0) petY = petXY.y + 100; // Flip below
     
     try { this.scene.scene.bringToTop('MenuScene'); } catch {}
     
@@ -330,8 +588,9 @@ export class MenuManager {
     dialogBackground.setScrollFactor(0);
     this.currentDialog.add(dialogBackground);
     
-    const foodLabel = this.scene.add.text(0, -20, 'FOOD', {
-      fontSize: '14px',
+    // Food meter
+    const foodLabel = this.scene.add.text(0, -40, 'FOOD', {
+      fontSize: '12px',
       color: '#ffffff',
       fontStyle: 'bold',
       align: 'center'
@@ -339,18 +598,56 @@ export class MenuManager {
     foodLabel.setScrollFactor(0);
     
     const foodBarWidth = 100;
-    const foodBarHeight = 12;
-    const foodBarBG = this.scene.add.rectangle(0, 5, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    const foodBarHeight = 10;
+    const foodBarBG = this.scene.add.rectangle(0, -25, foodBarWidth, foodBarHeight, 0x000000, 0.6);
     foodBarBG.setStrokeStyle(1, 0xffffff, 0.8);
     foodBarBG.setScrollFactor(0);
     
     const foodValue = pet.getFoodValue?.() || 0;
-    const fillWidth = Math.floor(foodBarWidth * (foodValue / 10));
-    const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, 5, fillWidth, foodBarHeight - 2, 0x2ecc71, 1);
+    const foodFillWidth = Math.floor(foodBarWidth * (foodValue / 10));
+    const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, -25, foodFillWidth, foodBarHeight - 2, 0x2ecc71, 1);
     foodBarFill.setOrigin(0, 0.5);
     foodBarFill.setScrollFactor(0);
     
-    this.currentDialog.add([foodLabel, foodBarBG, foodBarFill]);
+    // Bathroom meter
+    const bathroomLabel = this.scene.add.text(0, -5, 'BATH', {
+      fontSize: '12px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
+    bathroomLabel.setScrollFactor(0);
+    
+    const bathroomBarBG = this.scene.add.rectangle(0, 10, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    bathroomBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+    bathroomBarBG.setScrollFactor(0);
+    
+    const bathroomValue = pet.getBathroomValue?.() || 0;
+    const bathroomFillWidth = Math.floor(foodBarWidth * (bathroomValue / 10));
+    const bathroomBarFill = this.scene.add.rectangle(-foodBarWidth/2, 10, bathroomFillWidth, foodBarHeight - 2, 0x3498db, 1);
+    bathroomBarFill.setOrigin(0, 0.5);
+    bathroomBarFill.setScrollFactor(0);
+    
+    // Bored meter
+    const boredLabel = this.scene.add.text(0, 30, 'BORED', {
+      fontSize: '12px',
+      color: '#ffffff',
+      fontStyle: 'bold',
+      align: 'center'
+    }).setOrigin(0.5);
+    boredLabel.setScrollFactor(0);
+    
+    const boredBarBG = this.scene.add.rectangle(0, 45, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+    boredBarBG.setStrokeStyle(1, 0xffffff, 0.8);
+    boredBarBG.setScrollFactor(0);
+    
+    const boredValue = pet.getBoredValue?.() || 0;
+    const boredFillWidth = Math.floor(foodBarWidth * (boredValue / 10));
+    const boredBarFill = this.scene.add.rectangle(-foodBarWidth/2, 45, boredFillWidth, foodBarHeight - 2, 0x9b59b6, 1);
+    boredBarFill.setOrigin(0, 0.5);
+    boredBarFill.setScrollFactor(0);
+    
+    this.currentDialog.add([foodLabel, foodBarBG, foodBarFill, bathroomLabel, bathroomBarBG, bathroomBarFill, boredLabel, boredBarBG, boredBarFill]);
     
     (this.currentDialog as any).stepsRemaining = 3;
     (this.currentDialog as any).isStory = true;
@@ -361,18 +658,40 @@ export class MenuManager {
     return current ? current.type : null;
   }
   
+  // Debug helper to see current stack state
+  public getStackState(): string {
+    if (this.menuStack.length === 0) return 'Empty stack';
+    return this.menuStack.map(m => `${m.type}(${m.priority})`).join(' → ');
+  }
+  
   private shouldRestorePreviousMenu(): boolean {
-    // Only restore if there's a menu in the stack, no current dialog, and the menu being restored wasn't user-dismissed
+    // Basic checks
     if (this.menuStack.length === 0 || this.currentDialog) return false;
     
     const menuToRestore = this.menuStack[this.menuStack.length - 1];
-    const shouldRestore = menuToRestore.type !== this.userDismissedMenuType;
     
-    console.log('MenuManager: shouldRestorePreviousMenu - stack length:', this.menuStack.length, 'currentDialog:', !!this.currentDialog, 'menuToRestore:', menuToRestore.type, 'userDismissed:', this.userDismissedMenuType, 'shouldRestore:', shouldRestore);
-    if (this.menuStack.length > 0) {
-      console.log('MenuManager: Stack contents:', this.menuStack.map(m => `${m.type}(${m.priority})`));
+    // NEVER restore CYOA menus - they are one-time events
+    if (menuToRestore.type === 'CYOA') {
+      console.log(`MenuManager: CYOA is one-time event, not restoring`);
+      return false;
     }
-    return shouldRestore;
+    
+    // Only restore PERSISTENT menus (START, PAUSE, GAME_OVER, TURN_KEY)
+    const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
+    
+    if (!isPersistent) {
+      console.log(`MenuManager: ${menuToRestore.type} is not persistent, not restoring`);
+      return false;
+    }
+    
+    // Don't restore if user explicitly dismissed this menu type
+    if (menuToRestore.type === this.userDismissedMenuType) {
+      console.log(`MenuManager: User dismissed ${menuToRestore.type}, not restoring`);
+      return false;
+    }
+    
+    console.log(`MenuManager: Restoring ${menuToRestore.type} (persistent menu)`);
+    return true;
   }
   
   private restorePreviousMenu() {
@@ -381,53 +700,47 @@ export class MenuManager {
     const previousMenu = this.menuStack[this.menuStack.length - 1];
     console.log(`MenuManager: Restoring previous menu: ${previousMenu.type}`);
     
+    // Pop the menu from stack first
+    this.popMenu();
+    
+    // Restore based on menu type - simplified approach
     switch (previousMenu.type) {
       case 'START':
-        this.popMenu();
         this.showStartMenu();
         break;
       case 'PAUSE':
-        this.popMenu();
         this.showPauseMenu();
         break;
       case 'TURN_KEY':
-        // Check if keys are still in ignition before restoring ignition menu
+        // Check if keys are still in ignition before restoring
         const gameScene = this.scene.scene.get('GameScene');
-        console.log('MenuManager: Attempting to restore TURN_KEY menu, keysInIgnition:', gameScene ? (gameScene as any).keysInIgnition : 'no gameScene');
         if (gameScene && (gameScene as any).keysInIgnition) {
-          // Pop the menu from stack first, then show it
-          console.log('MenuManager: Popping TURN_KEY from stack and showing it');
-          this.popMenu();
           this.showTurnKeyMenu();
         } else {
           console.log('MenuManager: Not restoring ignition menu - keys not in ignition');
-          this.popMenu(); // Remove from stack since it shouldn't be restored
         }
         break;
       case 'SAVE':
-        this.popMenu();
         this.showSaveMenu();
         break;
       case 'OBSTACLE':
         if (previousMenu.config) {
-          this.popMenu();
           this.showObstacleMenu(previousMenu.config.type, previousMenu.config.damage);
         }
         break;
       case 'GAME_OVER':
-        this.popMenu();
         this.showGameOverMenu();
+        break;
+      default:
+        console.log(`MenuManager: No restoration logic for ${previousMenu.type}`);
         break;
     }
   }
 
   public showStartMenu() {
-    console.log('=== MenuManager: showStartMenu called ===');
     if (!this.canShowMenu('START')) {
-      console.log('MenuManager: canShowMenu(START) returned false, returning early');
       return;
     }
-    console.log('MenuManager: canShowMenu(START) returned true, proceeding');
     
     this.clearCurrentDialog();
     this.pushMenu('START');
@@ -496,7 +809,6 @@ export class MenuManager {
       };
     }
 
-    console.log('MenuManager: About to call createDialog with menuType: START');
     this.createDialog(menuConfig, 'START');
   }
 
@@ -541,6 +853,9 @@ export class MenuManager {
     };
 
     this.createDialog(menuConfig, 'PAUSE');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('PAUSE');
   }
 
   public showSaveMenu() {
@@ -717,10 +1032,32 @@ export class MenuManager {
     }
   }
 
-  public showExitMenu(shopCount: number = 3) {
+  public showExitMenu(shopCount: number = 3, exitNumber?: number) {
+    // Persist the last exit number so nested menus (e.g., Shop -> Back) can restore it
+    (this as any)._lastExitNumber = exitNumber ?? (this as any)._lastExitNumber;
     if (!this.canShowMenu('EXIT')) return;
     this.clearCurrentDialog();
-    this.pushMenu('EXIT');
+    // Determine the exit number for this menu instance with robust fallbacks
+    let exitNumForMenu = exitNumber ?? (this as any)._lastExitNumber;
+    if (exitNumForMenu == null) {
+      for (let i = this.menuStack.length - 1; i >= 0; i--) {
+        const m = this.menuStack[i];
+        if (m.type === 'EXIT' && m.config && m.config.exitNumber != null) {
+          exitNumForMenu = m.config.exitNumber;
+          break;
+        }
+      }
+    }
+    // Final fallback: if first driving sequence, default to Exit 1
+    if (exitNumForMenu == null) {
+      try {
+        const gameScene = this.scene.scene.get('GameScene') as any;
+        const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+        if (isFirstSequence) exitNumForMenu = 1;
+      } catch {}
+    }
+    // Push menu with whichever exit number we resolved (may still be undefined in worst case)
+    this.pushMenu('EXIT', { exitNumber: exitNumForMenu }); // Store exit number for CYOA triggering
     
     // Generate shop names based on count
     const shopNames = this.generateShopNames(shopCount);
@@ -728,11 +1065,12 @@ export class MenuManager {
     // Create buttons for each shop
     const buttons: MenuButton[] = shopNames.map((shopName, index) => ({
       text: shopName,
-      onClick: () => { this.handleExitShopChoice(shopName); }
+      onClick: () => { 
+        this.handleExitShopChoice(shopName); 
+      }
     }));
     
-    // Add close button
-    buttons.push({ text: 'Close', onClick: () => this.closeDialog() });
+    // No close button - user must choose a shop
     
     const menuConfig: MenuConfig = {
       title: 'EXIT',
@@ -740,6 +1078,10 @@ export class MenuManager {
       buttons: buttons
     };
     this.createDialog(menuConfig, 'EXIT');
+    // Attach exit number to the dialog instance as a definitive source
+    try { (this.currentDialog as any).exitNumber = exitNumForMenu; console.log('showExitMenu: attached dialog exitNumber=', exitNumForMenu); } catch {}
+    
+    // Exit menus are exempt from auto-completion (interactive content)
   }
 
   /**
@@ -747,9 +1089,8 @@ export class MenuManager {
    */
   private generateShopNames(count: number): string[] {
     const shopTypes = [
-      'Gas Station', 'Convenience Store', 'Rest Stop', 'Truck Stop',
-      'Roadside Diner', 'Motel Shop', 'Service Center', 'Market',
-      'General Store', 'Trading Post', 'Outpost', 'Depot'
+      'Regional Gas Station', 'Gas Station', 'Motel', 'Restaurant',
+      'Weed Store', 'Car Store', 'Healer', 'Psychic'
     ];
     
     const names: string[] = [];
@@ -774,6 +1115,7 @@ export class MenuManager {
   private handleExitShopChoice(shopName: string) {
     // Placeholder: simply close the dialog and resume game. Hook narrative/transition later.
     try { console.log('Exit menu choice:', shopName); } catch {}
+    
     // Open shop menu instead of closing
     this.showShopMenu();
     // Optionally emit an event for GameScene to react to
@@ -826,6 +1168,9 @@ export class MenuManager {
     };
     
     this.createDialog(menuConfig, 'SHOP');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('SHOP');
   }
 
   private handleShopPurchase(itemName: string, cost: number) {
@@ -863,14 +1208,7 @@ export class MenuManager {
     console.log('MenuManager: Current dialog exists:', !!this.currentDialog);
     console.log('MenuManager: Current displayed menu type:', this.currentDisplayedMenuType);
     
-    if (!this.canShowMenu('TURN_KEY')) {
-      console.log('MenuManager: Ignition menu blocked by higher priority menu - will show when hierarchy allows');
-      // Still push to stack so it can be restored when the blocking menu closes
-      this.pushMenu('TURN_KEY');
-      console.log('MenuManager: Pushed TURN_KEY to stack. Stack now:', this.menuStack.map(m => `${m.type}(${m.priority})`));
-      return; // Don't show the menu, but the tutorial overlay will still be controlled by keysInIgnition
-    }
-    
+    // Always rebuild the ignition menu when keys are in ignition and car not started
     console.log('MenuManager: Showing ignition menu');
     this.clearCurrentDialog();
     this.pushMenu('TURN_KEY');
@@ -886,6 +1224,9 @@ export class MenuManager {
     
     // Add drag dial after creating the dialog
     this.addTurnKeyDial();
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('TURN_KEY');
     
     // Emit event to notify GameScene that ignition menu is shown
     console.log('MenuManager: Emitting ignitionMenuShown event');
@@ -1123,11 +1464,16 @@ export class MenuManager {
           console.log('Car started!');
           carStarted = true; // Mark car as started
           // Add delay before closing menu
+          console.log('Manual completion: Scheduling turnKey event in 500ms');
           this.scene.time.delayedCall(500, () => {
+            console.log('Manual completion: Executing delayed turnKey event');
             this.closeDialog();
             const gameScene = this.scene.scene.get('GameScene');
             if (gameScene) {
+              console.log('Manual completion: Emitting turnKey event to GameScene');
               gameScene.events.emit('turnKey');
+            } else {
+              console.error('Manual completion: GameScene not found for turnKey event');
             }
           });
         }
@@ -1174,12 +1520,35 @@ export class MenuManager {
     (this.currentDialog as any).startMeter = { meterBackground, meterFill, meterText };
   }
 
-  public showObstacleMenu(obstacleType: string, damage: number) {
+  public showObstacleMenu(obstacleType: string, damage: number, exitNumber?: number) {
     if (!this.canShowMenu('OBSTACLE')) return;
     
     // Special-case: obstacle type 'exit' should show the dedicated Exit menu
     if (obstacleType === 'exit') {
-      this.showExitMenu();
+      console.log(`🎭 showObstacleMenu(exit): incoming exitNumber=`, exitNumber, `_lastExitNumber=`, (this as any)._lastExitNumber);
+      
+      // Resolve exit number with fallbacks: event param -> persisted -> bundled CYOA exit
+      let resolvedExitNumber = exitNumber ?? (this as any)._lastExitNumber;
+      console.log(`🎭 showObstacleMenu(exit): after ?? operator, resolvedExitNumber=`, resolvedExitNumber);
+      
+      if (resolvedExitNumber == null) {
+        try {
+          const gameScene = this.scene.scene.get('GameScene') as any;
+          const cm = gameScene?.carMechanics;
+          const planned = cm?.getPlannedCyoa?.();
+          if (Array.isArray(planned)) {
+            const bundled = planned.find((c: any) => c.isExitRelated && c.exitNumber != null);
+            if (bundled) resolvedExitNumber = bundled.exitNumber;
+          }
+        } catch {}
+      }
+      console.log(`🎭 showObstacleMenu(exit): after fallback logic, resolvedExitNumber=`, resolvedExitNumber);
+      
+      // Persist exit number immediately so downstream menus can access it reliably
+      (this as any)._lastExitNumber = resolvedExitNumber ?? (this as any)._lastExitNumber;
+      console.log(`🎭 showObstacleMenu(exit): resolved exitNumber=`, resolvedExitNumber, `updated _lastExitNumber=`, (this as any)._lastExitNumber);
+      console.log(`🎭 showObstacleMenu(exit): calling showExitMenu with damage=`, damage, `exitNumber=`, resolvedExitNumber);
+      this.showExitMenu(damage, resolvedExitNumber);
       return;
     }
     
@@ -1208,22 +1577,19 @@ export class MenuManager {
     this.createDialog(menuConfig, 'OBSTACLE');
   }
 
-  public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number }) {
-    if (!this.canShowMenu('CYOA')) return;
+  public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
+    // SIMPLIFIED: CYOA menus are completely independent and immediate
+    console.log(`🎭 SIMPLE CYOA: Creating regular CYOA ${cyoaData.cyoaId}`);
     
+    // Clear any existing dialog immediately
     this.clearCurrentDialog();
-    this.pushMenu('CYOA', cyoaData);
     
-    // Pause the game when CYOA menu opens
-    const appScene = this.scene.scene.get('AppScene');
-    if (appScene) {
-      (appScene as any).isPaused = true;
-      console.log('MenuManager: Game paused for CYOA menu');
-    }
+    // CRITICAL: Clear the entire menu stack to prevent restoration issues
+    this.menuStack = [];
+    console.log(`🎭 SIMPLE CYOA: Cleared entire menu stack to prevent restoration conflicts`);
     
-    const cyoaDescription = cyoaData.isExitRelated 
-      ? `Something happened near Exit ${cyoaData.exitNumber}!`
-      : 'Something happened!';
+    // Simple CYOA description
+    const cyoaDescription = 'Something happened!';
     
     const menuConfig: MenuConfig = {
       title: 'CYOA',
@@ -1232,31 +1598,161 @@ export class MenuManager {
         {
           text: 'OK',
           onClick: () => {
-            this.closeDialog();
-            // Resume driving after CYOA
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).resumeAfterCyoa();
-            }
+            console.log(`🎭 SIMPLE CYOA: User clicked OK on regular CYOA ${cyoaData.cyoaId}`);
+            this.clearCurrentDialog();
+            this.resumeGame();
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
         },
         {
           text: 'No',
           onClick: () => {
-            this.closeDialog();
-            // Resume driving after CYOA (same as OK for now)
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).resumeAfterCyoa();
-            }
+            console.log(`🎭 SIMPLE CYOA: User clicked No on regular CYOA ${cyoaData.cyoaId}`);
+            this.clearCurrentDialog();
+            this.resumeGame();
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#666666', padding: { x: 10, y: 5 } }
         }
       ]
     };
 
+    // Create dialog directly without complex menu management
     this.createDialog(menuConfig, 'CYOA');
+    
+    // CYOA menus are exempt from auto-completion (interactive content)
+    
+    // Pause game immediately
+    this.pauseGame();
+  }
+
+  public showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
+    if (!this.canShowMenu('STORY')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('STORY', storyData);
+    
+    // Pause the game when story menu opens
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused for story menu');
+    }
+    
+    const storyDescription = storyData.isExitRelated 
+      ? `A story unfolds near Exit ${storyData.exitNumber}...`
+      : 'A story unfolds on the road...';
+    
+    const menuConfig: MenuConfig = {
+      title: 'STORY',
+      content: storyDescription,
+      buttons: [
+        {
+          text: 'Continue',
+          onClick: () => {
+            this.closeDialog();
+            // Resume driving after story
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene) {
+              (gameScene as any).resumeAfterCyoa();
+            }
+          },
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+
+    this.createDialog(menuConfig, 'STORY');
+    
+    // Start universal auto-completion
+    this.startMenuAutoComplete('STORY');
+  }
+
+  public showNovelStory(storyData: { 
+    storyline: string; 
+    event: number; 
+    eventData: any; 
+    storylineData: any 
+  }) {
+    console.log('MenuManager: showNovelStory called with:', storyData);
+    console.log('MenuManager: canShowMenu check:', this.canShowMenu('NOVEL_STORY'));
+    if (!this.canShowMenu('NOVEL_STORY')) {
+      console.log('MenuManager: Cannot show novel story menu - blocked');
+      return;
+    }
+    
+    this.clearCurrentDialog();
+    this.pushMenu('NOVEL_STORY', storyData);
+    
+    // Pause the game when story menu opens
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused for novel story menu');
+    }
+    
+    const title = `${storyData.storyline}-${storyData.event}`;
+    const content = storyData.eventData.text;
+    
+    const menuConfig: MenuConfig = {
+      title: title,
+      content: content,
+      buttons: storyData.eventData.choices.map((choice: any, index: number) => ({
+        text: choice.text,
+        onClick: () => {
+          // Show outcome first, then make choice
+          this.showStoryOutcome(storyData.storylineData, choice.outcome, () => {
+            // Check if we're in debug mode or real story mode
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene && (gameScene as any).storyManager) {
+              const storyManager = (gameScene as any).storyManager;
+              
+              // If we're in debug mode, just close the dialog
+              if (storyManager.isDebugStoryActive()) {
+                console.log(`Debug Story: Choice made - ${choice.outcome}`);
+                this.closeDialog();
+              } else {
+                // Real story mode - make choice in story manager
+                storyManager.makeChoice(choice.outcome);
+                this.closeDialog();
+              }
+            } else {
+              this.closeDialog();
+            }
+          });
+        },
+        style: { fontSize: '16px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+      }))
+    };
+
+    this.createDialog(menuConfig, 'NOVEL_STORY');
+    
+    // No auto-completion for story windows
+  }
+
+  public showStoryOutcome(storylineData: any, outcome: string, onContinue: () => void) {
+    if (!this.canShowMenu('STORY_OUTCOME')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('STORY_OUTCOME');
+    
+    const outcomeText = storylineData.outcomes[outcome] || storylineData.outcomes['a'];
+    const title = 'Outcome';
+    
+    const menuConfig: MenuConfig = {
+      title: title,
+      content: outcomeText,
+      buttons: [
+        {
+          text: 'Continue',
+          onClick: onContinue,
+          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+        }
+      ]
+    };
+
+    this.createDialog(menuConfig, 'STORY_OUTCOME');
+    
+    // No auto-completion for story outcome windows
   }
 
   public showGameOverMenu() {
@@ -1463,12 +1959,26 @@ export class MenuManager {
         
         // Bobbing animation removed - pet copy stays in fixed position
 
-        // Add food meter to the menu
+        // Add food/bathroom/bored meters to the menu
         const gameScene = this.scene.scene.get('GameScene');
-        if (gameScene && (gameScene as any).virtualPet) {
-          const foodMeter = (gameScene as any).virtualPet.getFoodMeterElements();
+        if (gameScene) {
+          // Derive the specific pet from the clicked sprite
+          let pet: any = undefined;
+          try {
+            const pets = (gameScene as any)?.virtualPets as any[];
+            if (pets && pets.length) {
+              pet = pets.find(p => p?.getPetSprite?.() === petSprite);
+            }
+            if (!pet && (gameScene as any).getVirtualPet) {
+              pet = (gameScene as any).getVirtualPet(0);
+            }
+          } catch {}
+          if (!pet) return;
+          const foodMeter = pet.getFoodMeterElements();
+          const bathMeter = pet.getBathroomMeterElements?.();
+          const boredMeter = pet.getBoredMeterElements?.();
           
-          // Create food meter elements for the menu
+          // Create identical meter elements for the menu
           const foodLabel = this.scene.add.text(0, 20, 'FOOD', {
             fontSize: '16px',
             color: '#ffffff',
@@ -1483,14 +1993,38 @@ export class MenuManager {
           foodBarBG.setStrokeStyle(2, 0xffffff, 0.8);
           foodBarBG.setScrollFactor(0);
           
-          const foodValue = (gameScene as any).virtualPet.getFoodValue?.() || 0;
+          const foodValue = pet.getFoodValue?.() || 0;
           const fillWidth = Math.floor(foodBarWidth * (foodValue / 10));
           const foodBarFill = this.scene.add.rectangle(-foodBarWidth/2, 45, fillWidth, foodBarHeight - 4, 0x2ecc71, 1);
           foodBarFill.setOrigin(0, 0.5);
           foodBarFill.setScrollFactor(0);
           
-          // Add food meter elements to the dialog
-          (this.currentDialog as any).add([foodLabel, foodBarBG, foodBarFill]);
+          // Bathroom meter
+          const bathLabel = this.scene.add.text(0, 70, 'BATH', {
+            fontSize: '16px', color: '#ffffff', fontStyle: 'bold', align: 'center'
+          }).setOrigin(0.5);
+          bathLabel.setScrollFactor(0);
+          const bathBG = this.scene.add.rectangle(0, 95, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+          bathBG.setStrokeStyle(2, 0xffffff, 0.8);
+          bathBG.setScrollFactor(0);
+          const bathVal = Phaser.Math.Clamp(pet?.['bathroomValue'] ?? 0, 0, 10);
+          const bathFill = this.scene.add.rectangle(-foodBarWidth/2, 95, Math.floor(foodBarWidth * (bathVal / 10)), foodBarHeight - 4, 0x3498db, 1).setOrigin(0, 0.5);
+          bathFill.setScrollFactor(0);
+
+          // Bored meter
+          const boredLabel = this.scene.add.text(0, 120, 'BORED', {
+            fontSize: '16px', color: '#ffffff', fontStyle: 'bold', align: 'center'
+          }).setOrigin(0.5);
+          boredLabel.setScrollFactor(0);
+          const boredBG = this.scene.add.rectangle(0, 145, foodBarWidth, foodBarHeight, 0x000000, 0.6);
+          boredBG.setStrokeStyle(2, 0xffffff, 0.8);
+          boredBG.setScrollFactor(0);
+          const boredVal = Phaser.Math.Clamp(pet?.['boredValue'] ?? 0, 0, 10);
+          const boredFill = this.scene.add.rectangle(-foodBarWidth/2, 145, Math.floor(foodBarWidth * (boredVal / 10)), foodBarHeight - 4, 0x9b59b6, 1).setOrigin(0, 0.5);
+          boredFill.setScrollFactor(0);
+
+          // Add all meters to the dialog
+          (this.currentDialog as any).add([foodLabel, foodBarBG, foodBarFill, bathLabel, bathBG, bathFill, boredLabel, boredBG, boredFill]);
         }
       } catch (error) {
         console.log('Could not create pet copy in menu:', error);
@@ -1509,8 +2043,7 @@ export class MenuManager {
         { text: 'Shop 1', onClick: () => {} },
         { text: 'Shop 2', onClick: () => {} },
         { text: 'Shop 3', onClick: () => {} },
-        { text: 'Go', onClick: () => { /* TODO: handle go selection */ this.closeDialog(); } },
-        { text: 'Close', onClick: () => this.closeDialog() }
+        { text: 'Go', onClick: () => { /* TODO: handle go selection */ this.closeDialog(); } }
       ]
     };
     this.createDialog(menuConfig, 'DESTINATION');
@@ -1669,10 +2202,11 @@ export class MenuManager {
         showStep(0);
       });
     }
+    
+    // Destination menus are exempt from auto-completion (interactive content)
   }
 
   private createDialog(menuConfig: MenuConfig, menuType?: string) {
-    console.log('=== MenuManager: createDialog called for menuType:', menuType, '===');
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
@@ -1694,9 +2228,11 @@ export class MenuManager {
     // For story-type overlay, skip grey background; otherwise use default overlay
     let background: Phaser.GameObjects.Container | null = null;
     if (menuType !== 'STORY' && menuType !== 'PET_STORY') {
+      // Use lower opacity for tutorial interrupt
+      const opacity = menuType === 'TUTORIAL_INTERRUPT' ? 0.2 : 0.3;
       background = this.createOverlayBackground(gameWidth, gameHeight, [
         { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
-      ]);
+      ], opacity);
     }
     
     // Store reference for cleanup
@@ -1727,8 +2263,6 @@ export class MenuManager {
     });
     title.setOrigin(0.5);
     this.currentDialog.add(title);
-    
-    console.log('MenuManager: Dialog background and title added. Dialog children count:', this.currentDialog.list.length);
     
     // Content - instant display with brief pause
     if (menuConfig.content) {
@@ -1793,17 +2327,11 @@ export class MenuManager {
       this.currentDialog.add(buttonText);
     });
     
-    console.log('MenuManager: All buttons added. Dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog children:', this.currentDialog.list.map((child: any) => child.constructor.name));
-    
     // Notify GameScene that a menu is now open
     const gameSceneForTutorial: any = this.scene.scene.get('GameScene');
     if (gameSceneForTutorial && gameSceneForTutorial.updateAllTutorialOverlays) {
       gameSceneForTutorial.updateAllTutorialOverlays();
     }
-    
-    console.log('MenuManager: After GameScene notification. Dialog children count:', this.currentDialog.list.length);
-    console.log('MenuManager: Dialog children after notification:', this.currentDialog.list.map((child: any) => child.constructor.name));
   }
 
   private createActionButtons(buttons: MenuButton[]) {
@@ -1840,7 +2368,7 @@ export class MenuManager {
     });
   }
 
-  private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>) {
+  private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>, opacity: number = 0.3) {
     // Create overlay container
     const overlay = this.scene.add.container(0, 0);
     overlay.setScrollFactor(0);
@@ -1848,7 +2376,7 @@ export class MenuManager {
     
     // Create semi-transparent black background covering the screen (same as tutorial overlay)
     const background = this.scene.add.graphics();
-    background.fillStyle(0x000000, 0.3); // Black, 30% opacity (reduced from 70%)
+    background.fillStyle(0x000000, opacity); // Use provided opacity
     background.fillRect(0, 0, gameWidth, gameHeight);
     overlay.add(background);
     
@@ -1921,7 +2449,7 @@ export class MenuManager {
       this.currentDialog.destroy();
       this.currentDialog = null;
       
-      // Only emit ignitionMenuHidden if the current menu was actually an ignition menu
+      // Handle special menu types
       if (this.currentDisplayedMenuType === 'TURN_KEY') {
         console.log('MenuManager: Emitting ignitionMenuHidden event');
         this.scene.events.emit('ignitionMenuHidden');
@@ -1931,6 +2459,20 @@ export class MenuManager {
         if (gameScene) {
           console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
           gameScene.events.emit('ignitionMenuHidden');
+        }
+      } else if (this.currentDisplayedMenuType === 'CYOA') {
+        console.log('MenuManager: CYOA menu closed - resuming game');
+        // Resume AppScene step counting
+        const appScene = this.scene.scene.get('AppScene');
+        if (appScene) {
+          (appScene as any).isPaused = false;
+        }
+        
+        // Emit gameResumed event
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          gameScene.events.emit('gameResumed');
+          console.log('MenuManager: Emitted gameResumed event for CYOA menu close');
         }
       }
       // Restore input if we disabled it for this dialog
@@ -1945,6 +2487,8 @@ export class MenuManager {
       } else if (this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP') {
         console.log('MenuManager: Resuming game after exit/shop menu closed');
         this.resumeGameAfterDestinationMenu(false); // do NOT reset car/keys after exits
+        
+        // Exit CYOA triggering moved to Close button - no automatic triggering
       }
       
       // Clear the displayed menu type
@@ -2110,37 +2654,29 @@ export class MenuManager {
   }
 
   private closeDialog() {
+    // Stop universal menu auto-completion
+    this.stopMenuAutoComplete();
+    
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
     
-    // Handle special resumption logic for certain menu types
-    if (this.currentDisplayedMenuType === 'CYOA') {
-      // Resume the game when CYOA menu closes
-      const appScene = this.scene.scene.get('AppScene');
-      if (appScene) {
-        (appScene as any).isPaused = false;
-        console.log('MenuManager: Game resumed after CYOA menu');
+    // Simple cleanup - just pop the current menu and resume game
+    if (this.currentDisplayedMenuType) {
+      const menuType = this.currentDisplayedMenuType;
+      
+      if (this.MENU_CATEGORIES.ONE_TIME.includes(menuType)) {
+        // One-time menus: Clean up all instances from stack
+        this.clearMenusFromStack(menuType);
+      } else {
+        // All other menus: Just pop this instance
+        this.popSpecificMenu(menuType);
       }
       
-      // Resume driving after CYOA menu closes
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene && (gameScene as any).carStarted && (gameScene as any).carMechanics) {
-        (gameScene as any).carMechanics.resumeDriving();
-        console.log('MenuManager: Resumed CarMechanics driving after CYOA');
-      }
-      // Emit game resumed event
-      if (gameScene) {
-        gameScene.events.emit('gameResumed');
-      }
-    }
-    
-    // Pop the current displayed menu from the stack (not necessarily the top)
-    if (this.currentDisplayedMenuType) {
-      this.popSpecificMenu(this.currentDisplayedMenuType);
+      // Always resume game when closing any menu
+      this.resumeGame();
     }
     
     this.clearCurrentDialog();
-    // Don't reset the flag immediately - let clearCurrentDialog handle it after restoration
   }
 
   public closeCurrentDialog() {

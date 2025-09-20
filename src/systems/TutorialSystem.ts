@@ -124,21 +124,41 @@ export class TutorialSystem {
    * Update tutorial overlay based on current game state
    */
   public updateTutorialOverlay(state: TutorialState) {
-    // Tutorial overlay disabled - no visual overlays needed
+    // Determine tutorial state based on game state
     let tutorialState: 'none' | 'keys-and-ignition' | 'steering' | 'exit-warning' = 'none';
     
-    // Always hide tutorial overlay since tutorial system is working without visual cues
+    // Show keys-and-ignition tutorial when keys are not in ignition and car is not started
+    if (!state.keysInIgnition && !state.carStarted) {
+      tutorialState = 'keys-and-ignition';
+    }
+    
+    // Update tutorial overlay visibility
     if (this.tutorialOverlay) {
-      this.tutorialOverlay.setVisible(false);
+      this.tutorialOverlay.setVisible(tutorialState !== 'none');
       try {
         // Inform parent scene so other scenes (like AppScene) can react (hide Pause/Save)
-        (this.scene as any).events?.emit?.('tutorialOverlayVisible', false);
+        (this.scene as any).events?.emit?.('tutorialOverlayVisible', tutorialState !== 'none');
       } catch {}
+    }
+    
+    // Update tutorial text based on state
+    if (this.blinkText) {
+      if (tutorialState === 'keys-and-ignition') {
+        this.blinkText.setText('Place keys in ignition');
+        this.blinkText.setVisible(true);
+      } else {
+        this.blinkText.setVisible(false);
+      }
+    }
+    
+    // Update tutorial mask if needed
+    if (tutorialState !== 'none') {
+      this.updateTutorialMask(tutorialState);
     }
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      console.log('Tutorial overlay disabled - no visual overlays');
+      console.log('Tutorial state:', tutorialState);
       this.lastTutorialState = tutorialState;
     }
   }
@@ -233,10 +253,16 @@ export class TutorialSystem {
       this.tutorialMaskGraphics.fillCircle(sx, sy, keysHoleRadius);
     }
     
-    // Ignition cutout with 20% padding (prefer live magnetic body position in world/screen space)
-    let ignitionX = this.config.magneticTargetX;
-    let ignitionY = this.config.magneticTargetY;
+    // Ignition cutout with 20% padding (use actual magnetic target position from GameElements)
+    let ignitionX = 200; // Default fallback
+    let ignitionY = 550; // Default fallback
     try {
+      // Get the actual magnetic target position from GameElements config
+      const magneticTargetConfig = gameElements.getMagneticTarget();
+      ignitionX = magneticTargetConfig.position.x;
+      ignitionY = magneticTargetConfig.position.y;
+      
+      // Also try to get the live magnetic body position as backup
       const mt: any = (this.scene as any).magneticTarget;
       const magneticBody: any = mt && (mt as any).magneticBody;
       if (magneticBody && magneticBody.position) {
