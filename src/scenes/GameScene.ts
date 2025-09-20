@@ -268,6 +268,13 @@ export class GameScene extends Phaser.Scene {
         this.createStoryDialogWithQueue();
       });
       
+      // Debug: Add 'J' key to test CYOA dialog with H menu styling
+      const keyJ = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.J, true, false);
+      keyJ?.on('down', () => {
+        console.log('🎮 Creating CYOA dialog with H menu styling (J key)');
+        this.createCYOADialog();
+      });
+      
       // Debug: Add 'X' key to reset narrative system (force clear)
       const keyX = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.X, true, false);
       keyX?.on('down', () => {
@@ -2649,40 +2656,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Create a debug speech bubble window for testing 'S' key
+   * Create a debug speech bubble using H menu styling for consistency
    */
   private createDebugSpeechBubble() {
     // Clear previous debug windows
     this.debugWindows.forEach(window => window.destroy());
     this.debugWindows = [];
 
-    // Create a new speech bubble composition
-    const gameWidth = this.cameras.main.width;
-    const gameHeight = this.cameras.main.height;
-    
-    // Random position and size
-    const width = Phaser.Math.Between(200, 350);
-    const height = Phaser.Math.Between(150, 250);
-    const x = Phaser.Math.Between(50, gameWidth - width - 50);
-    const y = Phaser.Math.Between(50, gameHeight - height - 50);
-    
-    const newWindow = this.windowShapes.createSpeechBubbleComposition(x, y, width, height);
-    this.debugWindows.push(newWindow);
-
-    // Set high depth so it appears on top
-    newWindow.setDepth(2000);
-
-    // Auto-remove after 3 seconds
-    this.time.delayedCall(3000, () => {
-      if (newWindow && !newWindow.scene) return; // Already destroyed
-      newWindow.destroy();
-      const index = this.debugWindows.indexOf(newWindow);
-      if (index > -1) {
-        this.debugWindows.splice(index, 1);
-      }
-    });
-
-    console.log('Debug speech bubble created! Press S again to generate a new one.');
+    // The story system now uses showNovelStory through StoryManager
+    // No need for duplicate showStoryOverlay call here
+    console.log('✨ Story overlay system delegated to StoryManager');
   }
 
   /**
@@ -2752,6 +2735,60 @@ export class GameScene extends Phaser.Scene {
     } else {
       console.log('Story dialog queued (another dialog is active)');
       console.log(`Queue length: ${this.windowShapes.getQueuedNarrativeCount()}`);
+    }
+  }
+
+  /**
+   * Create a CYOA (Choose Your Own Adventure) dialog with H menu styling
+   * This demonstrates the new abstraction system that preserves H menu aesthetics
+   */
+  private createCYOADialog() {
+    // Calculate dialog dimensions (same as story dialog)
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    
+    const width = Math.floor(gameWidth * 0.95);
+    const height = Math.floor(gameHeight * 0.80);
+    const x = Math.floor((gameWidth - width) / 2);
+    const y = Math.floor((gameHeight - height) / 2);
+    
+    // Sample CYOA content
+    const storyTexts = [
+      "You stand before an ancient crossroads...",
+      "Three paths stretch out before you, each shrouded in mystery.",
+      "Which path will you choose?"
+    ];
+    
+    const choices = [
+      {
+        text: "Left Path",
+        callback: () => {
+          console.log("Player chose the Left Path - leads to the forest!");
+          // Could trigger different story branches here
+        }
+      },
+      {
+        text: "Center Path", 
+        callback: () => {
+          console.log("Player chose the Center Path - leads to the mountain!");
+        }
+      },
+      {
+        text: "Right Path",
+        callback: () => {
+          console.log("Player chose the Right Path - leads to the sea!");
+        }
+      }
+    ];
+    
+    // Create CYOA dialog using H menu styling
+    const cyoaWindow = this.windowShapes.createCYOADialog(x, y, width, height, storyTexts, choices);
+    
+    if (cyoaWindow) {
+      cyoaWindow.setDepth(5000);
+      console.log('✅ CYOA dialog created with H menu styling');
+    } else {
+      console.log('CYOA dialog was queued (another narrative is active)');
     }
   }
 }

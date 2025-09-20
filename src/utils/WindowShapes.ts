@@ -33,6 +33,361 @@ export interface PolygonWindowConfig {
   fillAlpha?: number;
 }
 
+/**
+ * Configuration for narrative window types
+ */
+interface NarrativeWindowConfig {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  backgroundImageKey?: string;
+  type: 'story' | 'cyoa' | 'hMenu'; // Different narrative window types
+  texts: string[];
+  buttons?: {
+    text: string;
+    callback: () => void;
+  }[];
+}
+
+/**
+ * Base class for narrative window creation - preserves H menu style
+ */
+abstract class BaseNarrativeWindow {
+  protected scene: Phaser.Scene;
+  protected container: Phaser.GameObjects.Container;
+  protected config: NarrativeWindowConfig;
+  protected windowShapes: WindowShapes;
+  
+  constructor(scene: Phaser.Scene, windowShapes: WindowShapes, config: NarrativeWindowConfig) {
+    this.scene = scene;
+    this.windowShapes = windowShapes;
+    this.config = config;
+    this.container = this.createContainer();
+  }
+  
+  protected createContainer(): Phaser.GameObjects.Container {
+    const container = this.scene.add.container(this.config.x, this.config.y);
+    container.setDepth(2000);
+    return container;
+  }
+  
+  // Abstract methods that subclasses must implement
+  abstract createBackground(): void;
+  abstract createTextElements(): void;
+  abstract createButtons(): void;
+  
+  // Common functionality all narrative windows share
+  public getContainer(): Phaser.GameObjects.Container {
+    return this.container;
+  }
+  
+  protected addInvisibleClickArea(): Phaser.GameObjects.Rectangle {
+    // Add invisible overlay for click interactions (like our current H menu)
+    const invisibleOverlay = this.scene.add.rectangle(
+      this.config.width/2, this.config.height/2, 
+      this.config.width, this.config.height, 
+      0x000000, 0
+    );
+    invisibleOverlay.setDepth(10);
+    invisibleOverlay.setName('invisibleClickArea');
+    this.container.add(invisibleOverlay);
+    return invisibleOverlay;
+  }
+  
+  // Helper method to create narrative backgrounds using WindowShapes method
+  protected createTextBackground(x: number, y: number, width: number, height: number): Phaser.GameObjects.Graphics {
+    const backgroundConfig: WindowShapeConfig = { x, y, width, height };
+    // We'll need to access the WindowShapes method - let's use createCollageRect instead
+    return this.windowShapes.createCollageRect(backgroundConfig, true, 'narrativeBackground');
+  }
+}
+
+/**
+ * H Menu preserved implementation - maintains original behavior
+ */
+class HMenuNarrativeWindow extends BaseNarrativeWindow {
+  createBackground(): void {
+    // Use the existing createCollageRect method to maintain H menu style
+    const mainWindow = this.windowShapes.createCollageRect({ 
+      x: 0, y: 0, 
+      width: this.config.width, 
+      height: this.config.height,
+      fillColor: 0xffffff 
+    }, true, 'window');
+    mainWindow.setDepth(10);
+    this.container.add(mainWindow);
+  }
+  
+  createTextElements(): void {
+    // Implement H menu text creation logic here
+    // This preserves the existing sequential text reveal behavior
+  }
+  
+  createButtons(): void {
+    // Implement H menu button creation using organic createCollageButton style
+    // This maintains the three-button system (Yes/Maybe/No)
+  }
+}
+
+/**
+ * CYOA (Choose Your Own Adventure) narrative window - uses H menu styling
+ */
+class CYOANarrativeWindow extends BaseNarrativeWindow {
+  private currentTextIndex: number = 0;
+  private textElements: Phaser.GameObjects.Text[] = [];
+  private textBackgrounds: Phaser.GameObjects.Graphics[] = [];
+  private isComplete: boolean = false;
+  private invisibleOverlay?: Phaser.GameObjects.Rectangle;
+  private autoAdvanceTimer?: Phaser.Time.TimerEvent;
+  
+  createBackground(): void {
+    // Use same organic style as H menu for consistency - DISABLE auto animation registration
+    const mainWindow = this.windowShapes.createCollageRect({ 
+      x: 0, y: 0, 
+      width: this.config.width, 
+      height: this.config.height,
+      fillColor: 0xffffff // White background like H menu
+    }, false, 'window'); // Disable auto animation - we'll register manually
+    mainWindow.setDepth(10);
+    this.container.add(mainWindow);
+    
+    // MANUAL registration: Register the main window for animation with world coordinates
+    const shapeId = `cyoa_window_${Date.now()}`;
+    this.windowShapes.registerAnimatedShape(
+      shapeId, 
+      mainWindow, 
+      'window', 
+      this.config.x, 
+      this.config.y, 
+      this.config.width, 
+      this.config.height
+    );
+    console.log(`🎬 CYOA main window registered for animation at world (${this.config.x}, ${this.config.y})`);
+    
+    // Store for cleanup
+    (mainWindow as any).cyoaAnimationId = shapeId;
+    mainWindow.on('destroy', () => {
+      this.windowShapes.unregisterAnimatedShape(shapeId);
+    });
+  }
+  
+  createTextElements(): void {
+    // Add invisible click area for click-to-advance (like H menu)
+    this.setupClickToAdvance();
+    // Start with sequential text reveals like H menu
+    this.revealNextText();
+  }
+  
+  createButtons(): void {
+    if (!this.config.buttons) return;
+    
+    // Only show buttons after all text is revealed (like H menu)
+    if (!this.isComplete) return;
+    
+    console.log('🔘 CYOA: Creating buttons with H menu style');
+    
+    // Don't modify the main window - keep it as is for better text visibility
+    
+    // Use the exact same button positioning as H menu
+    const buttonWidth = 80;
+    const buttonHeight = 30;
+    const buttonSpacing = 35;
+    const marginFromEdge = 15;
+    
+    // Get container's world position and dimensions for absolute button positioning - EXACT H menu approach
+    const containerX = this.container.x;
+    const containerY = this.container.y;
+    const containerWidth = (this.container as any).containerWidth || this.config.width;
+    const containerHeight = (this.container as any).containerHeight || this.config.height;
+    
+    // Position buttons based on number of choices (up to 3 like H menu)
+    const buttonCount = Math.min(this.config.buttons.length, 3);
+    const buttonLabels = ['Yes', 'Maybe', 'No']; // Default H menu labels
+    
+    // Position buttons in bottom right corner using container dimensions - EXACT H menu approach
+    const buttonX = containerWidth - buttonWidth - marginFromEdge;
+    const baseButtonY = containerHeight - buttonHeight - marginFromEdge;
+    
+    // Create buttons with same animation system as H menu
+    this.config.buttons.forEach((buttonConfig, index) => {
+      if (index >= 3) return; // Max 3 buttons like H menu
+      
+      const buttonY = baseButtonY - (index * (buttonHeight + buttonSpacing));
+      
+      // Calculate ABSOLUTE world coordinates
+      const absoluteButtonX = containerX + buttonX;
+      const absoluteButtonY = containerY + buttonY;
+      
+      // Use EXACT H menu approach: create at (0,0), then setPosition to absolute coordinates
+      const buttonGraphics = this.windowShapes.createCollageButton(0, 0, buttonWidth, buttonHeight);
+      
+      // Set position to absolute coordinates - EXACT H menu approach  
+      buttonGraphics.setPosition(absoluteButtonX, absoluteButtonY);
+      buttonGraphics.setVisible(true); // CRITICAL: Make button visible like H menu
+      buttonGraphics.setDepth(5000); // EXACT same high depth as H menu
+      
+      // Add text label at ABSOLUTE world position - NOT in container
+      const labelText = buttonConfig.text || buttonLabels[index] || `Option ${index + 1}`;
+      
+      const buttonLabel = this.scene.add.text(
+        absoluteButtonX + buttonWidth/2, 
+        absoluteButtonY + buttonHeight/2, 
+        labelText, 
+        { fontSize: '14px', color: '#000000', fontFamily: 'Arial, sans-serif' }
+      );
+      buttonLabel.setOrigin(0.5, 0.5);
+      buttonLabel.setDepth(5001); // Higher than buttons - EXACT H menu approach
+      
+      // Make button interactive with EXPLICIT HIT BOUNDS - EXACT H menu approach
+      const buttonBounds = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
+      buttonGraphics.setInteractive(buttonBounds, Phaser.Geom.Rectangle.Contains);
+      
+      console.log(`🔘 Button "${labelText}" created at ABSOLUTE (${absoluteButtonX}, ${absoluteButtonY}), depth 5000`);
+      
+      // Add hover effects for debugging
+      buttonGraphics.on('pointerover', () => console.log(`🖱️ Hovering over ${labelText} button`));
+      buttonGraphics.on('pointerout', () => console.log(`🖱️ Left ${labelText} button`));
+      
+      // Store button references for cleanup
+      (buttonGraphics as any).buttonIndex = index;
+      (buttonLabel as any).buttonIndex = index;
+      
+      // Track all buttons in the container for cleanup
+      if (!(this.container as any).storyButtons) {
+        (this.container as any).storyButtons = [];
+      }
+      (this.container as any).storyButtons.push(buttonGraphics, buttonLabel);
+      
+      // Add click handler that calls the callback - let callback handle window lifecycle
+      buttonGraphics.on('pointerup', () => {
+        console.log(`🔘 User selected: ${labelText}`);
+        
+        // Clean up ALL current story buttons immediately to prevent double-clicking
+        this.cleanupStoryButtons();
+        
+        // Call the callback - it will handle creating next dialog or ending story
+        if (buttonConfig.callback) {
+          console.log(`🔘 Calling callback for ${labelText}`);
+          buttonConfig.callback();
+        } else {
+          // No callback means story end - destroy container
+          console.log(`🔘 No callback - ending story and destroying container`);
+          if (this.container && this.container.scene) {
+            this.container.destroy();
+          }
+        }
+      });
+    });
+    console.log('🔘 CYOA buttons created with H menu styling and interaction');
+  }
+  
+  private revealNextText(): void {
+    if (this.currentTextIndex >= this.config.texts.length) {
+      this.completeDialog();
+      return;
+    }
+    
+    const currentText = this.config.texts[this.currentTextIndex];
+    const totalTexts = this.config.texts.length;
+    const topMargin = 30;
+    const bottomMargin = 120; // Leave space for buttons
+    const availableHeight = this.config.height - topMargin - bottomMargin;
+    const textSpacing = availableHeight / totalTexts;
+    const textY = topMargin + (this.currentTextIndex * textSpacing);
+    
+    // Create animated narrative background like H menu using createNarrativeText
+    try {
+      const narrativeResult = this.windowShapes.createNarrativeText(
+        20, textY, currentText, this.config.width - 40, this.container
+      );
+      
+      // Update animation coordinates for the background
+      if (narrativeResult.background && (narrativeResult.background as any).updateAnimationCoords) {
+        (narrativeResult.background as any).updateAnimationCoords(this.config.x, this.config.y);
+      }
+      
+      // Store references for cleanup
+      if (narrativeResult.textElement) {
+        this.textElements.push(narrativeResult.textElement);
+      }
+      if (narrativeResult.background) {
+        this.textBackgrounds.push(narrativeResult.background);
+      }
+    } catch (error) {
+      console.warn('Could not create narrative text element:', error);
+      return;
+    }
+    
+    this.currentTextIndex++;
+    
+    // Auto-advance after 2 seconds (can be interrupted by clicks) - just like H menu
+    this.autoAdvanceTimer = this.scene.time.delayedCall(2000, () => {
+      if (!this.isComplete && this.scene) {
+        this.revealNextText();
+      }
+    });
+  }
+  
+  private setupClickToAdvance(): void {
+    // Add invisible click area exactly like H menu does
+    this.invisibleOverlay = this.scene.add.rectangle(
+      this.config.width/2, this.config.height/2, 
+      this.config.width, this.config.height, 
+      0x000000, 0  // Completely transparent
+    );
+    this.invisibleOverlay.setDepth(10);  // Low depth so it doesn't interfere
+    this.invisibleOverlay.setName('invisibleClickArea');
+    this.container.add(this.invisibleOverlay);
+    
+    // Make it interactive for click-to-advance
+    this.invisibleOverlay.setInteractive();
+    this.invisibleOverlay.on('pointerup', () => {
+      // Only advance if dialog isn't complete (buttons not yet shown) - like H menu
+      if (!this.isComplete) {
+        // Cancel any existing timer
+        if (this.autoAdvanceTimer) {
+          this.autoAdvanceTimer.remove();
+          this.autoAdvanceTimer = undefined;
+        }
+        this.revealNextText();
+      }
+    });
+  }
+  
+  private completeDialog(): void {
+    this.isComplete = true;
+    
+    // Cancel any remaining timer
+    if (this.autoAdvanceTimer) {
+      this.autoAdvanceTimer.remove();
+      this.autoAdvanceTimer = undefined;
+    }
+    
+    // Hide the invisible overlay to prevent further clicks
+    if (this.invisibleOverlay && this.invisibleOverlay.scene) {
+      this.invisibleOverlay.removeInteractive();
+      this.invisibleOverlay.setVisible(false);
+    }
+    
+    // Now show the buttons
+    this.createButtons();
+  }
+  
+  private cleanupStoryButtons(): void {
+    // Clean up all standalone buttons tracked in container
+    if ((this.container as any).storyButtons) {
+      console.log('🧹 Cleaning up standalone CYOA buttons before callback');
+      (this.container as any).storyButtons.forEach((button: any) => {
+        if (button && button.destroy && button.scene) {
+          button.destroy();
+        }
+      });
+      (this.container as any).storyButtons = [];
+    }
+  }
+}
+
 export class WindowShapes {
   private scene: Phaser.Scene;
   private activeShapes: Map<string, { graphics: Phaser.GameObjects.Graphics, config: WindowShapeConfig }> = new Map();
@@ -173,7 +528,24 @@ export class WindowShapes {
     // Register for animation if enabled
     if (enableAnimation) {
       const shapeId = `animated_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      this.registerAnimatedShape(shapeId, graphics, shapeType, config.x, config.y, config.width, config.height);
+      
+      // Check if this graphics object will be added to a container
+      // If so, we need to account for the container's world position in animation
+      let worldX = config.x;
+      let worldY = config.y;
+      
+      // Store a callback to update world coordinates when the graphics is added to a container
+      (graphics as any).updateAnimationCoords = (containerX: number, containerY: number) => {
+        worldX = containerX + config.x;
+        worldY = containerY + config.y;
+        console.log(`🎬 Updated animation coords: ${shapeType} now at world (${worldX}, ${worldY})`);
+        // Re-register with updated coordinates
+        this.unregisterAnimatedShape(shapeId);
+        this.registerAnimatedShape(shapeId, graphics, shapeType, worldX, worldY, config.width, config.height);
+      };
+      
+      this.registerAnimatedShape(shapeId, graphics, shapeType, worldX, worldY, config.width, config.height);
+      console.log(`🎬 Registered shape for animation: ${shapeType} at (${worldX}, ${worldY})`);
       
       // Store the ID for cleanup
       (graphics as any).animationId = shapeId;
@@ -701,19 +1073,29 @@ export class WindowShapes {
         this.regenerateSteeringWheel(graphics, x, y, radius, currentRotation);
       }
     });
+    
+    // Debug: Log active animated shapes count
+    if (this.activeAnimatedShapes.size > 0) {
+      console.log(`🎬 Animating ${this.activeAnimatedShapes.size} shapes on half-step ${halfStep}`);
+    } else {
+      // Only log this occasionally to avoid spam
+      if (halfStep % 10 === 0) {
+        console.log('🎬 No animated shapes registered');
+      }
+    }
   }
 
   /**
    * Register an animated shape for ongoing updates
    */
-  private registerAnimatedShape(shapeId: string, graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
+  public registerAnimatedShape(shapeId: string, graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
     this.activeAnimatedShapes.set(shapeId, { graphics, shapeType, x, y, width, height });
   }
 
   /**
    * Unregister an animated shape to stop updates
    */
-  private unregisterAnimatedShape(shapeId: string): void {
+  public unregisterAnimatedShape(shapeId: string): void {
     this.activeAnimatedShapes.delete(shapeId);
   }
 
@@ -1421,7 +1803,56 @@ export class WindowShapes {
     
     return container;
   }
-  
+
+  /**
+   * Create a CYOA (Choose Your Own Adventure) dialog using the H menu style
+   * This preserves the H menu aesthetic while allowing for custom story content and choices
+   */
+  createCYOADialog(
+    x: number, y: number, width: number, height: number,
+    texts: string[], 
+    choices: { text: string, callback: () => void }[]
+  ): Phaser.GameObjects.Container | null {
+    
+    // Check narrative window queue (same as H menu behavior)
+    if (this.activeNarrativeWindow && this.activeNarrativeWindow.scene) {
+      console.log('CYOA dialog queued because another narrative window is active.');
+      // Could implement queuing here if needed
+      return null;
+    }
+
+    // Create CYOA narrative window using our abstraction
+    const config: NarrativeWindowConfig = {
+      x, y, width, height,
+      type: 'cyoa',
+      texts,
+      buttons: choices
+    };
+    
+    const cyoaWindow = new CYOANarrativeWindow(this.scene, this, config);
+    
+    // Initialize the window components
+    cyoaWindow.createBackground();
+    cyoaWindow.createTextElements();
+    // Buttons will be created automatically when text sequence completes
+    
+    const container = cyoaWindow.getContainer();
+    
+    // Track as active narrative window (same queue system as H menu)
+    this.activeNarrativeWindow = container;
+    
+    // Set up cleanup like H menu
+    container.on('destroy', () => {
+      if (this.activeNarrativeWindow === container) {
+        this.activeNarrativeWindow = null;
+        this.processNarrativeQueue();
+      }
+    });
+    
+    console.log('✅ CYOA dialog created with H menu styling');
+    return container;
+  }
+
   /**
    * Reveal the next text in the story sequence
    */

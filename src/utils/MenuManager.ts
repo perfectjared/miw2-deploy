@@ -435,49 +435,58 @@ export class MenuManager {
   public showStoryOverlay(title: string, content: string) {
     // Non-blocking: don't use menu stack or overlay background
     this.clearCurrentDialog();
-    // Create a lightweight dialog without blocking input
+    
+    // Use H menu styling through WindowShapes instead of custom graphics
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    if (!gameScene || !gameScene.windowShapes) {
+      console.warn('Cannot create story overlay: GameScene or WindowShapes not available');
+      return;
+    }
+    
+    // Calculate H menu style positioning (95% width, 80% height, centered)
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
-    this.currentDialog = this.scene.add.container(gameWidth / 2, gameHeight / 2);
-    this.currentDialog.setScrollFactor(0);
-    this.currentDialog.setDepth(40000); // below regular menus
-    this.currentDisplayedMenuType = 'STORY';
-
-    const dialogBackground = this.scene.add.graphics();
-    // Window background (no screen overlay)
-    dialogBackground.fillStyle(0x1e1e1e, 0.9);
-    dialogBackground.fillRoundedRect(-150, -125, 300, 250, 10);
-    dialogBackground.lineStyle(2, 0xffffff, 1);
-    dialogBackground.strokeRoundedRect(-150, -125, 300, 250, 10);
-    this.currentDialog.add(dialogBackground);
-
-    const titleText = this.scene.add.text(0, -70, title, { fontSize: '22px', color: '#ffffff', fontStyle: 'bold', align: 'center' }).setOrigin(0.5);
+    const width = Math.floor(gameWidth * 0.95);
+    const height = Math.floor(gameHeight * 0.80);
+    const x = Math.floor((gameWidth - width) / 2);
+    const y = Math.floor((gameHeight - height) / 2);
     
-    // Create instant text display with brief pause
-    const contentText = this.scene.add.text(0, 0, '', {
-      fontSize: '16px',
-      color: '#ffffff',
-      wordWrap: { width: 260 },
-      align: 'center'
-    }).setOrigin(0.5);
+    // Create story texts in H menu format
+    const storyTexts = [
+      title, // Title as first text
+      content // Content as second text
+    ];
     
-    this.currentDialog.add([titleText, contentText]);
-    
-    // Show all text at once after brief pause
-    const textCallback = this.scene.time.delayedCall(UI_CONFIG.textDisplayDelayMs, () => {
-      // Safety check: ensure text object still exists and is valid
-      if (contentText && contentText.scene && !contentText.scene.scene.isActive('GameScene')) {
-        return; // Scene is no longer active
+    // Create continue button in H menu style
+    const choices = [
+      {
+        text: "Continue",
+        callback: () => {
+          console.log("Story overlay dismissed by user");
+          this.clearCurrentDialog();
+        }
       }
-      if (contentText && contentText.setText) {
-        contentText.setText(content);
-      }
-    });
-    this.textDisplayCallbacks.push(textCallback);
-
-    // Mark as ephemeral and set step countdown
-    (this.currentDialog as any).isStory = true;
-    (this.currentDialog as any).stepsRemaining = 10;
+    ];
+    
+    // Use the CYOA system with H menu styling for story overlays
+    const storyContainer = gameScene.windowShapes.createCYOADialog(x, y, width, height, storyTexts, choices);
+    
+    if (storyContainer) {
+      // Set proper depth for story overlays (below regular menus but above game elements)
+      storyContainer.setDepth(40000);
+      
+      // Track as current dialog for MenuManager
+      this.currentDialog = storyContainer;
+      this.currentDisplayedMenuType = 'STORY';
+      
+      // Mark as ephemeral and set step countdown (same behavior as before)
+      (this.currentDialog as any).isStory = true;
+      (this.currentDialog as any).stepsRemaining = 10;
+      
+      console.log(`✨ Story overlay created with H menu styling: "${title}"`);
+    } else {
+      console.warn('Story overlay was queued (another narrative window is active)');
+    }
   }
 
   private onGlobalStep() {
@@ -1690,43 +1699,72 @@ export class MenuManager {
       console.log('MenuManager: Game paused for novel story menu');
     }
     
+    // Use H menu styling through WindowShapes instead of old dialog system
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    if (!gameScene || !gameScene.windowShapes) {
+      console.warn('Cannot create novel story: GameScene or WindowShapes not available');
+      return;
+    }
+    
+    // Calculate H menu style positioning (95% width, 80% height, centered)
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const width = Math.floor(gameWidth * 0.95);
+    const height = Math.floor(gameHeight * 0.80);
+    const x = Math.floor((gameWidth - width) / 2);
+    const y = Math.floor((gameHeight - height) / 2);
+    
     const title = `${storyData.storyline}-${storyData.event}`;
     const content = storyData.eventData.text;
     
-    const menuConfig: MenuConfig = {
-      title: title,
-      content: content,
-      buttons: storyData.eventData.choices.map((choice: any, index: number) => ({
-        text: choice.text,
-        onClick: () => {
-          // Show outcome first, then make choice
-          this.showStoryOutcome(storyData.storylineData, choice.outcome, () => {
-            // Check if we're in debug mode or real story mode
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene && (gameScene as any).storyManager) {
-              const storyManager = (gameScene as any).storyManager;
-              
-              // If we're in debug mode, just close the dialog
-              if (storyManager.isDebugStoryActive()) {
-                console.log(`Debug Story: Choice made - ${choice.outcome}`);
-                this.closeDialog();
-              } else {
-                // Real story mode - make choice in story manager
-                storyManager.makeChoice(choice.outcome);
-                this.closeDialog();
-              }
+    // Create story texts in H menu format
+    const storyTexts = [
+      title, // Title as first text
+      content // Story content as second text
+    ];
+    
+    // Create choice buttons using story data
+    const choices = storyData.eventData.choices.map((choice: any, index: number) => ({
+      text: choice.text,
+      callback: () => {
+        // Show outcome first, then make choice
+        this.showStoryOutcome(storyData.storylineData, choice.outcome, () => {
+          // Check if we're in debug mode or real story mode
+          const gameScene = this.scene.scene.get('GameScene');
+          if (gameScene && (gameScene as any).storyManager) {
+            const storyManager = (gameScene as any).storyManager;
+            
+            // If we're in debug mode, just close the dialog
+            if (storyManager.isDebugStoryActive()) {
+              console.log(`Debug Story: Choice made - ${choice.outcome}`);
+              this.closeDialog();
             } else {
+              // Real story mode - make choice in story manager
+              storyManager.makeChoice(choice.outcome);
               this.closeDialog();
             }
-          });
-        },
-        style: { fontSize: '16px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-      }))
-    };
-
-    this.createDialog(menuConfig, 'NOVEL_STORY');
+          } else {
+            this.closeDialog();
+          }
+        });
+      }
+    }));
     
-    // No auto-completion for story windows
+    // Use the CYOA system with H menu styling for novel stories
+    const novelContainer = gameScene.windowShapes.createCYOADialog(x, y, width, height, storyTexts, choices);
+    
+    if (novelContainer) {
+      // Set proper depth for story dialogs (below overlays but above game elements)
+      novelContainer.setDepth(35000);
+      
+      // Track as current dialog for MenuManager
+      this.currentDialog = novelContainer;
+      this.currentDisplayedMenuType = 'NOVEL_STORY';
+      
+      console.log(`✨ Novel story dialog created with H menu styling: "${title}"`);
+    } else {
+      console.warn('Novel story dialog was queued (another narrative window is active)');
+    }
   }
 
   public showStoryOutcome(storylineData: any, outcome: string, onContinue: () => void) {
@@ -1738,19 +1776,53 @@ export class MenuManager {
     const outcomeText = storylineData.outcomes[outcome] || storylineData.outcomes['a'];
     const title = 'Outcome';
     
-    const menuConfig: MenuConfig = {
-      title: title,
-      content: outcomeText,
-      buttons: [
-        {
-          text: 'Continue',
-          onClick: onContinue,
-          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        }
-      ]
-    };
+    // Get the game scene for WindowShapes access
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    
+    // Use WindowShapes CYOA system for H menu styling
+    if (gameScene && gameScene.windowShapes) {
+      // Calculate H menu style positioning (95% width, 80% height, centered)
+      const gameWidth = this.scene.cameras.main.width;
+      const gameHeight = this.scene.cameras.main.height;
+      const width = Math.floor(gameWidth * 0.95);
+      const height = Math.floor(gameHeight * 0.80);
+      const x = Math.floor((gameWidth - width) / 2);
+      const y = Math.floor((gameHeight - height) / 2);
+      
+      const container = gameScene.windowShapes.createCYOADialog(
+        x, y, width, height,
+        [title, outcomeText], // texts array
+        [
+          {
+            text: 'Continue',
+            callback: () => {
+              // First destroy the WindowShapes container properly
+              if (container && container.scene) {
+                console.log('🗑️ Destroying story outcome WindowShapes container');
+                container.destroy();
+              }
+              // Then call the original callback
+              onContinue();
+            }
+          }
+        ]
+      );
+    } else {
+      // Fallback to old system if WindowShapes not available
+      const menuConfig: MenuConfig = {
+        title: title,
+        content: outcomeText,
+        buttons: [
+          {
+            text: 'Continue',
+            onClick: onContinue,
+            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
+          }
+        ]
+      };
 
-    this.createDialog(menuConfig, 'STORY_OUTCOME');
+      this.createDialog(menuConfig, 'STORY_OUTCOME');
+    }
     
     // No auto-completion for story outcome windows
   }
