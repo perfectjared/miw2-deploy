@@ -143,27 +143,45 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
   
   createBackground(): void {
     // Use same organic style as H menu for consistency - DISABLE auto animation registration
+    // Create Graphics object with negative offset so center is at (0,0)
+    const centerX = this.config.width / 2;
+    const centerY = this.config.height / 2;
     const mainWindow = this.windowShapes.createCollageRect({ 
-      x: 0, y: 0, 
+      x: -centerX, y: -centerY, // Negative offset so center is at (0,0)
       width: this.config.width, 
       height: this.config.height,
       fillColor: 0xffffff // White background like H menu
     }, false, 'window'); // Disable auto animation - we'll register manually
+    
+    // Set alpha to 1 and scale to 0.01 IMMEDIATELY after creation
+    mainWindow.setAlpha(1); // Start visible
+    mainWindow.setScale(0.01); // Start tiny
     mainWindow.setDepth(10);
+    mainWindow.setPosition(centerX, centerY); // Position so center of Graphics object is at center
     this.container.add(mainWindow);
     
-    // MANUAL registration: Register the main window for animation with RELATIVE coordinates
+    // Create 1-bit dithered grey overlay below the menu
+    this.createDitheredOverlay();
+    
+    // Start expansion animation immediately (no fade-in delay)
+    this.createChoppyExpansionAnimation(mainWindow, () => {
+      console.log('🎬 CYOA window opening animation complete');
+      // Start text sequence after opening animation
+      this.startTextSequence();
+    });
+    
+    // MANUAL registration: Register the main window for animation with the actual drawing coordinates
     const shapeId = `cyoa_window_${Date.now()}`;
     this.windowShapes.registerAnimatedShape(
       shapeId, 
       mainWindow, 
       'window', 
-      0, // Relative to container, not world coordinates
-      0, // Relative to container, not world coordinates
+      -centerX, // Use the actual drawing coordinates (negative offset)
+      -centerY, // Use the actual drawing coordinates (negative offset)
       this.config.width, 
       this.config.height
     );
-    console.log(`🎬 CYOA main window registered for animation at RELATIVE (0, 0)`);
+    console.log(`🎬 CYOA main window registered for animation at OFFSET (${-centerX}, ${-centerY})`);
     
     // Store for cleanup
     (mainWindow as any).cyoaAnimationId = shapeId;
@@ -175,8 +193,88 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
   createTextElements(): void {
     // Add invisible click area for click-to-advance (like H menu)
     this.setupClickToAdvance();
+    // Text sequence will start after opening animation completes
+  }
+  
+  private startTextSequence(): void {
     // Start with sequential text reveals like H menu
     this.revealNextText();
+  }
+
+  private createChoppyExpansionAnimation(graphics: Phaser.GameObjects.Graphics, onComplete: () => void): void {
+    const animationDuration = 200; // Much faster animation
+    
+    // Start smooth scale tween only (no alpha animation)
+    this.scene.tweens.add({
+      targets: graphics,
+      scaleX: 1,
+      scaleY: 1,
+      duration: animationDuration,
+      ease: 'Back.easeOut', // Dramatic overshoot curve
+      onComplete: () => {
+        onComplete();
+      }
+    });
+    
+    // Let the normal collage animation system handle the updates
+    // No special frame-based updates needed
+  }
+
+  private createChoppyClosingAnimation(graphics: Phaser.GameObjects.Graphics, onComplete: () => void): void {
+    const animationDuration = 200; // Same duration as opening
+    
+    // Start smooth scale tween to shrink down
+    this.scene.tweens.add({
+      targets: graphics,
+      scaleX: 0.01,
+      scaleY: 0.01,
+      duration: animationDuration,
+      ease: 'Back.easeIn', // Dramatic shrink curve (inverse of opening)
+      onComplete: () => {
+        onComplete();
+      }
+    });
+    
+    // Let the normal collage animation system handle the updates
+    // No special frame-based updates needed
+  }
+
+  private regenerateCollageShape(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+    // Clear the graphics
+    graphics.clear();
+    
+    // Recreate the collage shape with new dimensions
+    const config = {
+      x: -width / 2, // Keep centered
+      y: -height / 2, // Keep centered
+      width: width,
+      height: height,
+      fillColor: 0xffffff,
+      strokeColor: 0x000000,
+      strokeWidth: 2
+    };
+    
+    // Use the same logic as createCollageRect but with custom dimensions
+    this.windowShapes.createCollageRectShape(graphics, config);
+  }
+
+  private regenerateCollageShapeForExpansion(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+    // Clear the graphics
+    graphics.clear();
+    
+    // Recreate the collage shape with increased jaggedness for expansion
+    const config = {
+      x: -width / 2, // Keep centered
+      y: -height / 2, // Keep centered
+      width: width,
+      height: height,
+      fillColor: 0xffffff,
+      strokeColor: 0x000000,
+      strokeWidth: 2
+    };
+    
+    // Use the expansion version with increased jaggedness
+    this.windowShapes.createCollageRectShapeForExpansion(graphics, config);
   }
   
   createButtons(): void {
@@ -266,17 +364,26 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
         // Clean up ALL current story buttons immediately to prevent double-clicking
         this.cleanupStoryButtons();
         
-        // Call the callback - it will handle creating next dialog or ending story
-        if (buttonConfig.callback) {
-          console.log(`🔘 Calling callback for ${labelText}`);
-          buttonConfig.callback();
-        } else {
-          // No callback means story end - destroy container
-          console.log(`🔘 No callback - ending story and destroying container`);
-          if (this.container && this.container.scene) {
-            this.container.destroy();
+        // Hide text and background elements first
+        this.hideTextElements();
+        
+        // Start closing animation after text is hidden
+        const mainWindow = this.container.getAt(0) as Phaser.GameObjects.Graphics; // Main window is first child
+        this.createChoppyClosingAnimation(mainWindow, () => {
+          console.log('🎬 CYOA window closing animation complete');
+          
+          // Call the callback - it will handle creating next dialog or ending story
+          if (buttonConfig.callback) {
+            console.log(`🔘 Calling callback for ${labelText}`);
+            buttonConfig.callback();
+          } else {
+            // No callback means story end - destroy container
+            console.log(`🔘 No callback - ending story and destroying container`);
+            if (this.container && this.container.scene) {
+              this.container.destroy();
+            }
           }
-        }
+        });
       });
     });
     console.log('🔘 CYOA buttons created with H menu styling and interaction');
@@ -386,6 +493,62 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       (this.container as any).storyButtons = [];
     }
   }
+
+  private hideTextElements(): void {
+    // Hide all text elements and their backgrounds
+    console.log('👻 Hiding text elements before closing animation');
+    
+    // Hide all text elements
+    this.textElements.forEach(textElement => {
+      if (textElement && textElement.setVisible) {
+        textElement.setVisible(false);
+      }
+    });
+    
+    // Hide all text backgrounds
+    this.textBackgrounds.forEach(background => {
+      if (background && background.setVisible) {
+        background.setVisible(false);
+      }
+    });
+    
+    // Hide invisible overlay if it exists
+    if (this.invisibleOverlay && this.invisibleOverlay.setVisible) {
+      this.invisibleOverlay.setVisible(false);
+    }
+  }
+
+  private createDitheredOverlay(): void {
+    // Create a 1-bit dithered grey overlay that covers the entire screen
+    const overlay = this.scene.add.graphics();
+    
+    // Set overlay to cover the entire game area
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Create dithered pattern
+    overlay.fillStyle(0x808080, 0.3); // Grey with transparency
+    
+    // Create a simple dither pattern using small rectangles
+    const ditherSize = 4; // Size of each dither square
+    for (let x = 0; x < gameWidth; x += ditherSize) {
+      for (let y = 0; y < gameHeight; y += ditherSize) {
+        // Create checkerboard pattern for dithering
+        if ((Math.floor(x / ditherSize) + Math.floor(y / ditherSize)) % 2 === 0) {
+          overlay.fillRect(x, y, ditherSize, ditherSize);
+        }
+      }
+    }
+    
+    // Position overlay at (0,0) to cover entire screen
+    overlay.setPosition(0, 0);
+    overlay.setDepth(1); // Below the menu (which is at depth 10+)
+    
+    // Store reference for cleanup
+    (this.container as any).ditheredOverlay = overlay;
+    
+    console.log('🎨 Created 1-bit dithered grey overlay');
+  }
 }
 
 export class WindowShapes {
@@ -408,6 +571,238 @@ export class WindowShapes {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  /**
+   * Create smooth expansion animation with choppy collage updates
+   */
+  createChoppyExpansionAnimation(graphics: Phaser.GameObjects.Graphics, width: number, height: number, onComplete: () => void): void {
+    const animationDuration = 200; // Much faster animation
+    
+    // Start smooth scale tween only (no alpha animation)
+    this.scene.tweens.add({
+      targets: graphics,
+      scaleX: 1,
+      scaleY: 1,
+      duration: animationDuration,
+      ease: 'Back.easeOut', // Dramatic overshoot curve
+      onComplete: () => {
+        onComplete();
+      }
+    });
+    
+    // Let the normal collage animation system handle the updates
+    // No special frame-based updates needed
+  }
+
+  /**
+   * Regenerate collage shape for animation
+   */
+  private regenerateCollageShapeForAnimation(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+    // Clear the graphics
+    graphics.clear();
+    
+    // Recreate the collage shape with new dimensions
+    const config = {
+      x: -width / 2, // Keep centered
+      y: -height / 2, // Keep centered
+      width: width,
+      height: height,
+      fillColor: 0xffffff,
+      strokeColor: 0x000000,
+      strokeWidth: 2
+    };
+    
+    // Use the same logic as createCollageRect but with custom dimensions
+    this.createCollageRectShape(graphics, config);
+  }
+
+  /**
+   * Regenerate collage shape for expansion with increased jaggedness
+   */
+  private regenerateCollageShapeForExpansion(graphics: Phaser.GameObjects.Graphics, width: number, height: number): void {
+    // Clear the graphics
+    graphics.clear();
+    
+    // Recreate the collage shape with increased jaggedness for expansion
+    const config = {
+      x: -width / 2, // Keep centered
+      y: -height / 2, // Keep centered
+      width: width,
+      height: height,
+      fillColor: 0xffffff,
+      strokeColor: 0x000000,
+      strokeWidth: 2
+    };
+    
+    // Use the expansion version with increased jaggedness
+    this.createCollageRectShapeForExpansion(graphics, config);
+  }
+
+  /**
+   * Create a collage-style rectangle shape on an existing Graphics object with increased jaggedness for expansion
+   */
+  createCollageRectShapeForExpansion(graphics: Phaser.GameObjects.Graphics, config: WindowShapeConfig): void {
+    // Set default values
+    const strokeWidth = config.strokeWidth || 2;
+    const strokeColor = config.strokeColor || 0x000000; // Black
+    const fillColor = config.fillColor || 0xd0d0d0; // Darker grey default
+    const fillAlpha = config.fillAlpha !== undefined ? config.fillAlpha : 1.0; // Fully opaque by default
+    
+    // Create polygon points with EXTRA random points and INCREASED jaggedness
+    const offset = 8; // Make polygon larger on each side (increased from 5)
+    const polygonPoints = [];
+    
+    // Add MORE random extra points for increased jaggedness
+    const extraPointCount = Phaser.Math.Between(4, 8); // Increased from 2-5 to 4-8
+    
+    // Create arrays for points along each edge
+    const topEdgePoints = [];
+    const rightEdgePoints = [];
+    const bottomEdgePoints = [];
+    const leftEdgePoints = [];
+    
+    // Always include corners with INCREASED random movement
+    topEdgePoints.push({ 
+      x: config.x - offset + Phaser.Math.Between(-12, -5), // Increased from -5,-2 to -12,-5
+      y: config.y - offset + Phaser.Math.Between(-12, -5)  // Increased from -5,-2 to -12,-5
+    }); // Top-left corner
+    rightEdgePoints.push({ 
+      x: config.x + config.width + offset + Phaser.Math.Between(5, 12), // Increased from 2,5 to 5,12
+      y: config.y - offset + Phaser.Math.Between(-12, -5)  // Increased from -5,-2 to -12,-5
+    }); // Top-right corner
+    bottomEdgePoints.push({ 
+      x: config.x + config.width + offset + Phaser.Math.Between(5, 12), // Increased from 2,5 to 5,12
+      y: config.y + config.height + offset + Phaser.Math.Between(5, 12)  // Increased from 2,5 to 5,12
+    }); // Bottom-right corner
+    leftEdgePoints.push({ 
+      x: config.x - offset + Phaser.Math.Between(-12, -5), // Increased from -5,-2 to -12,-5
+      y: config.y + config.height + offset + Phaser.Math.Between(5, 12)  // Increased from 2,5 to 5,12
+    }); // Bottom-left corner
+    
+    // Add extra random points along each edge with INCREASED variation
+    for (let i = 0; i < extraPointCount; i++) {
+      // Top edge
+      topEdgePoints.push({
+        x: config.x + (config.width * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8), // Increased from -3,3 to -8,8
+        y: config.y - offset + Phaser.Math.Between(-15, -3) // Increased from -8,-2 to -15,-3
+      });
+      
+      // Right edge
+      rightEdgePoints.push({
+        x: config.x + config.width + offset + Phaser.Math.Between(3, 15), // Increased from 2,8 to 3,15
+        y: config.y + (config.height * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8) // Increased from -3,3 to -8,8
+      });
+      
+      // Bottom edge
+      bottomEdgePoints.push({
+        x: config.x + (config.width * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8), // Increased from -3,3 to -8,8
+        y: config.y + config.height + offset + Phaser.Math.Between(3, 15) // Increased from 2,8 to 3,15
+      });
+      
+      // Left edge
+      leftEdgePoints.push({
+        x: config.x - offset + Phaser.Math.Between(-15, -3), // Increased from -8,-2 to -15,-3
+        y: config.y + (config.height * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8) // Increased from -3,3 to -8,8
+      });
+    }
+    
+    // Combine all points in order: top-left -> top -> top-right -> right -> bottom-right -> bottom -> bottom-left -> left
+    polygonPoints.push(...topEdgePoints);
+    polygonPoints.push(...rightEdgePoints);
+    polygonPoints.push(...bottomEdgePoints);
+    polygonPoints.push(...leftEdgePoints);
+    
+    // Draw the polygon with anti-aliasing
+    graphics.fillStyle(fillColor, fillAlpha);
+    graphics.fillPoints(polygonPoints);
+    
+    // Draw the stroke with anti-aliasing
+    graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Alpha 1.0 for smooth lines
+    graphics.strokePoints(polygonPoints, true);
+  }
+
+  /**
+   * Create a collage-style rectangle shape on an existing Graphics object
+   */
+  createCollageRectShape(graphics: Phaser.GameObjects.Graphics, config: WindowShapeConfig): void {
+    // Set default values
+    const strokeWidth = config.strokeWidth || 2;
+    const strokeColor = config.strokeColor || 0x000000; // Black
+    const fillColor = config.fillColor || 0xd0d0d0; // Darker grey default
+    const fillAlpha = config.fillAlpha !== undefined ? config.fillAlpha : 1.0; // Fully opaque by default
+    
+    // Create polygon points with EXTRA random points and INCREASED jaggedness
+    const offset = 8; // Make polygon larger on each side (increased from 5)
+    const polygonPoints = [];
+    
+    // Add MORE random extra points for increased jaggedness
+    const extraPointCount = Phaser.Math.Between(4, 8); // Increased from 2-5 to 4-8
+    
+    // Create arrays for points along each edge
+    const topEdgePoints = [];
+    const rightEdgePoints = [];
+    const bottomEdgePoints = [];
+    const leftEdgePoints = [];
+    
+    // Always include corners with INCREASED random movement
+    topEdgePoints.push({ 
+      x: config.x - offset + Phaser.Math.Between(-12, -5), // Increased from -5,-2 to -12,-5
+      y: config.y - offset + Phaser.Math.Between(-12, -5)  // Increased from -5,-2 to -12,-5
+    }); // Top-left corner
+    rightEdgePoints.push({ 
+      x: config.x + config.width + offset + Phaser.Math.Between(5, 12), // Increased from 2,5 to 5,12
+      y: config.y - offset + Phaser.Math.Between(-12, -5)  // Increased from -5,-2 to -12,-5
+    }); // Top-right corner
+    bottomEdgePoints.push({ 
+      x: config.x + config.width + offset + Phaser.Math.Between(5, 12), // Increased from 2,5 to 5,12
+      y: config.y + config.height + offset + Phaser.Math.Between(5, 12)  // Increased from 2,5 to 5,12
+    }); // Bottom-right corner
+    leftEdgePoints.push({ 
+      x: config.x - offset + Phaser.Math.Between(-12, -5), // Increased from -5,-2 to -12,-5
+      y: config.y + config.height + offset + Phaser.Math.Between(5, 12)  // Increased from 2,5 to 5,12
+    }); // Bottom-left corner
+    
+    // Add extra random points along each edge with INCREASED variation
+    for (let i = 0; i < extraPointCount; i++) {
+      // Top edge
+      topEdgePoints.push({
+        x: config.x + (config.width * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8), // Increased from -3,3 to -8,8
+        y: config.y - offset + Phaser.Math.Between(-15, -3) // Increased from -8,-2 to -15,-3
+      });
+      
+      // Right edge
+      rightEdgePoints.push({
+        x: config.x + config.width + offset + Phaser.Math.Between(3, 15), // Increased from 2,8 to 3,15
+        y: config.y + (config.height * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8) // Increased from -3,3 to -8,8
+      });
+      
+      // Bottom edge
+      bottomEdgePoints.push({
+        x: config.x + (config.width * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8), // Increased from -3,3 to -8,8
+        y: config.y + config.height + offset + Phaser.Math.Between(3, 15) // Increased from 2,8 to 3,15
+      });
+      
+      // Left edge
+      leftEdgePoints.push({
+        x: config.x - offset + Phaser.Math.Between(-15, -3), // Increased from -8,-2 to -15,-3
+        y: config.y + (config.height * (i + 1) / (extraPointCount + 1)) + Phaser.Math.Between(-8, 8) // Increased from -3,3 to -8,8
+      });
+    }
+    
+    // Combine all points in order: top-left -> top -> top-right -> right -> bottom-right -> bottom -> bottom-left -> left
+    polygonPoints.push(...topEdgePoints);
+    polygonPoints.push(...rightEdgePoints);
+    polygonPoints.push(...bottomEdgePoints);
+    polygonPoints.push(...leftEdgePoints);
+    
+    // Draw the polygon with anti-aliasing
+    graphics.fillStyle(fillColor, fillAlpha);
+    graphics.fillPoints(polygonPoints);
+    
+    // Draw the stroke with anti-aliasing
+    graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Alpha 1.0 for smooth lines
+    graphics.strokePoints(polygonPoints, true);
   }
 
   /**
@@ -1695,17 +2090,50 @@ export class WindowShapes {
     console.log(`📦 Container created at position: ${x}, ${y} with depth 2000`);
     
     // Main story window - white background with animation
+    // Create Graphics object with negative offset so center is at (0,0)
+    const centerX = width / 2;
+    const centerY = height / 2;
     const mainWindow = this.createCollageRect({ 
-      x: 0, y: 0, width, height,
+      x: -centerX, y: -centerY, // Negative offset so center is at (0,0)
+      width, height,
       fillColor: 0xffffff // White background
-    }, true, 'window'); // Enable animation for main window
-    console.log(`🏠 Main window created: ${width}x${height} at 0,0 relative to container`);
+    }, false, 'window'); // DISABLE automatic animation - we'll register manually
+    console.log(`🏠 Main window created: ${width}x${height} with center offset`);
+    
+    // Set alpha to 1 and scale to 0.01 IMMEDIATELY after creation
+    mainWindow.setAlpha(1); // Start visible
+    mainWindow.setScale(0.01); // Start tiny
+    mainWindow.setDepth(10);  // Changed from -1 to 10
+    mainWindow.setPosition(centerX, centerY); // Position so center of Graphics object is at center
     container.add(mainWindow);
     console.log('✅ Main window added to container');
-    
-    // Set the main window to a higher depth so it captures pointer events properly
-    mainWindow.setDepth(10);  // Changed from -1 to 10
     console.log('📦 Main window depth set to 10');
+    
+    // Start expansion animation immediately (no fade-in delay)
+    this.createChoppyExpansionAnimation(mainWindow, width, height, () => {
+      console.log('🎬 H menu window opening animation complete');
+      // Start text sequence after opening animation
+      this.revealNextStoryText(container as any);
+    });
+    
+    // MANUAL registration: Register the main window for animation with the actual drawing coordinates
+    const shapeId = `h_menu_window_${Date.now()}`;
+    this.registerAnimatedShape(
+      shapeId, 
+      mainWindow, 
+      'window', 
+      -centerX, // Use the actual drawing coordinates (negative offset)
+      -centerY, // Use the actual drawing coordinates (negative offset)
+      width, 
+      height
+    );
+    console.log(`🎬 H menu main window registered for animation at OFFSET (${-centerX}, ${-centerY})`);
+    
+    // Store for cleanup
+    (mainWindow as any).hMenuAnimationId = shapeId;
+    mainWindow.on('destroy', () => {
+      this.unregisterAnimatedShape(shapeId);
+    });
     
     // Make the main window (polygon background) interactive for clicking to advance
     mainWindow.setInteractive();
@@ -1746,8 +2174,7 @@ export class WindowShapes {
     (container as any).containerHeight = height;
     (container as any).isComplete = false;
     
-    // Start the first text reveal
-    this.revealNextStoryText(container as any);
+    // Text sequence will start after opening animation completes
     
     // Add proper cleanup when container is destroyed
     container.on('destroy', () => {
