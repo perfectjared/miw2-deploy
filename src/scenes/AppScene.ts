@@ -232,11 +232,11 @@ export class AppScene extends Phaser.Scene {
   }
 
   private incrementHalfStep() {
-    if (!this.gameStarted || this.isPaused) return; // Don't increment if game hasn't started or is paused
+    if (!this.gameStarted) return; // Don't increment if game hasn't started
     
     this.halfStep++;
     
-    // Emit half-step event to GameScene for UI animations
+    // Always emit half-step event for UI animations, even when paused
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
       gameScene.events.emit('halfStep', this.halfStep);

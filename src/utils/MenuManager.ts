@@ -1727,25 +1727,28 @@ export class MenuManager {
     const choices = storyData.eventData.choices.map((choice: any, index: number) => ({
       text: choice.text,
       callback: () => {
-        // Show outcome first, then make choice
-        this.showStoryOutcome(storyData.storylineData, choice.outcome, () => {
-          // Check if we're in debug mode or real story mode
-          const gameScene = this.scene.scene.get('GameScene');
-          if (gameScene && (gameScene as any).storyManager) {
-            const storyManager = (gameScene as any).storyManager;
-            
-            // If we're in debug mode, just close the dialog
-            if (storyManager.isDebugStoryActive()) {
-              console.log(`Debug Story: Choice made - ${choice.outcome}`);
-              this.closeDialog();
+        // Add a small delay to allow the preceding menu to complete its animation
+        this.scene.time.delayedCall(500, () => {
+          // Show outcome first, then make choice
+          this.showStoryOutcome(storyData.storylineData, choice.outcome, () => {
+            // Check if we're in debug mode or real story mode
+            const gameScene = this.scene.scene.get('GameScene');
+            if (gameScene && (gameScene as any).storyManager) {
+              const storyManager = (gameScene as any).storyManager;
+              
+              // If we're in debug mode, just close the dialog
+              if (storyManager.isDebugStoryActive()) {
+                console.log(`Debug Story: Choice made - ${choice.outcome}`);
+                this.closeDialog();
+              } else {
+                // Real story mode - make choice in story manager
+                storyManager.makeChoice(choice.outcome);
+                this.closeDialog();
+              }
             } else {
-              // Real story mode - make choice in story manager
-              storyManager.makeChoice(choice.outcome);
               this.closeDialog();
             }
-          } else {
-            this.closeDialog();
-          }
+          });
         });
       }
     }));
@@ -2545,6 +2548,20 @@ export class MenuManager {
         if (gameScene) {
           gameScene.events.emit('gameResumed');
           console.log('MenuManager: Emitted gameResumed event for CYOA menu close');
+        }
+      } else if (this.currentDisplayedMenuType === 'NOVEL_STORY') {
+        console.log('MenuManager: NOVEL_STORY menu closed - resuming game');
+        // Resume AppScene step counting
+        const appScene = this.scene.scene.get('AppScene');
+        if (appScene) {
+          (appScene as any).isPaused = false;
+        }
+        
+        // Emit gameResumed event
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          gameScene.events.emit('gameResumed');
+          console.log('MenuManager: Emitted gameResumed event for NOVEL_STORY menu close');
         }
       }
       // Restore input if we disabled it for this dialog

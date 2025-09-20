@@ -152,18 +152,18 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
     mainWindow.setDepth(10);
     this.container.add(mainWindow);
     
-    // MANUAL registration: Register the main window for animation with world coordinates
+    // MANUAL registration: Register the main window for animation with RELATIVE coordinates
     const shapeId = `cyoa_window_${Date.now()}`;
     this.windowShapes.registerAnimatedShape(
       shapeId, 
       mainWindow, 
       'window', 
-      this.config.x, 
-      this.config.y, 
+      0, // Relative to container, not world coordinates
+      0, // Relative to container, not world coordinates
       this.config.width, 
       this.config.height
     );
-    console.log(`🎬 CYOA main window registered for animation at world (${this.config.x}, ${this.config.y})`);
+    console.log(`🎬 CYOA main window registered for animation at RELATIVE (0, 0)`);
     
     // Store for cleanup
     (mainWindow as any).cyoaAnimationId = shapeId;
@@ -225,7 +225,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       // Set position to absolute coordinates - EXACT H menu approach  
       buttonGraphics.setPosition(absoluteButtonX, absoluteButtonY);
       buttonGraphics.setVisible(true); // CRITICAL: Make button visible like H menu
-      buttonGraphics.setDepth(5000); // EXACT same high depth as H menu
+      buttonGraphics.setDepth(40000); // Higher than story container (35000) to ensure visibility
       
       // Add text label at ABSOLUTE world position - NOT in container
       const labelText = buttonConfig.text || buttonLabels[index] || `Option ${index + 1}`;
@@ -237,13 +237,13 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
         { fontSize: '14px', color: '#000000', fontFamily: 'Arial, sans-serif' }
       );
       buttonLabel.setOrigin(0.5, 0.5);
-      buttonLabel.setDepth(5001); // Higher than buttons - EXACT H menu approach
+      buttonLabel.setDepth(40001); // Higher than buttons - ensure visibility above story container
       
       // Make button interactive with EXPLICIT HIT BOUNDS - EXACT H menu approach
       const buttonBounds = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
       buttonGraphics.setInteractive(buttonBounds, Phaser.Geom.Rectangle.Contains);
       
-      console.log(`🔘 Button "${labelText}" created at ABSOLUTE (${absoluteButtonX}, ${absoluteButtonY}), depth 5000`);
+      console.log(`🔘 Button "${labelText}" created at ABSOLUTE (${absoluteButtonX}, ${absoluteButtonY}), depth 40000`);
       
       // Add hover effects for debugging
       buttonGraphics.on('pointerover', () => console.log(`🖱️ Hovering over ${labelText} button`));
@@ -1843,6 +1843,19 @@ export class WindowShapes {
     
     // Set up cleanup like H menu
     container.on('destroy', () => {
+      console.log('🗑️ CYOA Container destroy event triggered');
+      
+      // Clean up standalone buttons (not part of container)
+      if ((container as any).storyButtons) {
+        console.log('🧹 Cleaning up standalone CYOA buttons');
+        (container as any).storyButtons.forEach((button: any) => {
+          if (button && button.destroy && button.scene) {
+            button.destroy();
+          }
+        });
+        (container as any).storyButtons = [];
+      }
+      
       if (this.activeNarrativeWindow === container) {
         this.activeNarrativeWindow = null;
         this.processNarrativeQueue();
