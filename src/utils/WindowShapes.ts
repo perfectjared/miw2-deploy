@@ -1399,32 +1399,6 @@ export class WindowShapes {
     // Track this as the active narrative window
     this.activeNarrativeWindow = container;
     
-    // Debug: Add a semi-transparent overlay to visualize the clickable area
-    const debugOverlay = this.scene.add.rectangle(width/2, height/2, width, height, 0xff0000, 0.3);  // Made more visible
-    debugOverlay.setStrokeStyle(4, 0x00ff00, 1.0);  // Thick green border
-    debugOverlay.setDepth(20);  // Even higher depth
-    debugOverlay.setName('debugOverlay');  // Give it a name so we can find it later
-    container.add(debugOverlay);
-    console.log(`🔍 Debug overlay added to show clickable area: ${width}x${height}`);
-    
-    // Make the debug overlay ALSO interactive as a test
-    debugOverlay.setInteractive();
-    debugOverlay.on('pointerdown', () => console.log('🎯 DEBUG OVERLAY CLICKED!'));
-    debugOverlay.on('pointerover', () => console.log('🎯 Mouse over DEBUG OVERLAY'));
-    debugOverlay.on('pointerout', () => console.log('🎯 Mouse left DEBUG OVERLAY'));
-    
-    // Make clicking the debug overlay advance the story on pointerup
-    debugOverlay.on('pointerup', () => {
-      console.log('🎯 DEBUG OVERLAY RELEASED - checking if should advance story');
-      // Only advance if dialog isn't complete (buttons not yet shown)
-      if (!(container as any).isComplete) {
-        console.log('➡️ Advancing story dialog from debug overlay');
-        this.advanceStoryDialog(container as any);
-      } else {
-        console.log('⏹️ Dialog complete - buttons should handle interactions now');
-      }
-    });
-    
     return container;
   }
   
@@ -1668,10 +1642,15 @@ export class WindowShapes {
     const maybeButtonY = noButtonY - buttonHeight - buttonSpacing;
     const yesButtonY = maybeButtonY - buttonHeight - buttonSpacing;
     
-    // Create buttons at absolute world positions (NOT added to container) - SIMPLE RECTANGLES FOR TESTING
-    const yesButton = this.scene.add.rectangle(buttonX + buttonWidth/2, yesButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xcccccc); // Light grey
-    const maybeButton = this.scene.add.rectangle(buttonX + buttonWidth/2, maybeButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xcccccc);
-    const noButton = this.scene.add.rectangle(buttonX + buttonWidth/2, noButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xcccccc);
+    // Create buttons at absolute world positions with proper organic styling like R debug windows
+    const yesButton = this.createCollageButton(0, 0, buttonWidth, buttonHeight);  
+    const maybeButton = this.createCollageButton(0, 0, buttonWidth, buttonHeight);
+    const noButton = this.createCollageButton(0, 0, buttonWidth, buttonHeight);
+    
+    // Position the Graphics objects at absolute world coordinates
+    yesButton.setPosition(buttonX, yesButtonY);
+    maybeButton.setPosition(buttonX, maybeButtonY);
+    noButton.setPosition(buttonX, noButtonY);
     
     // Make buttons visible with high depth - SET DEPTH IMMEDIATELY
     yesButton.setVisible(true);
@@ -1681,28 +1660,8 @@ export class WindowShapes {
     maybeButton.setDepth(5000);
     noButton.setDepth(5000);
     
-    // TEMP: Add bright colored rectangles as debug overlays to see where buttons are
-    const yesDebug = this.scene.add.rectangle(buttonX + buttonWidth/2, yesButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0xff0000, 0.8);
-    const maybeDebug = this.scene.add.rectangle(buttonX + buttonWidth/2, maybeButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0x00ff00, 0.8);
-    const noDebug = this.scene.add.rectangle(buttonX + buttonWidth/2, noButtonY + buttonHeight/2, buttonWidth, buttonHeight, 0x0000ff, 0.8);
-    yesDebug.setDepth(5000);    // Much higher
-    maybeDebug.setDepth(5000);
-    noDebug.setDepth(5000);
-    
-    // EXTREME TEST: Add rectangles at top-left corner of screen that should DEFINITELY be visible
-    const topLeftTest = this.scene.add.rectangle(50, 50, 100, 100, 0xff00ff, 1.0); // Bright magenta
-    topLeftTest.setDepth(999); // Extremely high depth
-    console.log(`🚨 EXTREME TEST: Created bright magenta rectangle at (50,50) with depth 999`);
-    
-    // EXTREME TEST: Add text at known visible location
-    const topLeftText = this.scene.add.text(50, 200, 'TEST VISIBLE TEXT', { fontSize: '24px', color: '#ffff00', backgroundColor: '#000000' });
-    topLeftText.setDepth(999);
-    console.log(`🚨 EXTREME TEST: Created yellow text at (50,200) with depth 999`);
-    
     // Debug logging
     console.log(`🎨 Scene name: ${this.scene.scene.key}`);
-    console.log(`🎨 Debug rectangles created on scene: ${this.scene.scene.key}`);
-    console.log(`🎨 Yes debug visible: ${yesDebug.visible}, depth: ${yesDebug.depth}`);
     console.log(`🎨 Yes button visible: ${yesButton.visible}, depth: ${yesButton.depth}`);
     
     console.log(`🔘 Buttons created at absolute positions: Yes(${buttonX},${yesButtonY}), Maybe(${buttonX},${maybeButtonY}), No(${buttonX},${noButtonY})`);
@@ -1718,8 +1677,8 @@ export class WindowShapes {
     noLabel.setOrigin(0.5, 0.5);
     noLabel.setDepth(5001);
     
-    // Store button references on container for cleanup (including debug overlays and test elements)
-    (container as any).storyButtons = [yesButton, maybeButton, noButton, yesLabel, maybeLabel, noLabel, yesDebug, maybeDebug, noDebug, topLeftTest, topLeftText];
+    // Store button references on container for cleanup (no debug overlays needed)
+    (container as any).storyButtons = [yesButton, maybeButton, noButton, yesLabel, maybeLabel, noLabel];
     console.log('🔘 Buttons created at absolute world positions (not in container)');
     
     // Labels already have depth set to 301, buttons have depth 200
