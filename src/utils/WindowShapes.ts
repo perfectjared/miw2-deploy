@@ -364,8 +364,8 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
         // Clean up ALL current story buttons immediately to prevent double-clicking
         this.cleanupStoryButtons();
         
-        // Hide text and background elements first
-        this.hideTextElements();
+        // Hide text and background elements first (but keep overlay)
+        this.hideTextElementsExceptOverlay();
         
         // Start closing animation after text is hidden
         const mainWindow = this.container.getAt(0) as Phaser.GameObjects.Graphics; // Main window is first child
@@ -494,6 +494,32 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
     }
   }
 
+  private hideTextElementsExceptOverlay(): void {
+    // Hide all text elements and their backgrounds (but keep dithered overlay)
+    console.log('👻 Hiding text elements before closing animation (keeping overlay)');
+    
+    // Hide all text elements
+    this.textElements.forEach(textElement => {
+      if (textElement && textElement.setVisible) {
+        textElement.setVisible(false);
+      }
+    });
+    
+    // Hide all text backgrounds
+    this.textBackgrounds.forEach(background => {
+      if (background && background.setVisible) {
+        background.setVisible(false);
+      }
+    });
+    
+    // Hide invisible overlay if it exists
+    if (this.invisibleOverlay && this.invisibleOverlay.setVisible) {
+      this.invisibleOverlay.setVisible(false);
+    }
+    
+    // DON'T hide dithered overlay - let the destroy event handler decide
+  }
+
   private hideTextElements(): void {
     // Hide all text elements and their backgrounds
     console.log('👻 Hiding text elements before closing animation');
@@ -516,38 +542,109 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
     if (this.invisibleOverlay && this.invisibleOverlay.setVisible) {
       this.invisibleOverlay.setVisible(false);
     }
+    
+    // Hide dithered overlay only if no more windows are queued
+    // Check if there are more windows in the queue before hiding overlay
+    const hasQueuedWindows = this.windowShapes && (this.windowShapes as any).narrativeWindowQueue && (this.windowShapes as any).narrativeWindowQueue.length > 0;
+    
+    if ((this.container as any).ditheredOverlay && (this.container as any).ditheredOverlay.setVisible && !hasQueuedWindows) {
+      console.log('🎨 Hiding dithered overlay (no more queued windows)');
+      (this.container as any).ditheredOverlay.setVisible(false);
+    } else if (hasQueuedWindows) {
+      console.log('🎨 Keeping dithered overlay (more windows queued)');
+    }
   }
 
-  private createDitheredOverlay(): void {
-    // Create a 1-bit dithered grey overlay that covers the entire screen
-    const overlay = this.scene.add.graphics();
-    
-    // Set overlay to cover the entire game area
+  private createDitheredOverlay(container?: Phaser.GameObjects.Container): void {
+    // Create efficient dither overlay using Phaser's texture system
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    // Create dithered pattern
-    overlay.fillStyle(0x808080, 0.3); // Grey with transparency
+    // Create a small dither pattern texture (8x8 pixels)
+    const patternSize = 8;
+    const textureKey = 'ditherPattern';
+    // Check if texture already exists, if not create it
+    let patternTexture;
+    let shouldDrawPattern = false;
+    console.log('🎨 Checking texture existence:', this.scene.textures.exists(textureKey));
     
-    // Create a simple dither pattern using small rectangles
-    const ditherSize = 4; // Size of each dither square
-    for (let x = 0; x < gameWidth; x += ditherSize) {
-      for (let y = 0; y < gameHeight; y += ditherSize) {
-        // Create checkerboard pattern for dithering
-        if ((Math.floor(x / ditherSize) + Math.floor(y / ditherSize)) % 2 === 0) {
-          overlay.fillRect(x, y, ditherSize, ditherSize);
-        }
-      }
+    if (!this.scene.textures.exists(textureKey)) {
+      console.log('🎨 Creating new dither texture...');
+      patternTexture = this.scene.textures.createCanvas(textureKey, patternSize, patternSize);
+      shouldDrawPattern = true;
+    } else {
+      console.log('🎨 Reusing existing dither texture...');
+      patternTexture = this.scene.textures.get(textureKey);
     }
     
-    // Position overlay at (0,0) to cover entire screen
-    overlay.setPosition(0, 0);
-    overlay.setDepth(1); // Below the menu (which is at depth 10+)
+    // Classic Mac OS halftone matrix (8x8 Bayer matrix for 50% gray)
+    const bayerMatrix = [
+      [0, 32, 8, 40, 2, 34, 10, 42],
+      [48, 16, 56, 24, 50, 18, 58, 26],
+      [12, 44, 4, 36, 14, 46, 6, 38],
+      [60, 28, 52, 20, 62, 30, 54, 22],
+      [3, 35, 11, 43, 1, 33, 9, 41],
+      [51, 19, 59, 27, 49, 17, 57, 25],
+      [15, 47, 7, 39, 13, 45, 5, 37],
+      [63, 31, 55, 23, 61, 29, 53, 21]
+    ];
+    
+    // Draw the dither pattern to the texture (only if we created it)
+    if (shouldDrawPattern) {
+      console.log('🎨 Drawing pattern to texture...');
+      const ctx = (patternTexture as any)?.getContext();
+      if (!ctx) return;
+      ctx.fillStyle = '#000000';
+      
+      for (let y = 0; y < patternSize; y++) {
+        for (let x = 0; x < patternSize; x++) {
+          // Use Bayer matrix to determine if pixel should be black
+          // Threshold of 32 gives us approximately 50% gray
+          if (bayerMatrix[y][x] < 32) {
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+      
+      (patternTexture as any)?.refresh();
+      
+      console.log('🎨 Dither texture created and drawn:', {
+        textureKey,
+        patternSize,
+        pixelsDrawn: bayerMatrix.flat().filter(val => val < 32).length,
+        totalPixels: patternSize * patternSize
+      });
+    } else {
+      console.log('🎨 Texture already exists, skipping drawing');
+    }
+    
+    // Create overlay using tile sprite for proper repeating pattern
+    const overlay = this.scene.add.tileSprite(0, 0, gameWidth, gameHeight, textureKey);
+    overlay.setOrigin(0, 0);
+    overlay.setDepth(45000); // Above menu (depth 10+) but below buttons (depth 40000+)
+    overlay.setTint(0x808080); // Temporary: add gray tint to make it visible
+    
+    // Debug logging
+    console.log('🎨 Dither overlay created:', {
+      textureKey,
+      gameWidth,
+      gameHeight,
+      overlayPosition: overlay.getBounds(),
+      overlayDepth: overlay.depth,
+      textureExists: this.scene.textures.exists(textureKey),
+      overlayVisible: overlay.visible,
+      overlayAlpha: overlay.alpha
+    });
     
     // Store reference for cleanup
-    (this.container as any).ditheredOverlay = overlay;
+    if (container) {
+      (container as any).ditheredOverlay = overlay;
+    } else {
+      // For CYOA windows, store on the container
+      (this.container as any).ditheredOverlay = overlay;
+    }
     
-    console.log('🎨 Created 1-bit dithered grey overlay');
+    console.log('🎨 Created efficient texture-based Mac OS dither overlay');
   }
 }
 
@@ -2109,6 +2206,9 @@ export class WindowShapes {
     console.log('✅ Main window added to container');
     console.log('📦 Main window depth set to 10');
     
+    // Create 1-bit dithered grey overlay below the menu
+    this.createDitheredOverlay(container);
+    
     // Start expansion animation immediately (no fade-in delay)
     this.createChoppyExpansionAnimation(mainWindow, width, height, () => {
       console.log('🎬 H menu window opening animation complete');
@@ -2184,6 +2284,17 @@ export class WindowShapes {
       if ((container as any).autoAdvanceTimer) {
         (container as any).autoAdvanceTimer.remove();
         (container as any).autoAdvanceTimer = null;
+      }
+      
+      // Clean up dithered overlay only if no more windows are queued
+      const hasQueuedWindows = this.narrativeWindowQueue && this.narrativeWindowQueue.length > 0;
+      
+      if ((container as any).ditheredOverlay && (container as any).ditheredOverlay.destroy && !hasQueuedWindows) {
+        console.log('🧹 Cleaning up dithered overlay (no more queued windows)');
+        (container as any).ditheredOverlay.destroy();
+        (container as any).ditheredOverlay = null;
+      } else if (hasQueuedWindows) {
+        console.log('🎨 Keeping dithered overlay (more windows queued)');
       }
       
       // Clean up standalone buttons (not part of container)
@@ -2271,6 +2382,17 @@ export class WindowShapes {
     // Set up cleanup like H menu
     container.on('destroy', () => {
       console.log('🗑️ CYOA Container destroy event triggered');
+      
+      // Clean up dithered overlay only if no more windows are queued
+      const hasQueuedWindows = this.narrativeWindowQueue && this.narrativeWindowQueue.length > 0;
+      
+      if ((container as any).ditheredOverlay && (container as any).ditheredOverlay.destroy && !hasQueuedWindows) {
+        console.log('🧹 Cleaning up dithered overlay (no more queued windows)');
+        (container as any).ditheredOverlay.destroy();
+        (container as any).ditheredOverlay = null;
+      } else if (hasQueuedWindows) {
+        console.log('🎨 Keeping dithered overlay (more windows queued)');
+      }
       
       // Clean up standalone buttons (not part of container)
       if ((container as any).storyButtons) {
@@ -2671,5 +2793,95 @@ export class WindowShapes {
     this.activeNarrativeWindow = null;
     this.narrativeWindowQueue.length = 0;
     console.log('✅ Narrative system reset complete');
+  }
+
+  /**
+   * Create a 1-bit dithered grey overlay for menus
+   */
+  createDitheredOverlay(container: Phaser.GameObjects.Container): void {
+    // Create efficient dither overlay using Phaser's texture system
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Create a small dither pattern texture (8x8 pixels)
+    const patternSize = 8;
+    const textureKey = 'ditherPattern';
+    // Check if texture already exists, if not create it
+    let patternTexture;
+    let shouldDrawPattern = false;
+    console.log('🎨 Checking texture existence:', this.scene.textures.exists(textureKey));
+    
+    if (!this.scene.textures.exists(textureKey)) {
+      console.log('🎨 Creating new dither texture...');
+      patternTexture = this.scene.textures.createCanvas(textureKey, patternSize, patternSize);
+      shouldDrawPattern = true;
+    } else {
+      console.log('🎨 Reusing existing dither texture...');
+      patternTexture = this.scene.textures.get(textureKey);
+    }
+    
+    // Classic Mac OS halftone matrix (8x8 Bayer matrix for 50% gray)
+    const bayerMatrix = [
+      [0, 32, 8, 40, 2, 34, 10, 42],
+      [48, 16, 56, 24, 50, 18, 58, 26],
+      [12, 44, 4, 36, 14, 46, 6, 38],
+      [60, 28, 52, 20, 62, 30, 54, 22],
+      [3, 35, 11, 43, 1, 33, 9, 41],
+      [51, 19, 59, 27, 49, 17, 57, 25],
+      [15, 47, 7, 39, 13, 45, 5, 37],
+      [63, 31, 55, 23, 61, 29, 53, 21]
+    ];
+    
+    // Draw the dither pattern to the texture (only if we created it)
+    if (shouldDrawPattern) {
+      console.log('🎨 Drawing pattern to texture...');
+      const ctx = (patternTexture as any)?.getContext();
+      if (!ctx) return;
+      ctx.fillStyle = '#000000';
+      
+      for (let y = 0; y < patternSize; y++) {
+        for (let x = 0; x < patternSize; x++) {
+          // Use Bayer matrix to determine if pixel should be black
+          // Threshold of 32 gives us approximately 50% gray
+          if (bayerMatrix[y][x] < 32) {
+            ctx.fillRect(x, y, 1, 1);
+          }
+        }
+      }
+      
+      (patternTexture as any)?.refresh();
+      
+      console.log('🎨 Dither texture created and drawn:', {
+        textureKey,
+        patternSize,
+        pixelsDrawn: bayerMatrix.flat().filter(val => val < 32).length,
+        totalPixels: patternSize * patternSize
+      });
+    } else {
+      console.log('🎨 Texture already exists, skipping drawing');
+    }
+    
+    // Create overlay using tile sprite for proper repeating pattern
+    const overlay = this.scene.add.tileSprite(0, 0, gameWidth, gameHeight, textureKey);
+    overlay.setOrigin(0, 0);
+    overlay.setDepth(45000); // Above menu (depth 10+) but below buttons (depth 40000+)
+    overlay.setTint(0x808080); // Temporary: add gray tint to make it visible
+    
+    // Debug logging
+    console.log('🎨 Dither overlay created:', {
+      textureKey,
+      gameWidth,
+      gameHeight,
+      overlayPosition: overlay.getBounds(),
+      overlayDepth: overlay.depth,
+      textureExists: this.scene.textures.exists(textureKey),
+      overlayVisible: overlay.visible,
+      overlayAlpha: overlay.alpha
+    });
+    
+    // Store reference for cleanup
+    (container as any).ditheredOverlay = overlay;
+    
+    console.log('🎨 Created efficient texture-based Mac OS dither overlay');
   }
 }
