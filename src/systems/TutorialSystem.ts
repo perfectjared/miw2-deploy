@@ -21,6 +21,7 @@
 
 import Phaser from 'phaser';
 import { gameElements } from '../config/GameConfig';
+import { OverlayManager } from '../utils/OverlayManager';
 
 export interface TutorialConfig {
   // Overlay Parameters
@@ -51,6 +52,7 @@ export interface TutorialState {
 export class TutorialSystem {
   private scene: Phaser.Scene;
   private config: TutorialConfig;
+  private overlayManager: OverlayManager;
   
   // Visual Elements
   private tutorialOverlay!: Phaser.GameObjects.Container;
@@ -65,9 +67,10 @@ export class TutorialSystem {
   private frontseatKeys: any = null;
   private gameUI: any = null;
 
-  constructor(scene: Phaser.Scene, config: TutorialConfig) {
+  constructor(scene: Phaser.Scene, config: TutorialConfig, overlayManager?: OverlayManager) {
     this.scene = scene;
     this.config = config;
+    this.overlayManager = overlayManager || new OverlayManager(scene);
   }
 
   /**
@@ -110,13 +113,16 @@ export class TutorialSystem {
    * Update tutorial mask in real-time (for drag operations)
    */
   public updateTutorialMaskRealTime() {
-    if (!this.tutorialOverlay || !this.tutorialMaskGraphics) {
+    if (!this.tutorialOverlay) {
       return;
     }
     
     // Only update if tutorial is currently showing keys-and-ignition
+    // But don't recreate the overlay - just update the mask if needed
     if (this.lastTutorialState === 'keys-and-ignition') {
-      this.createKeysAndIgnitionMask();
+      // Check if we need to update the mask (e.g., if cutouts changed)
+      // For now, just return without doing anything to prevent constant recreation
+      return;
     }
   }
 
@@ -164,40 +170,30 @@ export class TutorialSystem {
   }
 
   /**
-   * Create tutorial overlay
-   * 
-   * IMPORTANT: DO NOT DELETE THIS CODE - TUTORIAL OVERLAY SYSTEM
-   * This creates the visual tutorial overlay with cutouts and guidance.
-   * Currently commented out for cleaner UI, but should be preserved for future use.
-   * 
-   * To re-enable: Uncomment the code below and ensure tutorialOverlay is created in constructor
+   * Create tutorial overlay using unified OverlayManager
    */
   private createTutorialOverlay() {
+    // Don't recreate if overlay already exists
+    if (this.tutorialOverlay) {
+      console.log('Tutorial overlay already exists, skipping creation');
+      return;
+    }
+    
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
     console.log('Creating unified tutorial overlay with dimensions:', gameWidth, gameHeight);
     
-    // Create tutorial overlay container
-    this.tutorialOverlay = this.scene.add.container(0, 0);
-    this.tutorialOverlay.setDepth(this.config.overlayDepth); // Above everything
-    (this.tutorialOverlay as any).setScrollFactor?.(0);
+    // Create tutorial overlay using OverlayManager with dither pattern
+    // Start with empty cutouts - they'll be updated dynamically
+    const overlay = this.overlayManager.createTutorialOverlay('tutorial_overlay', []);
     
-    // Create semi-transparent black overlay covering the screen
-    const overlay = this.scene.add.graphics();
-    overlay.fillStyle(this.config.overlayColor, this.config.overlayAlpha).fillRect(0, 0, gameWidth, gameHeight);
-    overlay.setScrollFactor(0);
-    this.tutorialOverlay.add(overlay);
-    
-    // Create mask graphics for cutouts
+    // Store references for compatibility with existing code
+    this.tutorialOverlay = overlay.container;
     this.tutorialMaskGraphics = this.scene.make.graphics();
     
-    // Create BitmapMask with inverted alpha (white areas become cutouts)
-    const mask = new Phaser.Display.Masks.BitmapMask(this.scene, this.tutorialMaskGraphics);
-    mask.invertAlpha = true; // This makes white areas transparent (cutouts)
-    
-    // Apply the mask to the overlay
-    overlay.setMask(mask);
+    // Store overlay reference for dynamic mask updates
+    (this.tutorialOverlay as any).overlayInstance = overlay;
     
     // Initially hide the tutorial overlay - it will be shown when conditions are met
     this.tutorialOverlay.setVisible(false);
@@ -207,34 +203,52 @@ export class TutorialSystem {
    * Update tutorial mask based on current state
    */
   private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'steering' | 'exit-warning') {
-    if (!this.tutorialOverlay || !this.tutorialMaskGraphics) {
-      console.log('Cannot update mask - overlay or mask graphics not found');
+    if (!this.tutorialOverlay) {
+      console.log('Cannot update mask - overlay not found');
       return;
     }
     
-    // Clear previous mask
-    this.tutorialMaskGraphics.clear();
+    // Get cutouts for current tutorial state
+    let cutouts: Array<{x: number, y: number, width: number, height: number}> = [];
     
     switch (tutorialState) {
       case 'keys-and-ignition':
-        this.createKeysAndIgnitionMask();
+        cutouts = this.getKeysAndIgnitionCutouts();
         break;
-      // Speed crank removed - no crank mask
       case 'steering':
-        this.createSteeringMask();
+        cutouts = this.getSteeringCutouts();
         break;
       case 'exit-warning':
-        this.createExitWarningMask();
+        cutouts = this.getExitWarningCutouts();
         break;
     }
+    
+    // Update existing overlay's mask instead of creating new one
+    const overlayInstance = (this.tutorialOverlay as any).overlayInstance;
+    if (overlayInstance && overlayInstance.mask) {
+      // Destroy old mask
+      overlayInstance.mask.destroy();
+      
+      // Create new mask with updated cutouts
+      const maskGraphics = this.scene.make.graphics();
+      cutouts.forEach(cutout => {
+        maskGraphics.fillStyle(0xffffff);
+        maskGraphics.fillRect(cutout.x, cutout.y, cutout.width, cutout.height);
+      });
+      
+      // Apply new mask
+      overlayInstance.mask = this.scene.add.bitmapMask(maskGraphics);
+      overlayInstance.container.mask = overlayInstance.mask;
+    }
+    
+    // console.log(`Updated tutorial mask for state: ${tutorialState} with ${cutouts.length} cutouts`);
   }
   
   /**
-   * Create mask for keys and ignition tutorial
+   * Get cutouts for keys and ignition tutorial
    */
-  private createKeysAndIgnitionMask() {
-    // Create cutouts for both keys and ignition
-    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
+  private getKeysAndIgnitionCutouts(): Array<{x: number, y: number, width: number, height: number}> {
+    const cutouts: Array<{x: number, y: number, width: number, height: number}> = [];
     
     // Keys cutout with 20% padding (convert world -> screen if needed)
     if (this.frontseatKeys?.gameObject) {
@@ -250,7 +264,12 @@ export class TutorialSystem {
         }
       } catch {}
       const keysHoleRadius = this.config.keysHoleRadius * 1.2; // 20% larger
-      this.tutorialMaskGraphics.fillCircle(sx, sy, keysHoleRadius);
+      cutouts.push({
+        x: sx - keysHoleRadius,
+        y: sy - keysHoleRadius,
+        width: keysHoleRadius * 2,
+        height: keysHoleRadius * 2
+      });
     }
     
     // Ignition cutout with 20% padding (use actual magnetic target position from GameElements)
@@ -272,17 +291,23 @@ export class TutorialSystem {
       }
     } catch {}
     const ignitionHoleRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2; // 20% larger
-    this.tutorialMaskGraphics.fillCircle(ignitionX, ignitionY, ignitionHoleRadius);
+    cutouts.push({
+      x: ignitionX - ignitionHoleRadius,
+      y: ignitionY - ignitionHoleRadius,
+      width: ignitionHoleRadius * 2,
+      height: ignitionHoleRadius * 2
+    });
+    
+    return cutouts;
   }
 
   // Speed crank mask method removed - using automatic speed progression
 
   /**
-   * Create mask for steering tutorial
+   * Get cutouts for steering tutorial
    */
-  private createSteeringMask() {
-    // Create cutout around steering dial area
-    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
+  private getSteeringCutouts(): Array<{x: number, y: number, width: number, height: number}> {
+    const cutouts: Array<{x: number, y: number, width: number, height: number}> = [];
     
     // Get steering dial position (left side of screen)
     const gameWidth = this.scene.cameras.main.width;
@@ -293,7 +318,15 @@ export class TutorialSystem {
     const steeringX = gameWidth * steeringConfig.position.x;
     const steeringY = gameHeight * steeringConfig.position.y;
     const radius = 80 + 16; // knobRadius + padding
-    this.tutorialMaskGraphics.fillCircle(steeringX, steeringY, radius);
+    
+    cutouts.push({
+      x: steeringX - radius,
+      y: steeringY - radius,
+      width: radius * 2,
+      height: radius * 2
+    });
+    
+    return cutouts;
   }
 
   /**
@@ -355,13 +388,12 @@ export class TutorialSystem {
   }
 
   /**
-   * Create mask for exit warning tutorial
+   * Get cutouts for exit warning tutorial
    */
-  private createExitWarningMask() {
+  private getExitWarningCutouts(): Array<{x: number, y: number, width: number, height: number}> {
     // For exit warnings, we don't need cutouts - just show the warning text
-    // The mask will be transparent (no cutouts needed)
-    this.tutorialMaskGraphics.fillStyle(this.config.maskColor);
-    this.tutorialMaskGraphics.fillRect(0, 0, this.scene.cameras.main.width, this.scene.cameras.main.height);
+    // Return empty array to show full dither overlay
+    return [];
   }
 
   /**

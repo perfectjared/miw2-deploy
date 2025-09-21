@@ -282,6 +282,19 @@ export class GameScene extends Phaser.Scene {
         this.windowShapes.forceResetNarrativeSystem();
       });
 
+      // Debug: Add '[' and ']' keys to cycle through dither patterns
+      const keyLeftBracket = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.OPEN_BRACKET, true, false);
+      keyLeftBracket?.on('down', () => {
+        console.log('🎨 Cycling to previous dither pattern...');
+        this.windowShapes.overlayManager.cycleDitherPattern('prev');
+      });
+
+      const keyRightBracket = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.CLOSED_BRACKET, true, false);
+      keyRightBracket?.on('down', () => {
+        console.log('🎨 Cycling to next dither pattern...');
+        this.windowShapes.overlayManager.cycleDitherPattern('next');
+      });
+
       // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability
       const openPetStoryByIndex = (index: number) => {
         const menuScene = this.scene.get('MenuScene');
@@ -616,16 +629,16 @@ export class GameScene extends Phaser.Scene {
     
     this.carMechanics = new CarMechanics(this, carConfig);
     
-    // Window Shapes utility for menu boundaries
+    // WindowShapes Configuration (needed for shared OverlayManager)
     this.windowShapes = new WindowShapes(this);
     
     // Story Manager Configuration
     this.storyManager = new StoryManager(this);
     this.storyManager.initialize();
     
-    // Tutorial System Configuration - using centralized config
+    // Tutorial System Configuration - using centralized config and shared OverlayManager
     const tutorialConfig: TutorialConfig = TUTORIAL_CONFIG;
-    this.tutorialSystem = new TutorialSystem(this, tutorialConfig);
+    this.tutorialSystem = new TutorialSystem(this, tutorialConfig, this.windowShapes.overlayManager);
     
     // Game UI Configuration - using centralized config
     const uiConfig: GameUIConfig = {

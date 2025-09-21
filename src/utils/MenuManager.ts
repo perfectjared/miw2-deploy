@@ -25,6 +25,7 @@
  */
 
 import Phaser from 'phaser';
+import { OverlayManager } from './OverlayManager';
 import { SaveManager } from './SaveManager';
 import { MENU_CONFIG, UI_CONFIG } from '../config/GameConfig';
 
@@ -161,10 +162,12 @@ export class MenuManager {
   private menuStack: Array<{type: string, priority: number, config?: any}> = []; // Track menu hierarchy
   private currentDisplayedMenuType: string | null = null; // Track what menu is actually being displayed
   private userDismissedMenuType: string | null = null; // Track which specific menu was dismissed by user action
+  private overlayManager: OverlayManager;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.saveManager = SaveManager.getInstance();
+    this.overlayManager = new OverlayManager(scene);
     // Listen for global step events to auto-hide ephemeral overlays
     this.scene.events.on('step', this.onGlobalStep, this);
     // Listen for CYOA menu events
@@ -2444,32 +2447,9 @@ export class MenuManager {
   }
 
   private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>, opacity: number = 0.3) {
-    // Create overlay container
-    const overlay = this.scene.add.container(0, 0);
-    overlay.setScrollFactor(0);
-    overlay.setDepth(49999);
-    
-    // Create semi-transparent black background covering the screen (same as tutorial overlay)
-    const background = this.scene.add.graphics();
-    background.fillStyle(0x000000, opacity); // Use provided opacity
-    background.fillRect(0, 0, gameWidth, gameHeight);
-    overlay.add(background);
-    
-    // Create mask graphics for cutouts
-    const maskGraphics = this.scene.make.graphics();
-    
-    // Draw cutouts (white areas become transparent)
-    cutouts.forEach(cutout => {
-      maskGraphics.fillStyle(0xffffff);
-      maskGraphics.fillRect(cutout.x, cutout.y, cutout.width, cutout.height);
-    });
-    
-    // Create BitmapMask with inverted alpha (white areas become cutouts)
-    const mask = new Phaser.Display.Masks.BitmapMask(this.scene, maskGraphics);
-    mask.invertAlpha = true;
-    background.setMask(mask);
-    
-    return overlay;
+    const overlayId = `menu_overlay_${Date.now()}`;
+    const overlay = this.overlayManager.createMenuOverlay(overlayId, cutouts, opacity);
+    return overlay.container;
   }
 
   private clearCurrentDialog() {
