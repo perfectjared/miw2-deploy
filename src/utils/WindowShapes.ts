@@ -618,31 +618,34 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       console.log('🎨 Texture already exists, skipping drawing');
     }
     
-    // Create overlay using tile sprite for proper repeating pattern
-    const overlay = this.scene.add.tileSprite(0, 0, gameWidth, gameHeight, textureKey);
-    overlay.setOrigin(0, 0);
-    overlay.setDepth(45000); // Above menu (depth 10+) but below buttons (depth 40000+)
-    overlay.setTint(0x808080); // Temporary: add gray tint to make it visible
-    
-    // Debug logging
-    console.log('🎨 Dither overlay created:', {
-      textureKey,
-      gameWidth,
-      gameHeight,
-      overlayPosition: overlay.getBounds(),
-      overlayDepth: overlay.depth,
-      textureExists: this.scene.textures.exists(textureKey),
-      overlayVisible: overlay.visible,
-      overlayAlpha: overlay.alpha
-    });
-    
-    // Store reference for cleanup
-    if (container) {
-      (container as any).ditheredOverlay = overlay;
-    } else {
-      // For CYOA windows, store on the container
-      (this.container as any).ditheredOverlay = overlay;
-    }
+     // Create overlay as scene-level object (not in container) to avoid depth issues
+     const overlay = this.scene.add.tileSprite(0, 0, gameWidth, gameHeight, textureKey);
+     overlay.setOrigin(0, 0);
+     overlay.setDepth(1); // Scene-level depth - should be behind container (depth 10+)
+     overlay.setTint(0x808080); // Temporary: add gray tint to make it visible
+     
+     // Position overlay at scene level to cover the full screen
+     overlay.setPosition(0, 0); // Cover full screen from top-left
+     
+     // Store reference for cleanup
+     if (container) {
+       (container as any).ditheredOverlay = overlay;
+     } else {
+       (this.container as any).ditheredOverlay = overlay;
+     }
+     
+     // Debug logging
+     console.log('🎨 Dither overlay created as scene-level object:', {
+       textureKey,
+       gameWidth,
+       gameHeight,
+       overlayPosition: overlay.getBounds(),
+       overlayDepth: overlay.depth,
+       containerPosition: container ? { x: container.x, y: container.y } : { x: this.container.x, y: this.container.y },
+       textureExists: this.scene.textures.exists(textureKey),
+       overlayVisible: overlay.visible,
+       overlayAlpha: overlay.alpha
+     });
     
     console.log('🎨 Created efficient texture-based Mac OS dither overlay');
   }
@@ -2861,26 +2864,28 @@ export class WindowShapes {
       console.log('🎨 Texture already exists, skipping drawing');
     }
     
-    // Create overlay using tile sprite for proper repeating pattern
-    const overlay = this.scene.add.tileSprite(0, 0, gameWidth, gameHeight, textureKey);
-    overlay.setOrigin(0, 0);
-    overlay.setDepth(45000); // Above menu (depth 10+) but below buttons (depth 40000+)
-    overlay.setTint(0x808080); // Temporary: add gray tint to make it visible
-    
-    // Debug logging
-    console.log('🎨 Dither overlay created:', {
-      textureKey,
-      gameWidth,
-      gameHeight,
-      overlayPosition: overlay.getBounds(),
-      overlayDepth: overlay.depth,
-      textureExists: this.scene.textures.exists(textureKey),
-      overlayVisible: overlay.visible,
-      overlayAlpha: overlay.alpha
-    });
-    
-    // Store reference for cleanup
-    (container as any).ditheredOverlay = overlay;
+     // Create overlay as scene-level object (not in container) to avoid depth issues
+     const overlay = this.scene.add.tileSprite(0, 0, gameWidth, gameHeight, textureKey);
+     overlay.setOrigin(0, 0);
+     overlay.setDepth(1); // Scene-level depth - should be behind container (depth 10+)
+     overlay.setTint(0x808080); // Temporary: add gray tint to make it visible
+     
+     // Position overlay at scene level to cover the full screen
+     overlay.setPosition(0, 0); // Cover full screen from top-left
+     (container as any).ditheredOverlay = overlay;
+     
+     // Debug logging
+     console.log('🎨 Dither overlay created as scene-level object:', {
+       textureKey,
+       gameWidth,
+       gameHeight,
+       overlayPosition: overlay.getBounds(),
+       overlayDepth: overlay.depth,
+       containerPosition: { x: container.x, y: container.y },
+       textureExists: this.scene.textures.exists(textureKey),
+       overlayVisible: overlay.visible,
+       overlayAlpha: overlay.alpha
+     });
     
     console.log('🎨 Created efficient texture-based Mac OS dither overlay');
   }
