@@ -24,6 +24,7 @@ export interface WindowShapeConfig {
   fillColor?: number;
   fillAlpha?: number;
   cornerRadius?: number;
+  shapeType?: string;
 }
 
 export interface PolygonWindowConfig {
@@ -114,7 +115,8 @@ class HMenuNarrativeWindow extends BaseNarrativeWindow {
       x: 0, y: 0, 
       width: this.config.width, 
       height: this.config.height,
-      fillColor: 0xffffff 
+      fillColor: 0xffffff,
+      shapeType: 'window'
     }, true, 'window');
     mainWindow.setDepth(10);
     this.container.add(mainWindow);
@@ -151,7 +153,8 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       x: -centerX, y: -centerY, // Negative offset so center is at (0,0)
       width: this.config.width, 
       height: this.config.height,
-      fillColor: 0xffffff // White background like H menu
+      fillColor: 0xffffff, // White background like H menu
+      shapeType: 'window'
     }, false, 'window'); // Disable auto animation - we'll register manually
     
     // Set alpha to 1 and scale to 0.01 IMMEDIATELY after creation
@@ -252,7 +255,8 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       height: height,
       fillColor: 0xffffff,
       strokeColor: 0x000000,
-      strokeWidth: 2
+      strokeWidth: 2,
+      shapeType: 'window'
     };
     
     // Use the same logic as createCollageRect but with custom dimensions
@@ -271,7 +275,8 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       height: height,
       fillColor: 0xffffff,
       strokeColor: 0x000000,
-      strokeWidth: 2
+      strokeWidth: 2,
+      shapeType: 'window'
     };
     
     // Use the expansion version with increased jaggedness
@@ -644,7 +649,8 @@ export class WindowShapes {
       height: height,
       fillColor: 0xffffff,
       strokeColor: 0x000000,
-      strokeWidth: 2
+      strokeWidth: 2,
+      shapeType: 'window'
     };
     
     // Use the same logic as createCollageRect but with custom dimensions
@@ -666,7 +672,8 @@ export class WindowShapes {
       height: height,
       fillColor: 0xffffff,
       strokeColor: 0x000000,
-      strokeWidth: 2
+      strokeWidth: 2,
+      shapeType: 'window'
     };
     
     // Use the expansion version with increased jaggedness
@@ -751,9 +758,11 @@ export class WindowShapes {
     graphics.fillStyle(fillColor, fillAlpha);
     graphics.fillPoints(polygonPoints);
     
-    // Draw the stroke with anti-aliasing
-    graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Alpha 1.0 for smooth lines
-    graphics.strokePoints(polygonPoints, true);
+    // Draw the stroke with anti-aliasing (skip for windows)
+    if (config.shapeType !== 'window') {
+      graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Alpha 1.0 for smooth lines
+      graphics.strokePoints(polygonPoints, true);
+    }
   }
 
   /**
@@ -834,9 +843,11 @@ export class WindowShapes {
     graphics.fillStyle(fillColor, fillAlpha);
     graphics.fillPoints(polygonPoints);
     
-    // Draw the stroke with anti-aliasing
-    graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Alpha 1.0 for smooth lines
-    graphics.strokePoints(polygonPoints, true);
+    // Draw the stroke with anti-aliasing (skip for windows)
+    if (config.shapeType !== 'window') {
+      graphics.lineStyle(strokeWidth, strokeColor, 1.0); // Alpha 1.0 for smooth lines
+      graphics.strokePoints(polygonPoints, true);
+    }
   }
 
   /**
@@ -856,8 +867,8 @@ export class WindowShapes {
     const offset = 5; // Make polygon 5 pixels larger on each side
     const polygonPoints = [];
     
-    // Add random extra points (1.5 to 2.3 times original = 6-9 total points)
-    const extraPointCount = Phaser.Math.Between(2, 5);
+    // Add random extra points (increased jaggedness for s windows)
+    const extraPointCount = Phaser.Math.Between(4, 8);
     
     // Create arrays for points along each edge
     const topEdgePoints = [];
@@ -867,20 +878,20 @@ export class WindowShapes {
     
     // Always include corners with random movement (ensuring they stay outside rectangle)
     topEdgePoints.push({ 
-      x: config.x - offset + Phaser.Math.Between(-5, -2), // Move further left from rectangle
-      y: config.y - offset + Phaser.Math.Between(-5, -2)  // Move further up from rectangle
+      x: config.x - offset + Phaser.Math.Between(-8, -3), // Increased movement range
+      y: config.y - offset + Phaser.Math.Between(-8, -3)  // Increased movement range
     }); // Top-left corner
     rightEdgePoints.push({ 
-      x: config.x + config.width + offset + Phaser.Math.Between(2, 5), // Move further right from rectangle
-      y: config.y - offset + Phaser.Math.Between(-5, -2)  // Move further up from rectangle
+      x: config.x + config.width + offset + Phaser.Math.Between(3, 8), // Increased movement range
+      y: config.y - offset + Phaser.Math.Between(-8, -3)  // Increased movement range
     }); // Top-right corner
     bottomEdgePoints.push({ 
-      x: config.x + config.width + offset + Phaser.Math.Between(2, 5), // Move further right from rectangle
-      y: config.y + config.height + offset + Phaser.Math.Between(2, 5) // Move further down from rectangle
+      x: config.x + config.width + offset + Phaser.Math.Between(3, 8), // Increased movement range
+      y: config.y + config.height + offset + Phaser.Math.Between(3, 8) // Increased movement range
     }); // Bottom-right corner
     leftEdgePoints.push({ 
-      x: config.x - offset + Phaser.Math.Between(-5, -2), // Move further left from rectangle
-      y: config.y + config.height + offset + Phaser.Math.Between(2, 5) // Move further down from rectangle
+      x: config.x - offset + Phaser.Math.Between(-8, -3), // Increased movement range
+      y: config.y + config.height + offset + Phaser.Math.Between(3, 8) // Increased movement range
     }); // Bottom-left corner
     
     // Add random extra points to edges
@@ -890,26 +901,26 @@ export class WindowShapes {
       switch (edgeIndex) {
         case 0: // Top edge - ensure points stay above rectangle
           topEdgePoints.push({
-            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-4, 4),
-            y: config.y - offset + Phaser.Math.Between(-8, -2) // Always above rectangle
+            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-6, 6),
+            y: config.y - offset + Phaser.Math.Between(-10, -3) // Increased movement range
           });
           break;
         case 1: // Right edge - ensure points stay right of rectangle
           rightEdgePoints.push({
-            x: config.x + config.width + offset + Phaser.Math.Between(2, 8), // Always right of rectangle
-            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-4, 4)
+            x: config.x + config.width + offset + Phaser.Math.Between(3, 10), // Increased movement range
+            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-6, 6)
           });
           break;
         case 2: // Bottom edge - ensure points stay below rectangle
           bottomEdgePoints.push({
-            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-4, 4),
-            y: config.y + config.height + offset + Phaser.Math.Between(2, 8) // Always below rectangle
+            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-6, 6),
+            y: config.y + config.height + offset + Phaser.Math.Between(3, 10) // Increased movement range
           });
           break;
         case 3: // Left edge - ensure points stay left of rectangle
           leftEdgePoints.push({
-            x: config.x - offset + Phaser.Math.Between(-8, -2), // Always left of rectangle
-            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-4, 4)
+            x: config.x - offset + Phaser.Math.Between(-10, -3), // Increased movement range
+            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-6, 6)
           });
           break;
       }
@@ -939,7 +950,13 @@ export class WindowShapes {
     graphics.fillPath(); // Fill the shadow
     
     // Then draw the main polygon border
-    graphics.lineStyle(strokeWidth, strokeColor);
+    if (shapeType === 'window') {
+      // No stroke for h/s style windows - just fill
+      graphics.lineStyle(0, strokeColor, 0); // Invisible stroke
+    } else {
+      // Normal rendering for other shapes (buttons, etc.)
+      graphics.lineStyle(strokeWidth, strokeColor);
+    }
     graphics.fillStyle(fillColor, fillAlpha); // Set fill style for polygon
     graphics.beginPath();
     graphics.moveTo(polygonPoints[0].x, polygonPoints[0].y);
@@ -948,7 +965,11 @@ export class WindowShapes {
     }
     graphics.closePath();
     graphics.fillPath(); // Fill the polygon with white
-    graphics.strokePath(); // Then stroke the black outline
+    
+    // Only stroke if not a window
+    if (shapeType !== 'window') {
+      graphics.strokePath(); // Then stroke the black outline
+    }
     
     // Then draw the filled rectangle on top (NO STROKE, only fill) - use EXACT same fill settings
     graphics.fillStyle(fillColor, fillAlpha); // Explicitly set the same fill style
@@ -995,8 +1016,8 @@ export class WindowShapes {
     const graphics = this.scene.add.graphics();
     
     // Force pure black styling for narrative backgrounds
-    const strokeWidth = 2;
-    const strokeColor = 0x000000; // Black stroke
+    const strokeWidth = 0; // No stroke for text background boxes
+    const strokeColor = 0x000000; // Black stroke (not used)
     const fillColor = 0x000000;  // Pure black fill
     const fillAlpha = 1.0;       // Fully opaque
     
@@ -1236,8 +1257,8 @@ export class WindowShapes {
    * Generate a unique rotation that's not too close to existing rotations
    */
   public generateUniqueRotation(): number {
-    const maxRange = 0.15; // ±0.075 radians (±4.3 degrees)
-    const minSeparation = 0.05; // Minimum separation in radians (≈2.9 degrees)
+    const maxRange = 0.08; // ±0.04 radians (±2.3 degrees) - narrower range
+    const minSeparation = 0.03; // Minimum separation in radians (≈1.7 degrees) - smaller separation
     const maxAttempts = 20; // Prevent infinite loops
     
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -1319,8 +1340,8 @@ export class WindowShapes {
       height: textBounds.height + (bgPadding * 2),
       fillColor: 0x000000, // Pure black
       fillAlpha: 1.0,
-      strokeColor: 0x000000, // Black stroke too
-      strokeWidth: 2
+      strokeColor: 0x000000, // Black stroke (not used)
+      strokeWidth: 0 // No stroke for text background boxes
     };
     
     // Use the specialized NARRATIVE BACKGROUND method (no shadows, pure black)
@@ -1402,26 +1423,26 @@ export class WindowShapes {
       switch (edgeIndex) {
         case 0: // Top edge
           topEdgePoints.push({
-            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-4, 4),
-            y: config.y - offset + Phaser.Math.Between(-8, -2)
+            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-6, 6),
+            y: config.y - offset + Phaser.Math.Between(-10, -3)
           });
           break;
         case 1: // Right edge
           rightEdgePoints.push({
-            x: config.x + config.width + offset + Phaser.Math.Between(2, 8),
-            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-4, 4)
+            x: config.x + config.width + offset + Phaser.Math.Between(3, 10),
+            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-6, 6)
           });
           break;
         case 2: // Bottom edge
           bottomEdgePoints.push({
-            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-4, 4),
-            y: config.y + config.height + offset + Phaser.Math.Between(2, 8)
+            x: Phaser.Math.Between(config.x - offset + 10, config.x + config.width + offset - 10) + Phaser.Math.Between(-6, 6),
+            y: config.y + config.height + offset + Phaser.Math.Between(3, 10)
           });
           break;
         case 3: // Left edge
           leftEdgePoints.push({
-            x: config.x - offset + Phaser.Math.Between(-8, -2),
-            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-4, 4)
+            x: config.x - offset + Phaser.Math.Between(-10, -3),
+            y: Phaser.Math.Between(config.y - offset + 10, config.y + config.height + offset - 10) + Phaser.Math.Between(-6, 6)
           });
           break;
       }
@@ -1796,8 +1817,11 @@ export class WindowShapes {
           alpha: fillAlpha
         }
       });
+    } else if (shapeType === 'window') {
+      // No stroke for h/s style windows - just fill
+      graphics.lineStyle(0, strokeColor, 0); // Invisible stroke
     } else {
-      // Normal rendering for other shapes
+      // Normal rendering for other shapes (buttons, etc.)
       graphics.lineStyle(strokeWidth, strokeColor);
     }
     
@@ -1809,7 +1833,11 @@ export class WindowShapes {
     }
     graphics.closePath();
     graphics.fillPath();
-    graphics.strokePath();
+    
+    // Only stroke if not a window
+    if (shapeType !== 'window') {
+      graphics.strokePath();
+    }
     
     // Draw clean rectangle on top - SKIP for narrative backgrounds (they use only the polygon)
     if (shapeType !== 'narrativeBackground') {
