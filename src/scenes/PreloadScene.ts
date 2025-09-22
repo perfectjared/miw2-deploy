@@ -92,11 +92,14 @@ export class PreloadScene extends Phaser.Scene {
     // Load your assets here
     // Load the game configuration file
     
+    // Load shops configuration
+    this.load.json('shops', 'assets/json/shops.json');
+    
     // Load SVGs
     this.load.image('steering-wheel', 'assets/image/steering-wheel.svg');
     this.load.image('key-white', 'assets/image/key-white.svg');
     this.load.image('key-hole', 'assets/image/key-hole.svg');
-    this.load.image('bat', 'assets/image/bat.svg');
+    // this.load.image('bat', 'assets/image/bat.svg'); // deprecated
     this.load.image('hot-dog', 'assets/image/hot-dog.svg');
     this.load.image('face-smile', 'assets/image/face-smile.svg');
     this.load.image('face-neutral', 'assets/image/face-neutral.svg');

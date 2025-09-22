@@ -327,11 +327,19 @@ export class GameScene extends Phaser.Scene {
         this.windowShapes.overlayManager.cycleDitherPattern('next');
       });
 
-      // Debug: Add 'E' key to trigger next scheduled exit menu for testing
+      // Debug: Add 'E' key to open exit stores catalog for testing
       const keyE = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E, true, false);
       keyE?.on('down', () => {
-        console.log('🚪 Debug: Triggering next scheduled exit menu');
-        this.triggerNextExitMenu();
+        console.log('🚪 Debug: Opening Exit Stores Catalog');
+        // Pause driving similar to normal exit
+        if (this.carMechanics) {
+          this.carMechanics.pauseDriving();
+        }
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          (menuScene as any).events.emit('showExitStoresCatalog');
+          this.scene.bringToTop('MenuScene');
+        }
       });
 
       // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability

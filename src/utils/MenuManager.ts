@@ -29,6 +29,7 @@ import { OverlayManager } from './OverlayManager';
 import { WindowShapes } from './WindowShapes';
 import { SaveManager } from './SaveManager';
 import { MENU_CONFIG, UI_CONFIG } from '../config/GameConfig';
+import { REGION_CONFIG } from '../config/GameConfig';
 
 export interface MenuButton {
   text: string;
@@ -1178,13 +1179,20 @@ export class MenuManager {
     // Generate shop names based on count
     const shopNames = this.generateShopNames(shopCount);
     
-    // Create buttons for each shop
-    const buttons: MenuButton[] = shopNames.map((shopName, index) => ({
-      text: shopName,
-      onClick: () => { 
-        this.handleExitShopChoice(shopName); 
-      }
-    }));
+    // Create buttons for each shop with a weighted price indicator
+    const buttons: MenuButton[] = shopNames.map((shopName, index) => {
+      const price = this.getWeightedPrice();
+      const parts = this.formatPriceParts(price);
+      const btn: MenuButton = {
+        text: shopName,
+        onClick: () => { this.handleExitShopChoiceWithPrice(shopName, price); }
+      };
+      (btn as any).__priceFilled = parts.filled;
+      (btn as any).__priceEmpty = parts.empty;
+      return btn;
+    });
+    // Add a close button to allow dismissing the exit menu
+    buttons.push({ text: 'Close', onClick: () => { this.closeDialog(); } });
     
     // No close button - user must choose a shop
     
@@ -1201,12 +1209,149 @@ export class MenuManager {
   }
 
   /**
+   * Show a catalog of all possible exit store types for testing
+   */
+  public showExitStoresCatalog(exitNumber?: number) {
+    console.log(`🚪 MenuManager: showExitStoresCatalog called with exitNumber=${exitNumber}`);
+    // If a virtual pet menu is open, close it immediately before showing exit
+    if (this.currentDisplayedMenuType === 'VIRTUAL_PET') {
+      try { this.closeCurrentDialog(); } catch {}
+    }
+
+    // Persist/resolve exit number similar to showExitMenu
+    (this as any)._lastExitNumber = exitNumber ?? (this as any)._lastExitNumber;
+    if (!this.canShowMenu('EXIT')) {
+      console.log(`🚫 MenuManager: showExitStoresCatalog blocked by canShowMenu check`);
+      return;
+    }
+    this.clearCurrentDialog();
+    let exitNumForMenu = exitNumber ?? (this as any)._lastExitNumber;
+    if (exitNumForMenu == null) {
+      for (let i = this.menuStack.length - 1; i >= 0; i--) {
+        const m = this.menuStack[i];
+        if (m.type === 'EXIT' && m.config && m.config.exitNumber != null) {
+          exitNumForMenu = m.config.exitNumber;
+          break;
+        }
+      }
+    }
+    this.pushMenu('EXIT', { exitNumber: exitNumForMenu });
+
+    // All known shop/store types
+    const allShopTypes: string[] = [
+      'regional gas station', 'gas station', 'motel', 'restaurant',
+      'weed store', 'car store', 'car doctor', 'psychic'
+    ];
+
+    const buttons: MenuButton[] = allShopTypes.map((shopName) => {
+      const price = this.getWeightedPrice();
+      const parts = this.formatPriceParts(price);
+      const btn: MenuButton = {
+        text: shopName,
+        onClick: () => { this.handleExitShopChoiceWithPrice(shopName, price); }
+      };
+      (btn as any).__priceFilled = parts.filled;
+      (btn as any).__priceEmpty = parts.empty;
+      return btn;
+    });
+    // Add a close button to allow dismissing the catalog
+    buttons.push({ text: 'Close', onClick: () => { this.closeDialog(); } });
+
+    const menuConfig: MenuConfig = {
+      title: 'EXIT (All Stores)',
+      content: `Choose a store to test. (${allShopTypes.length} total)`,
+      buttons: buttons
+    };
+    this.createDialog(menuConfig, 'EXIT');
+    try { (this.currentDialog as any).exitNumber = exitNumForMenu; } catch {}
+  }
+
+  /**
+   * Region choice menu (stub) to satisfy MenuScene usage
+   */
+  public showRegionChoiceMenu(config: { currentRegion: string; connectedRegions: string[] }) {
+    if (!this.canShowMenu('DESTINATION')) return;
+    this.clearCurrentDialog();
+    const regions = config?.connectedRegions || [];
+    const buttons: MenuButton[] = regions.map((regionKey) => ({
+      text: regionKey,
+      onClick: () => { this.closeDialog(); }
+    }));
+    const menuConfig: MenuConfig = {
+      title: 'Choose Next Region',
+      content: `Current: ${config?.currentRegion || 'unknown'}`,
+      buttons
+    };
+    this.createDialog(menuConfig, 'DESTINATION');
+  }
+
+  // Compute dynamic difficulty: region index (custom mapping) + fraction of shows completed in region
+  private getCurrentDifficulty(): number {
+    try {
+      const gameScene = this.scene.scene.get('GameScene') as any;
+      const gameState = gameScene?.gameState;
+      const state = gameState?.getState?.();
+      if (!state) return 1;
+      const currentRegion: string = state.currentRegion || REGION_CONFIG.startingRegion;
+      const showsDone: number = state.showsInCurrentRegion || 0;
+      const showsPerRegion: number = (REGION_CONFIG as any).showsPerRegion || 3;
+      const regionBase = this.getRegionBaseDifficulty(currentRegion);
+      const progressFrac = Math.max(0, Math.min(1, showsDone / Math.max(1, showsPerRegion)));
+      const difficulty = Math.min(5, regionBase + progressFrac);
+      return difficulty;
+    } catch {
+      return 1;
+    }
+  }
+
+  // Explicit mapping so that midwest=1, south=2 as per examples
+  private getRegionBaseDifficulty(regionKey: string): number {
+    const mapping: Record<string, number> = {
+      midwest: 1,
+      south: 2,
+      southwest: 3,
+      west: 4,
+      northeast: 5
+    };
+    return mapping[regionKey] ?? 1;
+  }
+
+  // Weighted price helper varies with difficulty; higher difficulty -> weights approach uniform
+  private getWeightedPrice(): 1 | 2 | 3 | 4 {
+    const difficulty = this.getCurrentDifficulty();
+    // Base weights at low difficulty
+    const base = { 1: 0.20, 2: 0.50, 3: 0.25, 4: 0.05 } as Record<number, number>;
+    // Uniform weights target at max difficulty
+    const uniform = { 1: 0.25, 2: 0.25, 3: 0.25, 4: 0.25 } as Record<number, number>;
+    // Interpolation factor from 0 (diff=1) to 1 (diff=5)
+    const t = Math.max(0, Math.min(1, (difficulty - 1) / 4));
+    const weights = [1, 2, 3, 4].map(k => base[k] * (1 - t) + uniform[k] * t);
+    // Normalize to be safe
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const norm = weights.map(w => (w <= 0 ? 0 : w / (sum || 1)));
+    const r = Math.random();
+    let acc = 0;
+    for (let i = 0; i < norm.length; i++) {
+      acc += norm[i];
+      if (r <= acc) return (i + 1) as 1 | 2 | 3 | 4;
+    }
+    return 4; // Fallback
+  }
+
+  private formatPriceParts(price: number): { filled: string; empty: string } {
+    const count = Math.max(1, Math.min(4, Math.floor(price)));
+    const filled = '$'.repeat(count);
+    const empty = '$'.repeat(4 - count);
+    return { filled, empty };
+  }
+
+  /**
    * Generate shop names based on count
    */
   private generateShopNames(count: number): string[] {
     const shopTypes = [
-      'Regional Gas Station', 'Gas Station', 'Motel', 'Restaurant',
-      'Weed Store', 'Car Store', 'Healer', 'Psychic'
+      'regional gas station', 'gas station', 'motel', 'restaurant',
+      'weed store', 'car store', 'car hospital', 'psychic'
     ];
     
     const names: string[] = [];
@@ -1229,16 +1374,16 @@ export class MenuManager {
   }
 
   private handleExitShopChoice(shopName: string) {
-    // Placeholder: simply close the dialog and resume game. Hook narrative/transition later.
-    try { console.log('Exit menu choice:', shopName); } catch {}
-    
-    // Open shop menu instead of closing
-    this.showShopMenu();
-    // Optionally emit an event for GameScene to react to
+    this.handleExitShopChoiceWithPrice(shopName, this.getWeightedPrice());
+  }
+
+  private handleExitShopChoiceWithPrice(shopName: string, priceTier: 1|2|3|4) {
+    try { console.log('Exit menu choice:', shopName, 'priceTier', priceTier); } catch {}
+    this.showShopMenu({ shopType: (shopName || '').toLowerCase(), priceTier });
     try { this.scene.events.emit('exitShopChosen', shopName); } catch {}
   }
 
-  public showShopMenu() {
+  public showShopMenu(opts?: { shopType?: string; priceTier?: 1|2|3|4 }) {
     if (!this.canShowMenu('SHOP')) return;
     // Don't call clearCurrentDialog() here as it would resume the game prematurely
     // Instead, just clear the visual dialog without closing the menu stack
@@ -1262,18 +1407,73 @@ export class MenuManager {
     const gameScene = this.scene.scene.get('GameScene');
     const currentMoney = gameScene ? (gameScene as any).gameState?.getState()?.money || 0 : 0;
     
-    // Shop items with costs
-    const shopItems = [
-      { name: 'Health Pack', cost: 25 },
-      { name: 'Speed Boost', cost: 50 },
-      { name: 'Lucky Charm', cost: 100 }
-    ];
-    
+    // Resolve shop inventory based on config and price tier
+    const shopsData = (this.scene.cache.json.get('shops') || {}) as any;
+    const shopKey = (opts?.shopType || '').toLowerCase();
+    const priceTier = opts?.priceTier || this.getWeightedPrice();
+    (this as any)._lastPriceTier = priceTier;
+    const shopDef = shopsData[shopKey] || {};
+    let shopItems: Array<{ name: string; cost: number; effect?: any }> = [];
+    if (shopDef.type === 'retail' && shopDef.items) {
+      const tierItems = (shopDef.items[String(priceTier)] || []) as any[];
+      const shuffled = tierItems.slice().sort(() => Math.random() - 0.5);
+      shopItems = shuffled.slice(0, 3).map(it => ({ name: String(it.name), cost: Number(it.cost), effect: it.effect }));
+    }
+
+    // Service shops
+    if (shopDef.type === 'service') {
+      if (shopKey === 'car doctor') {
+        const baseCosts: number[] = (shopDef.pricing?.base || [30,60,100,150]);
+        const cost = baseCosts[Math.max(0, Math.min(baseCosts.length - 1, (priceTier as number) - 1))];
+        const menuConfig: MenuConfig = {
+          title: 'car doctor',
+          content: `they fixed this and this and that, $${cost}`,
+          buttons: [
+            { text: 'pay and heal', onClick: () => this.handleServiceCharge('car doctor', cost) },
+            { text: 'Back', onClick: () => { this.destroyCurrentDialogOnly(); this.showExitMenu(); } },
+            { text: 'Close', onClick: () => this.closeDialog() }
+          ]
+        };
+        this.createDialog(menuConfig, 'SHOP');
+        return;
+      }
+      if (shopKey === 'psychic') {
+        const baseCosts: number[] = (shopDef.pricing?.base || [20,35,55,80]);
+        const cost = baseCosts[Math.max(0, Math.min(baseCosts.length - 1, (priceTier as number) - 1))];
+        const menuConfig: MenuConfig = {
+          title: 'psychic',
+          content: `here's a rumor i heard`,
+          buttons: [
+            { text: `pay $${cost}`, onClick: () => this.handleServiceCharge('psychic', cost, true) },
+            { text: 'Back', onClick: () => { this.destroyCurrentDialogOnly(); this.showExitMenu(); } },
+            { text: 'Close', onClick: () => this.closeDialog() }
+          ]
+        };
+        this.createDialog(menuConfig, 'SHOP');
+        return;
+      }
+      if (shopKey === 'regional gas station') {
+        const baseCosts: number[] = (shopDef.pricing?.base || [15,25,40,60]);
+        const cost = baseCosts[Math.max(0, Math.min(baseCosts.length - 1, (priceTier as number) - 1))];
+        const menuConfig: MenuConfig = {
+          title: 'regional gas station',
+          content: `they topped you off and wiped the windshield, $${cost}`,
+          buttons: [
+            { text: `pay $${cost}`, onClick: () => this.handleServiceCharge('regional gas station', cost) },
+            { text: 'Back', onClick: () => { this.destroyCurrentDialogOnly(); this.showExitMenu(); } },
+            { text: 'Close', onClick: () => this.closeDialog() }
+          ]
+        };
+        this.createDialog(menuConfig, 'SHOP');
+        return;
+      }
+    }
+
     const menuConfig: MenuConfig = {
-      title: 'SHOP',
-      content: `Money: $${currentMoney}`,
+      title: shopKey || 'shop',
+      content: `money: $${currentMoney}`,
       buttons: shopItems.map(item => ({
-        text: `${item.name} - $${item.cost}`,
+        text: `${String(item.name).toLowerCase()} - $${item.cost}`,
         onClick: () => this.handleShopPurchase(item.name, item.cost),
         style: {
           fontSize: '16px',
@@ -1282,34 +1482,8 @@ export class MenuManager {
           padding: { x: 15, y: 8 }
         }
       })).concat([
-        {
-          text: 'Back',
-          onClick: () => {
-            // Simply destroy the current dialog and show exit menu
-            // Don't call clearCurrentDialog() as it would trigger driving resumption
-            if (this.currentDialog) {
-              // Clean up overlay before destroying dialog
-              if ((this.currentDialog as any).background) {
-                const background = (this.currentDialog as any).background;
-                if ((background as any).overlayInstance) {
-                  console.log('MenuManager: Cleaning up overlay instance in shop back button');
-                  (background as any).overlayInstance.destroy();
-                } else {
-                  background.destroy();
-                }
-              }
-              this.currentDialog.destroy();
-              this.currentDialog = null;
-            }
-            this.showExitMenu();
-          },
-          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        },
-        {
-          text: 'Close',
-          onClick: () => this.closeDialog(),
-          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        }
+        { text: 'Back', onClick: () => { this.destroyCurrentDialogOnly(); this.showExitMenu(); }, style: { fontSize: '16px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 6 } } },
+        { text: 'Close', onClick: () => this.closeDialog(), style: { fontSize: '16px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 6 } } }
       ])
     };
     
@@ -1340,11 +1514,46 @@ export class MenuManager {
     
     console.log(`Purchased ${itemName} for $${cost}. Remaining money: $${newMoney}`);
     
-    // Close shop menu
-    this.closeDialog();
-    
+    // Keep shop open; refresh shop UI to reflect new money
+    this.showShopMenu();
+
     // Emit purchase event for potential game effects
     try { this.scene.events.emit('shopPurchase', { item: itemName, cost: cost }); } catch {}
+  }
+
+  private handleServiceCharge(serviceName: string, cost: number, sayRumor?: boolean) {
+    const gameScene = this.scene.scene.get('GameScene');
+    if (!gameScene) return;
+    const gameState = (gameScene as any).gameState;
+    if (!gameState) return;
+    const state = gameState.getState();
+    const currentMoney = state.money || 0;
+    if (currentMoney < cost) return;
+    gameState.updateState({ money: currentMoney - cost });
+    if (serviceName === 'car doctor') {
+      // Refill health to max (assume 10 if no cap exposed)
+      gameState.updateState({ health: 10 });
+    }
+    if (sayRumor) {
+      console.log("psychic rumor: here's a rumor i heard");
+    }
+    // Refresh same service menu to reflect updated money
+    this.showShopMenu({ shopType: serviceName as any, priceTier: (this as any)._lastPriceTier || 2 });
+  }
+
+  private destroyCurrentDialogOnly() {
+    if (this.currentDialog) {
+      if ((this.currentDialog as any).background) {
+        const background = (this.currentDialog as any).background;
+        if ((background as any).overlayInstance) {
+          (background as any).overlayInstance.destroy();
+        } else {
+          background.destroy();
+        }
+      }
+      this.currentDialog.destroy();
+      this.currentDialog = null;
+    }
   }
 
   public showTurnKeyMenu() {
@@ -2609,6 +2818,12 @@ export class MenuManager {
       this.currentDialog.add(btnContainer);
       try { (this.currentDialog as any).bringToTop?.(btnContainer); } catch {}
       
+      const isCloseButton = /Close/i.test(button.text);
+      const btnWidth = isCloseButton ? 120 : 160;
+      const btnHeight = isCloseButton ? 30 : 34;
+      const halfBtnW = btnWidth / 2;
+      const halfBtnH = btnHeight / 2;
+
       let btnGraphic: Phaser.GameObjects.Graphics | null = null;
       try {
         const gameScene = this.scene.scene.get('GameScene');
@@ -2616,25 +2831,64 @@ export class MenuManager {
         if (windowShapes) this.windowShapes = windowShapes;
         if (windowShapes && windowShapes.createCollageButton) {
           // Create the button graphic at drawing offsets; container centers it
-          btnGraphic = windowShapes.createCollageButton(-80, -17, 160, 34);
+          btnGraphic = windowShapes.createCollageButton(-halfBtnW, -halfBtnH, btnWidth, btnHeight);
           if (btnGraphic) {
             btnContainer.add(btnGraphic);
             // Route clicks through the container to avoid duplicate listeners/hit area confusion
             // Manually register button shape using drawing coordinates
             const btnId = `menu_btn_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
-            try { (windowShapes as any).registerAnimatedShape(btnId, btnGraphic, 'button', -80, -17, 160, 34); } catch {}
+            try { (windowShapes as any).registerAnimatedShape(btnId, btnGraphic, 'button', -halfBtnW, -halfBtnH, btnWidth, btnHeight); } catch {}
             (btnGraphic as any).__shapeId = btnId;
           }
         }
       } catch {}
       
-      // Label placed within the button container, centered over the graphic
-      const label = this.scene.add.text(0, 0, button.text, {
-        fontSize: '14px',
+      // If this is the Close button, place it bottom-right, smaller and nearer edges
+      try {
+        if (isCloseButton) {
+          const marginRight = 6;
+          const marginBottom = 6;
+          btnContainer.setPosition((halfW - marginRight - halfBtnW), (halfH - marginBottom - halfBtnH));
+        }
+      } catch {}
+
+      // Label placed within the button container
+      const isRegionalGas = /regional gas station/i.test(button.text);
+      const isLongName = isRegionalGas || button.text.length > 16;
+      const displayText = isRegionalGas ? 'regional\ngas station' : button.text;
+      const label = this.scene.add.text(0, 0, displayText, {
+        fontSize: isRegionalGas ? '11px' : (isLongName ? '12px' : '14px'),
         color: '#000000',
         fontStyle: 'bold'
       }).setOrigin(0.5);
       btnContainer.add(label);
+      // If price indicators are present, render filled and empty dollars at right side
+      try {
+        const priceFilled: string | undefined = (button as any).__priceFilled;
+        const priceEmpty: string | undefined = (button as any).__priceEmpty;
+        const isClose = /Close/i.test(button.text);
+        if (!isClose && (priceFilled || priceEmpty)) {
+          // Left-justify the label with padding
+          label.setOrigin(0, 0.5);
+          label.x = (-halfBtnW + 8);
+          label.y = 0;
+
+          const filledText = this.scene.add.text(0, 0, priceFilled || '', {
+            fontSize: '14px', color: '#000000', fontStyle: 'bold'
+          }).setOrigin(1, 0.5);
+          const emptyText = this.scene.add.text(0, 0, priceEmpty || '', {
+            fontSize: '14px', color: '#888888', fontStyle: 'bold'
+          }).setOrigin(1, 0.5);
+          // Position both flush to right padding inside button
+          const rightX = (halfBtnW - 8);
+          emptyText.x = rightX;
+          emptyText.y = 0;
+          filledText.x = rightX - emptyText.width;
+          filledText.y = 0;
+          btnContainer.add(filledText);
+          btnContainer.add(emptyText);
+        }
+      } catch {}
       // If this is the tutorial interrupt menu, store a direct reference for countdown updates
       try {
         if (menuType === 'TUTORIAL_INTERRUPT' && /Continue/i.test(button.text)) {
@@ -2643,7 +2897,7 @@ export class MenuManager {
       } catch {}
       
       // Explicit invisible hit target rectangle on top (bypasses container hit quirks)
-      const hitTarget = this.scene.add.rectangle(0, 0, 160, 34, 0x000000, 0);
+      const hitTarget = this.scene.add.rectangle(0, 0, btnWidth, btnHeight, 0x000000, 0);
       hitTarget.setOrigin(0.5);
       hitTarget.setScrollFactor(0);
       hitTarget.setDepth((btnContainer.depth || 1) + 1);
@@ -2654,6 +2908,7 @@ export class MenuManager {
         })
         .on('pointerup', (p: any) => {
           console.log('🟢 button pointerup (hitTarget)', { x: p.worldX, y: p.worldY, depth: hitTarget.depth });
+          try { (this.scene.input as any).setDefaultCursor('default'); } catch {}
           try { button.onClick(); } catch (e) { console.warn('button onClick error', e); }
         });
 
@@ -2661,9 +2916,9 @@ export class MenuManager {
         // Fallback: add a simple rounded rect behind label inside the button container
         const fallback = this.scene.add.graphics();
         fallback.fillStyle(0x34495e, 1);
-        fallback.fillRoundedRect(-80, -17, 160, 34, 6);
+        fallback.fillRoundedRect(-halfBtnW, -halfBtnH, btnWidth, btnHeight, 6);
         fallback.lineStyle(2, 0xffffff, 1);
-        fallback.strokeRoundedRect(-80, -17, 160, 34, 6);
+        fallback.strokeRoundedRect(-halfBtnW, -halfBtnH, btnWidth, btnHeight, 6);
         btnContainer.addAt(fallback, 0);
         // Ensure label readable on dark fallback
         label.setColor('#ffffff');
@@ -2673,7 +2928,7 @@ export class MenuManager {
       try {
         const dbg = this.scene.add.graphics();
         dbg.lineStyle(1, 0xff0000, 1);
-        dbg.strokeRect(-80, -17, 160, 34);
+        dbg.strokeRect(-halfBtnW, -halfBtnH, btnWidth, btnHeight);
         btnContainer.addAt(dbg, 0);
         dbg.setAlpha(0.9);
         dbg.setDepth((btnContainer.depth || 1) + 1);

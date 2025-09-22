@@ -55,6 +55,7 @@ export class MenuScene extends Phaser.Scene {
       this.menuManager.showStoryOverlay(title, content);
     });
     this.events.on('closeCurrentMenu', this.closeCurrentMenu, this);
+    this.events.on('showExitStoresCatalog', this.showExitStoresCatalog, this);
     
     // Don't create any default menu - wait for events
     console.log('MenuScene ready - waiting for menu events');
@@ -106,6 +107,10 @@ export class MenuScene extends Phaser.Scene {
     } else if (obstacleType === 'exit') {
       this.menuManager.showExitMenu(shopCount || 3, exitNumber);
     }
+  }
+
+  private showExitStoresCatalog(exitNumber?: number) {
+    this.menuManager.showExitStoresCatalog(exitNumber);
   }
 
   private showTurnKeyMenu() {

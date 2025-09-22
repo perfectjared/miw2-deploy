@@ -19,6 +19,7 @@
 
 import Phaser from 'phaser';
 import { gameElements, GREYSCALE_PALETTE } from '../config/GameConfig';
+import { REGION_CONFIG } from '../config/GameConfig';
 
 // Tunable UI constants for quick tweaking
 const UI_TUNABLES = {
@@ -180,6 +181,7 @@ export class GameUI {
   private managerValuesText!: Phaser.GameObjects.Text;
   private frontseatButton!: Phaser.GameObjects.Graphics;
   private backseatButton!: Phaser.GameObjects.Graphics;
+  private difficultyDebugText!: Phaser.GameObjects.Text;
   
   // New UI Elements
   private regionText!: Phaser.GameObjects.Text;
@@ -256,6 +258,7 @@ export class GameUI {
    */
   public updateUI(state: GameUIState) {
     this.updateCountdown(state.gameTime, state.countdownStepCounter);
+    this.updateDifficulty(state);
     this.updateMoney(state.money);
     // Health update removed - no longer needed
     this.updateProgress(state.progress); // Re-added to fix progress bar
@@ -266,6 +269,34 @@ export class GameUI {
     this.updateBuzz(state.buzz);
     this.updateEncumbrance(2); // Default to 2 items (keys and hotdog)
     // Speed crank removed - using automatic speed progression
+  }
+
+  private updateDifficulty(state: GameUIState) {
+    if (!this.difficultyDebugText) return;
+    const diff = this.computeDifficulty(state);
+    this.difficultyDebugText.setText(`Diff: ${diff.toFixed(2)}`);
+    // Keep visibility in sync with countdown
+    try { this.difficultyDebugText.setAlpha(this.countdownText.alpha); } catch {}
+  }
+
+  private computeDifficulty(state: GameUIState): number {
+    const currentRegion = state.currentRegion || REGION_CONFIG.startingRegion;
+    const regionBase = this.getRegionBaseDifficulty(currentRegion);
+    const showsDone = state.showsInCurrentRegion || 0;
+    const showsPerRegion = (REGION_CONFIG as any).showsPerRegion || 3;
+    const progressFrac = Math.max(0, Math.min(1, showsDone / Math.max(1, showsPerRegion)));
+    return Math.min(5, regionBase + progressFrac);
+  }
+
+  private getRegionBaseDifficulty(regionKey: string): number {
+    const mapping: Record<string, number> = {
+      midwest: 1,
+      south: 2,
+      southwest: 3,
+      west: 4,
+      northeast: 5
+    };
+    return mapping[regionKey] ?? 1;
   }
 
   /**
@@ -447,6 +478,19 @@ export class GameUI {
     this.minutesText.setScrollFactor(0);
     this.minutesText.setDepth(10000);
     this.minutesText.setAlpha(0); // Start invisible for fade-in animation
+
+    // Debug difficulty tag under countdown
+    const diffY = countdownY + 20;
+    this.difficultyDebugText = this.scene.add.text(countdownX, diffY, 'Diff: -', {
+      fontSize: '12px',
+      color: `#${this.config.countdownColor.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      backgroundColor: '#000000',
+      padding: { x: 4, y: 2 }
+    }).setOrigin(0.5);
+    this.difficultyDebugText.setScrollFactor(0);
+    this.difficultyDebugText.setDepth(10000);
+    this.difficultyDebugText.setAlpha(0);
   }
 
   /**
@@ -715,12 +759,17 @@ export class GameUI {
     this.speedCrankArea.setDepth(this.config.speedCrankDepthArea);
     this.speedCrankArea.setInteractive();
     
-    // Create speed crank SVG overlay
-    this.speedCrankSVG = this.scene.add.sprite(crankX, crankY, 'bat');
-    this.speedCrankSVG.setScale(UI_TUNABLES.crank.svgScale); // Fit the crank area
-    this.speedCrankSVG.setOrigin(0.5, 0.5);
-    this.speedCrankSVG.setAlpha(UI_TUNABLES.crank.svgAlpha); // Semi-transparent overlay
-    this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1); // Just above the handle
+    // Create speed crank SVG overlay (deprecated 'bat' removed)
+    try {
+      const fallbackKey = this.scene.textures.exists('steering-wheel') ? 'steering-wheel' : (this.scene.textures.getTextureKeys?.()[0] || '');
+      if (fallbackKey) {
+        this.speedCrankSVG = this.scene.add.sprite(crankX, crankY, fallbackKey);
+        this.speedCrankSVG.setScale(UI_TUNABLES.crank.svgScale);
+        this.speedCrankSVG.setOrigin(0.5, 0.5);
+        this.speedCrankSVG.setAlpha(UI_TUNABLES.crank.svgAlpha);
+        this.speedCrankSVG.setDepth(this.config.speedCrankDepthHandle + 1);
+      }
+    } catch {}
     
     // Apply white fill and black stroke styling
     this.speedCrankSVG.setTint(GREYSCALE_PALETTE.white); // White fill
