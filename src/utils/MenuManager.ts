@@ -132,22 +132,22 @@ export class MenuManager {
   
   // Menu Hierarchy System - Simplified
   private readonly MENU_PRIORITIES = {
-    TURN_KEY: 110,    // Highest priority - turn key menu (must always show)
-    START: 100,       // High priority - start menu
-    PAUSE: 80,        // High priority - pause menu
-    GAME_OVER: 70,    // High priority - game over menu
-    OBSTACLE: 60,     // Medium priority - obstacle collision menu
-    REGION_CHOICE: 55, // Medium priority - region choice menu
-    SAVE: 50,         // Medium priority - save menu
-    DESTINATION: 50,  // Medium priority - destination menu
-    EXIT: 50,         // Medium priority - exit choice menu
-    SHOP: 50,         // Medium priority - shop menu
-    CYOA: 50,         // Medium priority - choose-your-own-adventure menu
-    STORY: 50,        // Medium priority - story menu
-    VIRTUAL_PET: 50,  // Medium priority -  menu
-    MORAL_DECISION: 50, // Medium priority - moral decision menu
-    PET_STORY: 40,    // Low priority - pet story UI
-    TUTORIAL: 20      // Lowest priority - tutorial overlay
+    TURN_KEY: 110,       // Highest priority - ignition
+    START: 100,          // Start game
+    TUTORIAL_INTERRUPT: 95, // Tutorial interrupt modal should preempt lower menus
+    PAUSE: 90,           // Pause
+    REGION_CHOICE: 80,   // Region change choice
+    GAME_OVER: 75,       // Game over
+    STORY: 74,           // Story content (should NOT be preempted by exit)
+    EXIT: 73,            // Exit choice (should interrupt CYOA only)
+    CYOA: 70,            // Choose-your-own-adventure
+    DESTINATION: 65,     // Trip planning
+    OBSTACLE: 60,        // Collision/obstacle
+    SHOP: 60,            // Shop (paired with exit flow)
+    VIRTUAL_PET: 45,     // Pet UI
+    MORAL_DECISION: 45,  // Moral decision
+    PET_STORY: 40,       // Pet story overlay
+    TUTORIAL: 20         // Passive tutorial overlay
   };
 
   // Menu Categories - Simplified cleanup rules
@@ -385,9 +385,32 @@ export class MenuManager {
     const currentMenu = this.menuStack[this.menuStack.length - 1];
     
     if (currentMenu && currentMenu.priority > newPriority) {
+      // Special case: allow EXIT to preempt CYOA (but NOT STORY)
+      if (menuType === 'EXIT' && currentMenu.type === 'CYOA') {
+        console.log(`⚠️ Forcing EXIT to preempt CYOA`);
+        this.clearCurrentDialog();
+        this.popSpecificMenu(currentMenu.type);
+        return true;
+      }
       console.log(`🚫 MenuManager: Cannot show ${menuType} menu (priority ${newPriority}) - blocked by ${currentMenu.type} menu (priority ${currentMenu.priority})`);
       console.log(`🚫 MenuManager: Current menu stack:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
       return false;
+    }
+
+    // If a new higher-priority menu wants to show, proactively clear lower ones
+    if (currentMenu && currentMenu.priority < newPriority) {
+      console.log(`⚠️ MenuManager: Preempting lower-priority menus for ${menuType} (priority ${newPriority})`);
+      // Check if an exit/shop was being displayed or pending on stack
+      const hadExitOrShop = !!(this.currentDisplayedMenuType && (this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP'))
+        || this.menuStack.some(m => m.type === 'EXIT' || m.type === 'SHOP');
+      // Remove any menus with priority lower than the new one
+      this.menuStack = this.menuStack.filter(m => m.priority >= newPriority);
+      // Also clear any currently displayed dialog to avoid overlap
+      try { this.clearCurrentDialog(); } catch {}
+      // If we preempted an exit/shop, ensure we resume gameplay on next close to avoid stuck state
+      if (hadExitOrShop) {
+        (this as any)._resumeOnNextClose = true;
+      }
     }
     
     console.log(`✅ MenuManager: Can show ${menuType} menu (priority ${newPriority})`);
@@ -532,6 +555,17 @@ export class MenuManager {
       (this.currentDialog as any).stepsRemaining -= 1;
       if ((this.currentDialog as any).stepsRemaining <= 0) {
         this.clearCurrentDialog();
+      }
+    }
+    // Auto-dismiss pothole after 2 steps and resume driving
+    if (this.currentDialog && (this.currentDialog as any).isPothole) {
+      (this.currentDialog as any).stepsRemaining -= 1;
+      if ((this.currentDialog as any).stepsRemaining <= 0) {
+        this.clearCurrentDialog();
+        try {
+          const gameScene = this.scene.scene.get('GameScene');
+          if (gameScene) { (gameScene as any).resumeAfterCollision?.(); }
+        } catch {}
       }
     }
     
@@ -846,7 +880,7 @@ export class MenuManager {
       // Show resume menu for existing save
       const saveDate = new Date(saveData.timestamp).toLocaleString();
       menuConfig = {
-        title: 'RESUME GAME',
+        title: 'INFINITY DRIVES',
         content: `Welcome back! You have a saved game with ${saveData.steps} steps.\nSaved: ${saveDate}`,
         buttons: [
           {
@@ -882,7 +916,7 @@ export class MenuManager {
     } else {
       // Show new game menu for first time
       menuConfig = {
-        title: 'START GAME',
+        title: 'INFINITY DRIVES',
         content: 'click start to start',
         buttons: [
           {
@@ -1014,25 +1048,29 @@ export class MenuManager {
   public showPotholeMenu() {
     this.clearCurrentDialog();
     
+    // Smaller, slimmer dialog with no buttons
     const menuConfig: MenuConfig = {
-      title: 'POTHOLE!',
-      content: 'You hit a pothole! Your car took some damage. Take a moment to recover.',
-      buttons: [
-        {
-          text: 'Continue',
-          onClick: () => {
-            this.closeDialog();
-            const gameScene = this.scene.scene.get('GameScene');
-            if (gameScene) {
-              (gameScene as any).resumeAfterCollision();
-            }
-          },
-            style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        }
-      ]
+      title: 'pothole',
+      content: 'you hit a pothole',
+      buttons: [],
+      width: 220,
+      height: 140
     };
 
     this.createDialog(menuConfig);
+    // Mark as ephemeral with 2-step lifespan
+    if (this.currentDialog) {
+      (this.currentDialog as any).isPothole = true;
+      (this.currentDialog as any).stepsRemaining = 2;
+      // Randomize position within middle 80% of screen
+      try {
+        const gw = this.scene.cameras.main.width;
+        const gh = this.scene.cameras.main.height;
+        const rx = Phaser.Math.FloatBetween(0.1, 0.9) * gw;
+        const ry = Phaser.Math.FloatBetween(0.1, 0.9) * gh;
+        (this.currentDialog as Phaser.GameObjects.Container).setPosition(rx, ry);
+      } catch {}
+    }
   }
 
   /**
@@ -1932,51 +1970,50 @@ export class MenuManager {
   }
 
   public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
-    // SIMPLIFIED: CYOA menus are completely independent and immediate
-    console.log(`🎭 SIMPLE CYOA: Creating regular CYOA ${cyoaData.cyoaId}`);
-    
-    // Clear any existing dialog immediately
+    console.log(`🎭 CYOA (H-style): Creating CYOA ${cyoaData.cyoaId}`);
+    // Clear any existing simple dialog
     this.clearCurrentDialog();
-    
-    // CRITICAL: Clear the entire menu stack to prevent restoration issues
-    this.menuStack = [];
-    console.log(`🎭 SIMPLE CYOA: Cleared entire menu stack to prevent restoration conflicts`);
-    
-    // Simple CYOA description
-    const cyoaDescription = 'Something happened!';
-    
-    const menuConfig: MenuConfig = {
-      title: 'CYOA',
-      content: cyoaDescription,
-      buttons: [
-        {
-          text: 'OK',
-          onClick: () => {
-            console.log(`🎭 SIMPLE CYOA: User clicked OK on regular CYOA ${cyoaData.cyoaId}`);
-            this.clearCurrentDialog();
-            this.resumeGame();
-          },
-          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
-        },
-        {
-          text: 'No',
-          onClick: () => {
-            console.log(`🎭 SIMPLE CYOA: User clicked No on regular CYOA ${cyoaData.cyoaId}`);
-            this.clearCurrentDialog();
-            this.resumeGame();
-          },
-          style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#666666', padding: { x: 10, y: 5 } }
-        }
-      ]
-    };
+    // Push to stack for priority management
+    this.pushMenu('CYOA', cyoaData);
 
-    // Create dialog directly without complex menu management
-    this.createDialog(menuConfig, 'CYOA');
-    
-    // CYOA menus are exempt from auto-completion (interactive content)
-    
-    // Pause game immediately
+    // Pause game while CYOA is open
     this.pauseGame();
+
+    // H-style CYOA using WindowShapes
+    const gameScene = this.scene.scene.get('GameScene') as any;
+    if (!gameScene || !gameScene.windowShapes) {
+      console.warn('Cannot create CYOA: GameScene or WindowShapes not available');
+      return;
+    }
+
+    const gw = this.scene.cameras.main.width;
+    const gh = this.scene.cameras.main.height;
+    const width = Math.floor(gw * 0.9);
+    const height = Math.floor(gh * 0.7);
+    const x = Math.floor((gw - width) / 2);
+    const y = Math.floor((gh - height) / 2);
+
+    const storyTexts = [ 'choose your path', 'something happened on the road...' ];
+    let container: Phaser.GameObjects.Container | null = null;
+    const closeAndResume = () => {
+      try { container && container.destroy(); } catch {}
+      this.resumeGame();
+      // Pop CYOA from stack
+      this.popSpecificMenu('CYOA');
+    };
+    const choices = [
+      { text: 'ok', callback: () => closeAndResume() },
+      { text: 'no', callback: () => closeAndResume() }
+    ];
+
+    container = gameScene.windowShapes.createCYOADialog(x, y, width, height, storyTexts, choices);
+    if (container) {
+      // Track as current dialog for cleanup parity
+      this.currentDialog = container;
+      this.currentDisplayedMenuType = 'CYOA';
+    } else {
+      console.log('CYOA dialog queued; will appear after current narrative closes');
+    }
   }
 
   public showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
@@ -2771,39 +2808,65 @@ export class MenuManager {
       this.currentDialog.add(fallback);
     }
     
-    // Title
-    const titleYOffset = -halfH + 40;
-    const title = this.scene.add.text(0, titleYOffset, menuConfig.title, {
-      fontSize: '24px',
-      color: '#000000',
-      fontStyle: 'bold'
-    });
-    title.setOrigin(0.5);
-    this.currentDialog.add(title);
+    // Title rendered using WindowShapes narrative text (black animating background)
+    const titleText = `<< ${String(menuConfig.title || '')} >>`;
+    try {
+      const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+      if (ws && (ws as any).createNarrativeText) {
+        // Place at top-left, slightly overlapping the window edge
+        const nx = -halfW - 4;
+        const ny = -halfH - 4;
+        const nwidth = dialogWidth - 4;
+        (ws as any).createNarrativeText(nx, ny, titleText, nwidth, this.currentDialog);
+      } else {
+        const title = this.scene.add.text(-halfW + 6, -halfH + 6, titleText, {
+          fontSize: '20px', color: '#000000', fontStyle: 'bold'
+        }).setOrigin(0, 0);
+        this.currentDialog.add(title);
+      }
+    } catch {
+      const title = this.scene.add.text(-halfW + 6, -halfH + 6, titleText, {
+        fontSize: '20px', color: '#000000', fontStyle: 'bold'
+      }).setOrigin(0, 0);
+      this.currentDialog.add(title);
+    }
     
-    // Content - instant display with brief pause
+    // Content - render with narrative text blocks (black animated backs), supporting multiple lines
     if (menuConfig.content) {
-      const contentY = titleYOffset + 50;
-      const contentText = this.scene.add.text(0, contentY, '', {
-        fontSize: '16px',
-        color: '#000000',
-        wordWrap: { width: dialogWidth - 50 },
-        align: 'center'
-      }).setOrigin(0.5);
-      
-      this.currentDialog.add(contentText);
-      
-      // Show all text at once after brief pause
-      const textCallback = this.scene.time.delayedCall(UI_CONFIG.textDisplayDelayMs, () => {
-        // Safety check: ensure text object still exists and is valid
-        if (contentText && contentText.scene && !contentText.scene.scene.isActive('GameScene')) {
-          return; // Scene is no longer active
-        }
-        if (contentText && contentText.setText) {
-          contentText.setText(menuConfig.content || '');
-        }
-      });
-      this.textDisplayCallbacks.push(textCallback);
+      const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+      const lines = String(menuConfig.content || '').split('\n').map(s => s.trim()).filter(Boolean);
+      const totalTexts = Math.max(1, lines.length);
+      const topMargin = 40;
+      const bottomMargin = 110; // space for buttons
+      const availableHeight = dialogHeight - topMargin - bottomMargin;
+      const leftX = -halfW + 20;
+      const rightX = halfW - 20;
+      const blockWidth = dialogWidth - 40;
+
+      const getYForIndex = (idx: number): number => {
+        if (totalTexts === 1) return -halfH + topMargin + availableHeight / 2;
+        const spacing = availableHeight / (totalTexts - 1);
+        return -halfH + topMargin + idx * spacing;
+      };
+
+      for (let i = 0; i < totalTexts; i++) {
+        const text = lines[i] || lines[0];
+        const y = getYForIndex(i);
+        // Two-line special: first left, second right; otherwise left
+        const useRight = (totalTexts === 2 && i === 1);
+        const x = useRight ? (rightX - blockWidth) : leftX;
+        try {
+          if (ws && (ws as any).createNarrativeText) {
+            (ws as any).createNarrativeText(x, y, text, blockWidth, this.currentDialog);
+          } else {
+            const t = this.scene.add.text(0, 0, text, {
+              fontSize: '16px', color: '#000000', wordWrap: { width: blockWidth }, align: useRight ? 'right' : 'left'
+            }).setOrigin(useRight ? 1 : 0, 0.5);
+            t.setPosition(useRight ? rightX : leftX, y);
+            this.currentDialog.add(t);
+          }
+        } catch {}
+      }
     }
     
     // Buttons
@@ -3107,6 +3170,17 @@ export class MenuManager {
       if (gameScene) {
         gameScene.events.emit('gameResumed');
       }
+    }
+
+    // If we flagged that gameplay should resume after a preemption (e.g., exit cancelled by CYOA), do it now
+    if ((this as any)._resumeOnNextClose) {
+      (this as any)._resumeOnNextClose = false;
+      try {
+        const appScene = this.scene.scene.get('AppScene');
+        if (appScene) { (appScene as any).isPaused = false; }
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) { (gameScene as any).carMechanics?.resumeDriving?.(); gameScene.events.emit('gameResumed'); }
+      } catch {}
     }
 
     // Resume game when certain menus are closed

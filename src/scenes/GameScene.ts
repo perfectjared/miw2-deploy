@@ -372,6 +372,16 @@ export class GameScene extends Phaser.Scene {
           this.scene.bringToTop('MenuScene');
         }
       });
+
+      // Debug: Add 'C' key to trigger a CYOA menu for testing
+      const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
+      keyC?.on('down', () => {
+        const menuScene = this.scene.get('MenuScene');
+        if (menuScene) {
+          (menuScene as any).events.emit('showCyoaMenu', { cyoaId: 1, isExitRelated: false });
+          this.scene.bringToTop('MenuScene');
+        }
+      });
     } catch {}
 
     // Initialize five virtual pets within a single rectangle container (rearview)

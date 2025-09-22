@@ -2444,23 +2444,36 @@ export class WindowShapes {
     const containerWidth = container.containerWidth;
     const containerHeight = container.containerHeight;
     
-    // Calculate vertical spacing to distribute text evenly from top to bottom
+    // Calculate vertical placement based on number of texts
     const topMargin = 30;
     const bottomMargin = 120; // Leave space for buttons
     const availableHeight = containerHeight - topMargin - bottomMargin;
-    const textSpacing = availableHeight / totalTexts;
-    
-    // Position this text element
-    const textY = topMargin + (container.currentTextIndex * textSpacing);
-    const textX = 20;
+    let textY: number;
+    const textXLeft = 20;
+    const textXRight = containerWidth - 20; // right alignment anchor
     const textWidth = containerWidth - 40; // Leave side margins
+    
+    if (totalTexts === 1) {
+      // Single block: vertically centered left-justified
+      textY = topMargin + availableHeight / 2;
+    } else if (totalTexts === 2) {
+      // Two blocks: balance around center
+      const mid = topMargin + availableHeight / 2;
+      textY = container.currentTextIndex === 0 ? mid - 40 : mid + 40;
+    } else {
+      // Default distribution
+      const textSpacing = availableHeight / totalTexts;
+      textY = topMargin + (container.currentTextIndex * textSpacing);
+    }
     const textHeight = Math.min(textSpacing - 10, 60); // Max height per text, with spacing
     
     console.log(`Creating text ${container.currentTextIndex}: x=${textX}, y=${textY}, w=${textWidth}, h=${textHeight}`);
     
     try {
       // Use the new narrative text creation method
-      const narrativeResult = this.createNarrativeText(textX, textY, currentText, textWidth, container);
+      // Align left for first, right for second if two texts; else left
+      const alignedX = (totalTexts === 2 && container.currentTextIndex === 1) ? textXRight - textWidth : textXLeft;
+      const narrativeResult = this.createNarrativeText(alignedX, textY, currentText, textWidth, container);
       
       // Store references for cleanup
       container.textElements.push(narrativeResult.textElement);
