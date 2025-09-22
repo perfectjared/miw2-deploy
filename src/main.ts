@@ -107,19 +107,7 @@ if (import.meta && (import.meta as any).hot) {
   });
 }
 
-// Reduce dev-console overhead: disable verbose logs by default; enable via window.__ENABLE_LOGS=true
-(() => {
-  const originalLog = console.log.bind(console);
-  if (typeof window !== 'undefined') {
-    // Re-enable logs by default so we can see pattern switching and other debug
-    window.__ENABLE_LOGS = true;
-  }
-  console.log = (...args: any[]) => {
-    if ((window as any)?.__ENABLE_LOGS) {
-      originalLog(...args);
-    }
-  };
-  
-  // Test that console.log is working
-  // console.log('Console.log is now enabled!');
-})();
+// Keep console available; use targeted debug flags per system when needed
+if (typeof window !== 'undefined') {
+  (window as any).__ENABLE_TUTORIAL_DEBUG = false;
+}

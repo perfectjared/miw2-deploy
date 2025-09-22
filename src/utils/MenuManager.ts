@@ -143,7 +143,7 @@ export class MenuManager {
     CYOA: 70,            // Choose-your-own-adventure
     DESTINATION: 65,     // Trip planning
     OBSTACLE: 60,        // Collision/obstacle
-    SHOP: 60,            // Shop (paired with exit flow)
+    SHOP: 73,            // Shop (paired with exit flow)
     VIRTUAL_PET: 45,     // Pet UI
     MORAL_DECISION: 45,  // Moral decision
     PET_STORY: 40,       // Pet story overlay
@@ -1389,7 +1389,7 @@ export class MenuManager {
   private generateShopNames(count: number): string[] {
     const shopTypes = [
       'regional gas station', 'gas station', 'motel', 'restaurant',
-      'weed store', 'car store', 'car hospital', 'psychic'
+      'weed store', 'car store', 'car doctor', 'psychic'
     ];
     
     const names: string[] = [];

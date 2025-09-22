@@ -163,7 +163,7 @@ export class TutorialSystem {
       tutorialState = 'keys-and-ignition';
     }
     
-    console.log('🎯 Tutorial Update:', {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🎯 Tutorial Update:', {
       keysInIgnition: state.keysInIgnition,
       carStarted: state.carStarted,
       tutorialState: tutorialState,
@@ -175,7 +175,7 @@ export class TutorialSystem {
     if (this.tutorialOverlay) {
       const shouldShow = tutorialState !== 'none';
       this.tutorialOverlay.setVisible(shouldShow);
-      console.log('🎯 Tutorial overlay visibility:', {
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🎯 Tutorial overlay visibility:', {
         tutorialState: tutorialState,
         shouldShow: shouldShow,
         actualVisible: this.tutorialOverlay.visible
@@ -204,7 +204,7 @@ export class TutorialSystem {
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      console.log('🎯 Tutorial Update:', { tutorialState, shouldShow: tutorialState !== 'none', actualVisible: this.tutorialOverlay?.visible });
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🎯 Tutorial Update:', { tutorialState, shouldShow: tutorialState !== 'none', actualVisible: this.tutorialOverlay?.visible });
       this.lastTutorialState = tutorialState;
     }
   }
@@ -215,20 +215,20 @@ export class TutorialSystem {
   private createTutorialOverlay() {
     // Don't recreate if overlay already exists
     if (this.tutorialOverlay) {
-      console.log('Tutorial overlay already exists, skipping creation');
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('Tutorial overlay already exists, skipping creation');
       return;
     }
     
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    console.log('🎨 Creating unified tutorial overlay with dimensions:', gameWidth, gameHeight);
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🎨 Creating unified tutorial overlay with dimensions:', gameWidth, gameHeight);
     
     // Create tutorial overlay using OverlayManager with dither pattern
     // Start with empty cutouts - they'll be updated dynamically
     const overlay = this.overlayManager.createTutorialOverlay('tutorial_overlay', []);
     
-    console.log('🎨 Tutorial overlay created:', {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🎨 Tutorial overlay created:', {
       container: !!overlay.container,
       background: !!overlay.background,
       mask: !!overlay.mask
@@ -250,7 +250,7 @@ export class TutorialSystem {
    */
   private updateTutorialMask(tutorialState: 'keys-and-ignition' | 'steering' | 'exit-warning') {
     if (!this.tutorialOverlay) {
-      console.log('Cannot update mask - overlay not found');
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('Cannot update mask - overlay not found');
       return;
     }
     
@@ -270,7 +270,7 @@ export class TutorialSystem {
     }
     
     // Debug logging
-    console.log('🎭 Mask Debug:', {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🎭 Mask Debug:', {
       tutorialState: tutorialState,
       cutoutsCount: cutouts.length,
       cutouts: cutouts
@@ -314,7 +314,7 @@ export class TutorialSystem {
     const pulseScale = (timer % 2 === 0) ? 1.0 : 1.3; // Normal on even seconds, 30% bigger on odd seconds
     
     // Only log pulse debug when timer is low to avoid spam
-    if (timer < 20) {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG && timer < 20) {
       console.log('💓 Pulse Debug:', {
         timer: timer,
         pulseScale: pulseScale.toFixed(1)
@@ -322,7 +322,7 @@ export class TutorialSystem {
     }
     
     // Keys cutout with 20% padding (convert world -> screen if needed)
-    console.log('🔑 Checking for frontseat keys:', {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🔑 Checking for frontseat keys:', {
       frontseatKeys: !!this.frontseatKeys,
       gameObject: !!this.frontseatKeys?.gameObject
     });
@@ -333,7 +333,7 @@ export class TutorialSystem {
       let sx = keysBody ? keysBody.position.x : this.frontseatKeys.gameObject.x;
       let sy = keysBody ? keysBody.position.y : this.frontseatKeys.gameObject.y;
       
-      console.log('🔑 Keys live position:', { x: sx, y: sy, hasBody: !!keysBody });
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🔑 Keys live position:', { x: sx, y: sy, hasBody: !!keysBody });
       const keysHoleRadius = this.config.keysHoleRadius * 1.2 * pulseScale; // 20% larger + pulsing
       cutouts.push({
         x: sx - keysHoleRadius,
@@ -342,14 +342,14 @@ export class TutorialSystem {
         height: keysHoleRadius * 2
       });
       
-      console.log('🔑 Keys cutout:', {
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🔑 Keys cutout:', {
         keysPos: { x: sx, y: sy },
         screenPos: { x: sx, y: sy },
         radius: keysHoleRadius,
         cutout: cutouts[cutouts.length - 1]
       });
     } else {
-      console.log('🔑 No frontseat keys found for cutout');
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🔑 No frontseat keys found for cutout');
     }
     
     // Ignition cutout with 20% padding (use actual magnetic target position from GameElements)
@@ -378,7 +378,7 @@ export class TutorialSystem {
       height: ignitionHoleRadius * 2
     });
     
-    console.log('🚗 Ignition cutout:', {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🚗 Ignition cutout:', {
       ignitionPos: { x: ignitionX, y: ignitionY },
       radius: ignitionHoleRadius,
       cutout: cutouts[cutouts.length - 1]
@@ -456,17 +456,17 @@ export class TutorialSystem {
   /** Call on each half-step for faster text flashing (every 0.5 seconds) */
   public handleHalfStep(halfStep: number) {
     try {
-      console.log('💓 handleHalfStep called with halfStep:', halfStep);
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 handleHalfStep called with halfStep:', halfStep);
       
       // Update flash timer (increment by 0.5 seconds each half-step)
       this.flashTimer = halfStep * 0.5;
       
-      console.log('💓 Using half-step counter:', halfStep, 'flash timer:', this.flashTimer);
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 Using half-step counter:', halfStep, 'flash timer:', this.flashTimer);
     
       // Update mask if tutorial is visible (for pulsing animation)
       const overlayVisible = this.isTutorialVisible();
       if (overlayVisible && this.lastTutorialState === 'keys-and-ignition') {
-        console.log('💓 handleHalfStep: Updating mask with pulse, timer:', this.pulseTimer);
+        if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 handleHalfStep: Updating mask with pulse, timer:', this.pulseTimer);
         this.updateTutorialMaskWithPulse();
       }
       
@@ -482,7 +482,7 @@ export class TutorialSystem {
       this.blinkText.setAlpha(alpha);
       
       // Debug logging for alpha animation
-      if (halfStep % 20 === 0) { // Log every 20th half-step to avoid spam
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG && halfStep % 20 === 0) { // Log every 20th half-step to avoid spam
         console.log('💓 Tutorial text alpha animation (half-step):', {
           halfStep: halfStep,
           phase: phase,
@@ -500,7 +500,7 @@ export class TutorialSystem {
   /** Call on each step to toggle blink visibility every 5 steps on/off when overlay is active */
   public handleStep(step: number) {
     try {
-      console.log('💓 handleStep called with step:', step);
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 handleStep called with step:', step);
       
       // Use the actual global step number
       this.stepCounter = step;
@@ -508,17 +508,17 @@ export class TutorialSystem {
       // Update pulse timer (increment by 1 second each step)
       this.pulseTimer += 1;
       
-    console.log('💓 Using global step counter:', this.stepCounter, 'pulse timer:', this.pulseTimer);
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 Using global step counter:', this.stepCounter, 'pulse timer:', this.pulseTimer);
   
   // Debug: Log every 5th step to avoid spam
-  if (this.stepCounter % 5 === 0) {
+  if ((window as any)?.__ENABLE_TUTORIAL_DEBUG && this.stepCounter % 5 === 0) {
     console.log('💓 handleStep called, step:', this.stepCounter, 'overlay visible:', this.isTutorialVisible(), 'tutorial state:', this.lastTutorialState);
   }
   
   // Update mask if tutorial is visible (for pulsing animation)
   const overlayVisible = this.isTutorialVisible();
   if (overlayVisible && this.lastTutorialState === 'keys-and-ignition') {
-    console.log('💓 handleStep: Updating mask with pulse, timer:', this.pulseTimer);
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 handleStep: Updating mask with pulse, timer:', this.pulseTimer);
     this.updateTutorialMaskWithPulse();
   }
   
@@ -536,14 +536,14 @@ export class TutorialSystem {
       return;
     }
     
-    console.log('💓 Updating mask with pulse, timer:', this.pulseTimer);
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 Updating mask with pulse, timer:', this.pulseTimer);
     
     // Get cutouts with current pulse timer for pulsing
     const cutouts = this.getKeysAndIgnitionCutouts(this.pulseTimer);
     
     // Update existing overlay's mask
     const overlayInstance = (this.tutorialOverlay as any).overlayInstance;
-    console.log('💓 Mask update debug:', {
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('💓 Mask update debug:', {
       overlayInstance: !!overlayInstance,
       existingMask: !!overlayInstance?.mask,
       cutoutsCount: cutouts.length
@@ -584,30 +584,30 @@ export class TutorialSystem {
    * Debug method to force show tutorial overlay
    */
   public debugForceShowTutorial() {
-    console.log('🐛 DEBUG: Forcing tutorial overlay to show');
-    console.log('🐛 DEBUG: Tutorial overlay exists:', !!this.tutorialOverlay);
-    console.log('🐛 DEBUG: handleStep method exists:', typeof this.handleStep === 'function');
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Forcing tutorial overlay to show');
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Tutorial overlay exists:', !!this.tutorialOverlay);
+    if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: handleStep method exists:', typeof this.handleStep === 'function');
     
     if (this.tutorialOverlay) {
-      console.log('🐛 DEBUG: Tutorial overlay visible before:', this.tutorialOverlay.visible);
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Tutorial overlay visible before:', this.tutorialOverlay.visible);
       this.tutorialOverlay.setVisible(true);
-      console.log('🐛 DEBUG: Tutorial overlay visible after:', this.tutorialOverlay.visible);
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Tutorial overlay visible after:', this.tutorialOverlay.visible);
       this.updateTutorialMask('keys-and-ignition');
       if (this.blinkText) {
         this.blinkText.setText('DEBUG: Place keys in ignition');
         this.blinkText.setVisible(true);
         this.blinkText.setAlpha(1); // Set to full opacity for debug
-        console.log('🐛 DEBUG: Blink text visible:', this.blinkText.visible, 'alpha:', this.blinkText.alpha);
+        if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Blink text visible:', this.blinkText.visible, 'alpha:', this.blinkText.alpha);
       }
       // Reset step counter to start pulsing animation
       this.stepCounter = 0;
-      console.log('🐛 DEBUG: Reset step counter to 0 for pulsing animation');
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Reset step counter to 0 for pulsing animation');
       
       // Test handleStep directly
-      console.log('🐛 DEBUG: Testing handleStep directly...');
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: Testing handleStep directly...');
       this.handleStep(999);
     } else {
-      console.log('🐛 DEBUG: No tutorial overlay found');
+      if ((window as any)?.__ENABLE_TUTORIAL_DEBUG) console.log('🐛 DEBUG: No tutorial overlay found');
     }
   }
 

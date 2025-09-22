@@ -360,7 +360,7 @@ export class OverlayManager {
     this.currentPatternIndex = newIndex;
     
     const newPattern = this.hypercardPatterns[newIndex];
-    console.log(`🎨 Switching to: ${newPattern.name} (${newPattern.description})`);
+    console.info(`🎨 Switching to: ${newPattern.name} (${newPattern.description})`);
     
     // Update all active dither overlays with bulletproof scaling
     this.activeOverlays.forEach((overlay, id) => {
@@ -410,7 +410,7 @@ export class OverlayManager {
     this.currentPatternIndex = newIndex;
     
     const newPattern = patterns[newIndex];
-    console.log(`🎨 Switching to: ${newPattern.name} (${newPattern.percentage}%)`);
+    console.info(`🎨 Switching to: ${newPattern.name} (${newPattern.percentage}%)`);
     
     // Update all active dither overlays with bulletproof scaling
     this.activeOverlays.forEach((overlay, id) => {
