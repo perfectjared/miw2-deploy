@@ -331,10 +331,12 @@ const createViewportBackground = () => {
     parent: 'viewport-background',
     backgroundColor: '#ffffff',
     
-    // CRITICAL: Enable pixel art mode for crisp scaling
-    pixelArt: true,
-    antialias: false,
-    roundPixels: true,
+    // Smooth rendering for better graphics quality
+    render: {
+      antialias: true,
+      pixelArt: false,
+      roundPixels: false
+    },
     
     scene: [ViewportBackgroundScene],
     scale: {

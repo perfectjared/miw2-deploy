@@ -36,6 +36,7 @@ export interface VirtualPetConfig {
 	xPercent?: number;        // Horizontal position as percentage (0..1)
 	yOffset?: number;         // Vertical offset in pixels from top
 	depth?: number;           // Rendering depth/layer
+	petIndex?: number;        // Index of this pet (0-4) for special initialization
 	scale?: number;           // Scale multiplier for pet size
 }
 
@@ -58,19 +59,28 @@ export class VirtualPet {
 	private foodBarBG!: Phaser.GameObjects.Rectangle;
 	private foodBarFill!: Phaser.GameObjects.Rectangle;
 	private foodLabel!: Phaser.GameObjects.Text;
-	private foodDecayTimer?: Phaser.Time.TimerEvent;
 	private bathroomBarBG!: Phaser.GameObjects.Rectangle;
 	private bathroomBarFill!: Phaser.GameObjects.Rectangle;
 	private bathroomLabel!: Phaser.GameObjects.Text;
-	private bathroomDecayTimer?: Phaser.Time.TimerEvent;
 	private boredBarBG!: Phaser.GameObjects.Rectangle;
 	private boredBarFill!: Phaser.GameObjects.Rectangle;
 	private boredLabel!: Phaser.GameObjects.Text;
-	private boredDecayTimer?: Phaser.Time.TimerEvent;
 	private lastCamWidth: number = 0;
 	private debugGraphics?: Phaser.GameObjects.Graphics;
 	private isHovering: boolean = false;
 	private petBaseColor: number = PET_CONFIG.petColor;
+
+	// Messaging system
+	private messageSprite?: Phaser.GameObjects.Sprite;
+	private messageText?: Phaser.GameObjects.Text;
+	private hasActiveMessage: boolean = false;
+	private messageThresholds: number[] = [3.0, 2.0, 1.5, 1.0, 0.5, 0.3, 0.2]; // 30%, 20%, 15%, 10%, 5%, 3%, 2%
+	private lastMessageThreshold: number = 10.0; // Track last threshold that triggered a message
+	private messageStepsRemaining: number = 0; // Half-steps until message disappears
+	private messageStepTimer?: Phaser.Time.TimerEvent;
+	private messageStartX: number = 0; // Starting X position for movement calculation
+	private messageStartY: number = 0; // Starting Y position for movement calculation
+	private messageType: string = ''; // Track which meter triggered the message
 
 	// Matter.js integration
 	private petBody?: MatterJS.BodyType;
@@ -84,10 +94,40 @@ export class VirtualPet {
 		this.scene = scene;
 		this.config = config;
 		
-		// Initialize meters to random values between 77-100% (7.7-10.0)
-		this.foodValue = Phaser.Math.FloatBetween(7.7, 10.0);
-		this.bathroomValue = Phaser.Math.FloatBetween(7.7, 10.0);
-		this.boredValue = Phaser.Math.FloatBetween(7.7, 10.0);
+		// Initialize all meters to 100% (10.0)
+		this.foodValue = 10.0;
+		this.bathroomValue = 10.0;
+		this.boredValue = 10.0;
+		
+		// Add controlled randomness: subtract 0.1-0.5 from all meters
+		this.foodValue = Math.max(0, this.foodValue - Phaser.Math.FloatBetween(0.1, 0.5));
+		this.bathroomValue = Math.max(0, this.bathroomValue - Phaser.Math.FloatBetween(0.1, 0.5));
+		this.boredValue = Math.max(0, this.boredValue - Phaser.Math.FloatBetween(0.1, 0.5));
+		
+		// Apply special values for specific pets
+		if (config.petIndex !== undefined) {
+			this.applySpecialPetValues(config.petIndex);
+		}
+	}
+
+	/**
+	 * Apply special values for specific pets
+	 * Pet 1 (index 0): boredom at 60%
+	 * Pet 3 (index 2): bathroom at 60%
+	 * Pet 5 (index 4): food at 60%
+	 */
+	private applySpecialPetValues(petIndex: number) {
+		switch (petIndex) {
+			case 0: // Pet 1: boredom at 60%
+				this.boredValue = 6.0;
+				break;
+			case 2: // Pet 3: bathroom at 60%
+				this.bathroomValue = 6.0;
+				break;
+			case 4: // Pet 5: food at 60%
+				this.foodValue = 6.0;
+				break;
+		}
 	}
 
 	public initialize() {
@@ -265,31 +305,33 @@ export class VirtualPet {
 		this.steeringListenerBound = (value: number) => this.applySteeringSway(value);
 		this.scene.events.on('steeringInput', this.steeringListenerBound, this);
 
-		// Start passive food/bathroom/bored decay
-		this.foodDecayTimer = this.scene.time.addEvent({
-			delay: 2000,
-			loop: true,
-			callback: () => {
-				// Food decreases over time (lower value = hungry)
-				this.setFood(this.foodValue - 0.1);
-			}
+		// Listen for countdown events to trigger meter decay
+		this.scene.events.on('countdownChanged', () => {
+			this.processCountdownDecay();
 		});
-		this.bathroomDecayTimer = this.scene.time.addEvent({
-			delay: 2500,
-			loop: true,
-			callback: () => {
-				// bathroom fills over time (lower value = needs bathroom)
-				this.setBathroom(this.bathroomValue - 0.1);
-			}
-		});
-		this.boredDecayTimer = this.scene.time.addEvent({
-			delay: 2200,
-			loop: true,
-			callback: () => {
-				// boredom increases over time (lower value = bored)
-				this.setBored(this.boredValue - 0.1);
-			}
-		});
+	}
+
+	/**
+	 * Process meter decay on each countdown tick using individual pet decay rates
+	 */
+	private processCountdownDecay() {
+		// Get individual decay rates for this pet from config
+		const petIndex = this.config.petIndex || 0;
+		const decayRates = PET_CONFIG.petDecayRates[petIndex];
+		
+		if (!decayRates) {
+			console.warn(`VirtualPet: No decay rates found for pet index ${petIndex}, using defaults`);
+			// Fallback to default rates if config is missing
+			this.setFood(this.foodValue - 0.05);
+			this.setBathroom(this.bathroomValue - 0.04);
+			this.setBored(this.boredValue - 0.045);
+			return;
+		}
+
+		// Apply individual decay rates for this pet
+		this.setFood(this.foodValue - decayRates.food);
+		this.setBathroom(this.bathroomValue - decayRates.bathroom);
+		this.setBored(this.boredValue - decayRates.boredom);
 	}
 
 	public destroy() {
@@ -303,6 +345,10 @@ export class VirtualPet {
 			if (this.petBody) (this.scene as any).matter.world.remove(this.petBody);
 			if (this.anchorBody) (this.scene as any).matter.world.remove(this.anchorBody);
 		}
+		
+		// Cleanup message sprite
+		this.removeMessageSprite();
+		
 		this.container?.destroy();
 	}
 
@@ -504,20 +550,197 @@ export class VirtualPet {
 		this.boredBarFill.fillColor = color as any;
 	}
 
+	/**
+	 * Create a message sprite below the pet when any meter is low
+	 */
+	private createMessageSprite() {
+		if (this.hasActiveMessage || !this.pet) return;
+
+		// Store starting position for movement calculation
+		this.messageStartX = this.pet.x;
+		this.messageStartY = this.pet.y + 40; // Position below the pet
+
+		// Create a simple message sprite (using a circle for now)
+		this.messageSprite = this.scene.add.circle(
+			this.messageStartX, 
+			this.messageStartY,
+			8, // radius
+			0xff0000, // red color
+			0.8 // alpha
+		);
+		
+		this.messageSprite.setScrollFactor(0); // Keep it on screen
+		this.messageSprite.setDepth(this.config.depth ? this.config.depth + 1000 : 80000);
+		
+		// Create text label for the message
+		this.messageText = this.scene.add.text(
+			this.messageStartX,
+			this.messageStartY,
+			this.messageType.toUpperCase(), // Show which meter triggered the message
+			{
+				fontSize: '12px',
+				color: '#ffffff',
+				fontStyle: 'bold',
+				align: 'center'
+			}
+		);
+		this.messageText.setOrigin(0.5, 0.5); // Center the text
+		this.messageText.setScrollFactor(0); // Keep it on screen
+		this.messageText.setDepth(this.config.depth ? this.config.depth + 1001 : 80001); // Above the circle
+		
+		// Add to container if it exists
+		if (this.container) {
+			this.container.add(this.messageSprite);
+			this.container.add(this.messageText);
+		}
+
+		this.hasActiveMessage = true;
+		this.messageStepsRemaining = 8; // Message lasts 8 half-steps (4 full steps)
+
+		console.log(`Pet ${this.config.petIndex}: Created ${this.messageType} message at threshold ${this.lastMessageThreshold}`);
+
+		// Start half-step timer to animate message movement and fade
+		this.messageStepTimer = this.scene.time.addEvent({
+			delay: 1000, // Each half-step is 1 second
+			loop: true,
+			callback: () => {
+				this.messageStepsRemaining--;
+				this.updateMessageAnimation();
+				
+				if (this.messageStepsRemaining <= 0) {
+					this.removeMessageSprite();
+				}
+			}
+		});
+	}
+
+	/**
+	 * Update message animation (movement and fade) on each half-step
+	 */
+	private updateMessageAnimation() {
+		if (!this.messageSprite || !this.messageText) return;
+
+		const totalSteps = 8; // Total half-steps
+		const currentStep = totalSteps - this.messageStepsRemaining;
+		const progress = currentStep / totalSteps; // 0 to 1
+
+		// Calculate movement: slowly move down from pet
+		const moveDistance = 30; // Total distance to move down
+		const moveX = this.messageStartX; // Stay at same X position
+		const moveY = this.messageStartY + (moveDistance * progress); // Move straight down
+
+		// Calculate fade: gradually fade out
+		const startAlpha = 0.8;
+		const endAlpha = 0.0;
+		const currentAlpha = startAlpha - (startAlpha - endAlpha) * progress;
+
+		// Apply changes to both sprite and text
+		this.messageSprite.setPosition(moveX, moveY);
+		this.messageSprite.setAlpha(currentAlpha);
+		this.messageText.setPosition(moveX, moveY);
+		this.messageText.setAlpha(currentAlpha);
+	}
+
+	/**
+	 * Remove the message sprite
+	 */
+	private removeMessageSprite() {
+		console.log(`Pet ${this.config.petIndex}: Removing ${this.messageType} message (cleanup verification)`);
+		
+		if (this.messageSprite) {
+			this.messageSprite.destroy();
+			this.messageSprite = undefined;
+			console.log(`  -> Message sprite destroyed`);
+		}
+		
+		if (this.messageText) {
+			this.messageText.destroy();
+			this.messageText = undefined;
+			console.log(`  -> Message text destroyed`);
+		}
+		
+		// Clean up step timer
+		if (this.messageStepTimer) {
+			this.messageStepTimer.remove();
+			this.messageStepTimer = undefined;
+			console.log(`  -> Message timer removed`);
+		}
+		
+		this.hasActiveMessage = false;
+		this.messageStepsRemaining = 0;
+		this.messageType = '';
+		
+		console.log(`  -> Message cleanup completed for pet ${this.config.petIndex}`);
+	}
+
+	/**
+	 * Check if any meter has crossed a message threshold and show message if needed
+	 */
+	private checkAndShowMessage() {
+		const lowestMeter = Math.min(this.foodValue, this.bathroomValue, this.boredValue);
+		
+		// Determine which meter is the lowest
+		let lowestMeterType = '';
+		if (this.foodValue === lowestMeter) {
+			lowestMeterType = 'food';
+		} else if (this.bathroomValue === lowestMeter) {
+			lowestMeterType = 'bath';
+		} else if (this.boredValue === lowestMeter) {
+			lowestMeterType = 'bored';
+		}
+		
+		// Find the first threshold we've crossed under (first time going under each threshold)
+		let crossedThreshold = -1;
+		for (let i = 0; i < this.messageThresholds.length; i++) {
+			const threshold = this.messageThresholds[i];
+			// Check if we're under this threshold AND we haven't triggered a message for it yet
+			if (lowestMeter < threshold && threshold < this.lastMessageThreshold) {
+				crossedThreshold = threshold;
+				break; // Use the first (highest) threshold we cross under
+			}
+		}
+		
+		// Only show message if we've crossed a new threshold (to prevent spam)
+		if (crossedThreshold > 0 && !this.hasActiveMessage) {
+			this.lastMessageThreshold = crossedThreshold;
+			this.messageType = lowestMeterType;
+			this.createMessageSprite();
+		}
+		
+		// Reset threshold tracking when meters recover above the highest threshold
+		if (lowestMeter >= 3.0 && this.lastMessageThreshold < 10.0) {
+			this.lastMessageThreshold = 10.0;
+		}
+	}
+
+	/**
+	 * Debug method to manually trigger a message for testing
+	 */
+	public triggerDebugMessage() {
+		console.log(`Pet ${this.config.petIndex}: Triggering debug message`);
+		this.messageType = 'debug'; // Set a debug message type
+		this.createMessageSprite();
+	}
+
 	public setFood(value: number) {
 		this.foodValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshFoodBar();
 		this.updateFaceEmotion(); // Update face based on new food value
+		this.checkAndShowMessage(); // Check if we need to show a message
 	}
 
 	public setBathroom(value: number) {
 		this.bathroomValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshBathroomBar();
+		this.updateFaceEmotion(); // Update face based on new bathroom value
+		this.checkAndShowMessage(); // Check if we need to show a message
 	}
 
 	public setBored(value: number) {
 		this.boredValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshBoredBar();
+		this.updateFaceEmotion(); // Update face based on new boredom value
+		this.checkAndShowMessage(); // Check if we need to show a message
 	}
 
 	/** Gradually add food over a short duration */
@@ -621,19 +844,23 @@ export class VirtualPet {
 	}
 
 	/**
-	 * Update face emotion based on food value (thirds system)
+	 * Update face emotion based on lowest meter (overall pet state)
+	 * Uses the lowest of food, bathroom, or boredom meters
 	 * 0-3: sad (frown), 4-6: neutral, 7-10: happy (smile)
 	 */
 	private updateFaceEmotion() {
 		if (!this.faceSVG) return;
 
+		// Find the lowest meter to determine overall pet state
+		const lowestMeter = Math.min(this.foodValue, this.bathroomValue, this.boredValue);
+
 		let faceTexture: string;
-		if (this.foodValue <= 3) {
-			faceTexture = 'face-frown'; // Sad - low food (still correct since low food = sad)
-		} else if (this.foodValue <= 6) {
-			faceTexture = 'face-neutral'; // Neutral - middle food
+		if (lowestMeter <= 3) {
+			faceTexture = 'face-frown'; // Sad - any meter is low
+		} else if (lowestMeter <= 6) {
+			faceTexture = 'face-neutral'; // Neutral - any meter is medium
 		} else {
-			faceTexture = 'face-smile'; // Happy - high food
+			faceTexture = 'face-smile'; // Happy - all meters are high
 		}
 
 		this.faceSVG.setTexture(faceTexture);

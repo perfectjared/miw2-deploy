@@ -421,7 +421,18 @@ export const PET_CONFIG = {
   containerBackgroundColor: 0x222222,
   containerBackgroundAlpha: 0.9,
   containerStrokeColor: 0xffffff,
-  containerStrokeWidth: 2
+  containerStrokeWidth: 2,
+  
+  // Individual Pet Decay Rates (per countdown tick)
+  // Each pet has unique decay rates for food, bathroom, and boredom
+  // Values are randomly generated between 0.1 and 0.5, then multiplied by 1.3 for faster decay
+  petDecayRates: [
+    { food: 0.30, bathroom: 0.53, boredom: 0.23 }, // Pet 1 (1.3x faster)
+    { food: 0.48, bathroom: 0.38, boredom: 0.59 }, // Pet 2 (1.3x faster)
+    { food: 0.20, bathroom: 0.43, boredom: 0.35 }, // Pet 3 (1.3x faster)
+    { food: 0.62, bathroom: 0.16, boredom: 0.47 }, // Pet 4 (1.3x faster)
+    { food: 0.40, bathroom: 0.57, boredom: 0.29 }  // Pet 5 (1.3x faster)
+  ]
 } as const;
 
 // ============================================================================

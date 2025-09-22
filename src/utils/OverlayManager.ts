@@ -69,8 +69,8 @@ export class OverlayManager {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     
-    // Configure scene for bulletproof pixel rendering
-    this.configurePixelPerfectRendering();
+    // Configure scene for smooth rendering
+    this.configureSmoothRendering();
     
     // Test if HyperCard patterns method exists
     if (typeof this.createHypercardPatterns === 'function') {
@@ -89,24 +89,24 @@ export class OverlayManager {
   }
 
   /**
-   * Configure scene for bulletproof pixel-perfect rendering
+   * Configure scene for smooth rendering
    */
-  private configurePixelPerfectRendering(): void {
-    // Ensure the scene's renderer is configured for pixel-perfect rendering
+  private configureSmoothRendering(): void {
+    // Ensure the scene's renderer is configured for smooth rendering
     if (this.scene.renderer && 'gl' in this.scene.renderer && this.scene.renderer.gl) {
       const gl = this.scene.renderer.gl;
       
-      // Disable texture filtering for crisp pixels
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      // Enable smooth texture filtering for smoother graphics
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       
-      console.log('🎨 Configured pixel-perfect rendering with NEAREST filtering');
+      console.log('🎨 Configured smooth rendering with LINEAR filtering');
     }
     
-    // Ensure camera doesn't introduce sub-pixel positioning
+    // Allow sub-pixel positioning for smoother movement
     if (this.scene.cameras && this.scene.cameras.main) {
-      this.scene.cameras.main.roundPixels = true;
-      console.log('🎨 Enabled roundPixels for pixel-perfect camera positioning');
+      this.scene.cameras.main.roundPixels = false;
+      console.log('🎨 Disabled roundPixels for smooth camera positioning');
     }
   }
 

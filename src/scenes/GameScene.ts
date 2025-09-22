@@ -200,14 +200,26 @@ export class GameScene extends Phaser.Scene {
     // Initialize input handlers
     this.inputHandlers.initialize();
 
-    // Add keyboard shortcut to open Destination menu (key 'M')
+    // Add keyboard shortcut to open Destination menu (key 'M') or debug message (Shift+M)
     try {
       const keyM = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M, true, false);
       keyM?.on('down', () => {
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showDestinationMenu', true);
-          this.scene.bringToTop('MenuScene');
+        // Check if Shift is held for debug function
+        if (this.input.keyboard?.checkDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT))) {
+          // Debug: Trigger test message on random pet
+          if (this.virtualPets.length > 0) {
+            const randomPetIndex = Math.floor(Math.random() * this.virtualPets.length);
+            const randomPet = this.virtualPets[randomPetIndex];
+            console.log(`Debug: Triggering test message on pet ${randomPetIndex}`);
+            randomPet.triggerDebugMessage();
+          }
+        } else {
+          // Normal M key: open Destination menu
+          const menuScene = this.scene.get('MenuScene');
+          if (menuScene) {
+            menuScene.events.emit('showDestinationMenu', true);
+            this.scene.bringToTop('MenuScene');
+          }
         }
       });
       // REMOVED: Debug keyboard shortcut for old showCYOA event (was causing double-triggering)
@@ -399,7 +411,8 @@ export class GameScene extends Phaser.Scene {
         petColor: PET_CONFIG.petColor, // Use centralized pet color
         width: 0, // Don't create individual rectangles
         height: 0,
-        scale: position.scale || 0.8 // Use scale from config, default to 0.8
+        scale: position.scale || 0.8, // Use scale from config, default to 0.8
+        petIndex: i // Pass the pet index for special initialization
       });
       pet.initialize();
       

@@ -335,6 +335,9 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       // Add text label at ABSOLUTE world position - NOT in container
       const labelText = buttonConfig.text || buttonLabels[index] || `Option ${index + 1}`;
       
+      // Add subtle jaunty rotation variation for button labels
+      const buttonRotationVariation = this.windowShapes.generateUniqueRotation() * 0.67; // Scale down for buttons (≈±2.9 degrees)
+      
       const buttonLabel = this.scene.add.text(
         absoluteButtonX + buttonWidth/2, 
         absoluteButtonY + buttonHeight/2, 
@@ -343,6 +346,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       );
       buttonLabel.setOrigin(0.5, 0.5);
       buttonLabel.setDepth(40001); // Higher than buttons - ensure visibility above story container
+      buttonLabel.setRotation(buttonRotationVariation); // Apply jaunty rotation to button labels!
       
       // Make button interactive with EXPLICIT HIT BOUNDS - EXACT H menu approach
       const buttonBounds = new Phaser.Geom.Rectangle(0, 0, buttonWidth, buttonHeight);
@@ -580,6 +584,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
 
 export class WindowShapes {
   private scene: Phaser.Scene;
+  private currentWindowRotations: number[] = []; // Track rotations for current window
   private activeShapes: Map<string, { graphics: Phaser.GameObjects.Graphics, config: WindowShapeConfig }> = new Map();
   public overlayManager: OverlayManager;
   // Shape animation tracking
@@ -1228,14 +1233,53 @@ export class WindowShapes {
   }
 
   /**
+   * Generate a unique rotation that's not too close to existing rotations
+   */
+  public generateUniqueRotation(): number {
+    const maxRange = 0.15; // ±0.075 radians (±4.3 degrees)
+    const minSeparation = 0.05; // Minimum separation in radians (≈2.9 degrees)
+    const maxAttempts = 20; // Prevent infinite loops
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const candidateRotation = (Math.random() - 0.5) * maxRange;
+      
+      // Check if this rotation is sufficiently different from existing ones
+      let isUnique = true;
+      for (const existingRotation of this.currentWindowRotations) {
+        if (Math.abs(candidateRotation - existingRotation) < minSeparation) {
+          isUnique = false;
+          break;
+        }
+      }
+      
+      if (isUnique) {
+        this.currentWindowRotations.push(candidateRotation);
+        return candidateRotation;
+      }
+    }
+    
+    // Fallback: if we can't find a unique rotation, use a random one
+    const fallbackRotation = (Math.random() - 0.5) * maxRange;
+    this.currentWindowRotations.push(fallbackRotation);
+    return fallbackRotation;
+  }
+
+  /**
+   * Reset rotation tracking for a new window
+   */
+  public resetRotationTracking(): void {
+    this.currentWindowRotations = [];
+  }
+
+  /**
    * Create narrative text with tight black background - reusable component
    */
   createNarrativeText(x: number, y: number, text: string, maxWidth: number, container: Phaser.GameObjects.Container): { textElement: Phaser.GameObjects.Text, background: Phaser.GameObjects.Graphics } {
-    // Add subtle visual variation for more organic feel
-    const rotationVariation = (Math.random() - 0.5) * 0.8; // ±0.4 degrees
+    // Generate unique rotation to avoid similar rotations on same window
+    const rotationVariation = this.generateUniqueRotation();
     const xVariation = (Math.random() - 0.5) * 10; // ±5 pixels
     
-    // Create the narrative text element with bigger font - KEEP TEXT STATIONARY AND LEFT-ALIGNED
+    // Create the narrative text element with bigger font
     const narrativeTextStyle = {
       fontSize: '20px', // Bigger font for narrative text
       color: '#ffffff',
@@ -1244,12 +1288,13 @@ export class WindowShapes {
       padding: { x: 8, y: 6 } // Add some internal padding
     };
     
-    // Create text element WITHOUT position/rotation variations (keep text still)
-    const textElement = this.scene.add.text(x, y, text, narrativeTextStyle);
+    // Create text element with jaunty rotation variation
+    const textElement = this.scene.add.text(x + xVariation, y, text, narrativeTextStyle);
     textElement.setOrigin(0, 0); // Ensure left-top origin for proper left justification
     textElement.setWordWrapWidth(maxWidth);
     textElement.setAlign('left'); // Extra assurance of left alignment
     textElement.setDepth(11); // High depth for visibility
+    textElement.setRotation(rotationVariation); // Apply jaunty rotation!
     
     // Enable smooth text rendering
     textElement.setStyle({ ...narrativeTextStyle, smoothed: true });
@@ -2290,6 +2335,9 @@ export class WindowShapes {
       // Could implement queuing here if needed
       return null;
     }
+
+    // Reset rotation tracking for this new window
+    this.resetRotationTracking();
 
     // Create CYOA narrative window using our abstraction
     const config: NarrativeWindowConfig = {
