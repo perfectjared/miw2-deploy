@@ -58,10 +58,13 @@ export class TutorialSystem {
   private tutorialOverlay!: Phaser.GameObjects.Container;
   private tutorialMaskGraphics!: Phaser.GameObjects.Graphics;
   private blinkText?: Phaser.GameObjects.Text;
-  private blinkIntervalSteps: number = 2;
+  private blinkIntervalSteps: number = 0.5;
   
   // State Tracking
   private lastTutorialState: string = '';
+  private stepCounter: number = 0;
+  private pulseTimer: number = 0;
+  private flashTimer: number = 0; // Add flash timer for 0.5-second intervals
   
   // Physics Object References (set by external system)
   private frontseatKeys: any = null;
@@ -118,11 +121,33 @@ export class TutorialSystem {
     }
     
     // Only update if tutorial is currently showing keys-and-ignition
-    // But don't recreate the overlay - just update the mask if needed
     if (this.lastTutorialState === 'keys-and-ignition') {
-      // Check if we need to update the mask (e.g., if cutouts changed)
-      // For now, just return without doing anything to prevent constant recreation
-      return;
+      // Update mask with current positions (with pulsing)
+      const cutouts = this.getKeysAndIgnitionCutouts(this.pulseTimer);
+      
+      const overlayInstance = (this.tutorialOverlay as any).overlayInstance;
+      if (overlayInstance) {
+        // Destroy old mask if it exists
+        if (overlayInstance.mask) {
+          overlayInstance.mask.destroy();
+        }
+        
+        // Create new mask with updated cutouts
+        const maskGraphics = this.scene.make.graphics();
+        cutouts.forEach(cutout => {
+          maskGraphics.fillStyle(0xffffff);
+          // Draw circular cutouts instead of rectangular ones
+          const centerX = cutout.x + cutout.width / 2;
+          const centerY = cutout.y + cutout.height / 2;
+          const radius = Math.min(cutout.width, cutout.height) / 2;
+          maskGraphics.fillCircle(centerX, centerY, radius);
+        });
+        
+        // Apply new mask
+        overlayInstance.mask = this.scene.add.bitmapMask(maskGraphics);
+        overlayInstance.mask.invertAlpha = true;
+        overlayInstance.background.setMask(overlayInstance.mask);
+      }
     }
   }
 
@@ -138,12 +163,26 @@ export class TutorialSystem {
       tutorialState = 'keys-and-ignition';
     }
     
+    console.log('🎯 Tutorial Update:', {
+      keysInIgnition: state.keysInIgnition,
+      carStarted: state.carStarted,
+      tutorialState: tutorialState,
+      stepCounter: this.stepCounter,
+      stateChanged: this.lastTutorialState !== tutorialState
+    });
+    
     // Update tutorial overlay visibility
     if (this.tutorialOverlay) {
-      this.tutorialOverlay.setVisible(tutorialState !== 'none');
+      const shouldShow = tutorialState !== 'none';
+      this.tutorialOverlay.setVisible(shouldShow);
+      console.log('🎯 Tutorial overlay visibility:', {
+        tutorialState: tutorialState,
+        shouldShow: shouldShow,
+        actualVisible: this.tutorialOverlay.visible
+      });
       try {
         // Inform parent scene so other scenes (like AppScene) can react (hide Pause/Save)
-        (this.scene as any).events?.emit?.('tutorialOverlayVisible', tutorialState !== 'none');
+        (this.scene as any).events?.emit?.('tutorialOverlayVisible', shouldShow);
       } catch {}
     }
     
@@ -151,20 +190,21 @@ export class TutorialSystem {
     if (this.blinkText) {
       if (tutorialState === 'keys-and-ignition') {
         this.blinkText.setText('Place keys in ignition');
-        this.blinkText.setVisible(true);
+        this.blinkText.setVisible(true); // Keep visible for alpha animation
       } else {
         this.blinkText.setVisible(false);
       }
     }
     
-    // Update tutorial mask if needed
-    if (tutorialState !== 'none') {
+    // Update tutorial mask if needed (only when state changes)
+    // Don't update mask if we're already in the same state and pulsing
+    if (tutorialState !== 'none' && this.lastTutorialState !== tutorialState) {
       this.updateTutorialMask(tutorialState);
     }
     
     // Only log when tutorial state changes to prevent spam
     if (this.lastTutorialState !== tutorialState) {
-      console.log('Tutorial state:', tutorialState);
+      console.log('🎯 Tutorial Update:', { tutorialState, shouldShow: tutorialState !== 'none', actualVisible: this.tutorialOverlay?.visible });
       this.lastTutorialState = tutorialState;
     }
   }
@@ -182,11 +222,17 @@ export class TutorialSystem {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
-    console.log('Creating unified tutorial overlay with dimensions:', gameWidth, gameHeight);
+    console.log('🎨 Creating unified tutorial overlay with dimensions:', gameWidth, gameHeight);
     
     // Create tutorial overlay using OverlayManager with dither pattern
     // Start with empty cutouts - they'll be updated dynamically
     const overlay = this.overlayManager.createTutorialOverlay('tutorial_overlay', []);
+    
+    console.log('🎨 Tutorial overlay created:', {
+      container: !!overlay.container,
+      background: !!overlay.background,
+      mask: !!overlay.mask
+    });
     
     // Store references for compatibility with existing code
     this.tutorialOverlay = overlay.container;
@@ -213,7 +259,7 @@ export class TutorialSystem {
     
     switch (tutorialState) {
       case 'keys-and-ignition':
-        cutouts = this.getKeysAndIgnitionCutouts();
+        cutouts = this.getKeysAndIgnitionCutouts(this.pulseTimer);
         break;
       case 'steering':
         cutouts = this.getSteeringCutouts();
@@ -223,22 +269,36 @@ export class TutorialSystem {
         break;
     }
     
+    // Debug logging
+    console.log('🎭 Mask Debug:', {
+      tutorialState: tutorialState,
+      cutoutsCount: cutouts.length,
+      cutouts: cutouts
+    });
+    
     // Update existing overlay's mask instead of creating new one
     const overlayInstance = (this.tutorialOverlay as any).overlayInstance;
-    if (overlayInstance && overlayInstance.mask) {
-      // Destroy old mask
-      overlayInstance.mask.destroy();
+    if (overlayInstance) {
+      // Destroy old mask if it exists
+      if (overlayInstance.mask) {
+        overlayInstance.mask.destroy();
+      }
       
       // Create new mask with updated cutouts
       const maskGraphics = this.scene.make.graphics();
       cutouts.forEach(cutout => {
         maskGraphics.fillStyle(0xffffff);
-        maskGraphics.fillRect(cutout.x, cutout.y, cutout.width, cutout.height);
+        // Draw circular cutouts instead of rectangular ones
+        const centerX = cutout.x + cutout.width / 2;
+        const centerY = cutout.y + cutout.height / 2;
+        const radius = Math.min(cutout.width, cutout.height) / 2;
+        maskGraphics.fillCircle(centerX, centerY, radius);
       });
       
       // Apply new mask
       overlayInstance.mask = this.scene.add.bitmapMask(maskGraphics);
-      overlayInstance.container.mask = overlayInstance.mask;
+      overlayInstance.mask.invertAlpha = true;
+      overlayInstance.background.setMask(overlayInstance.mask);
     }
     
     // console.log(`Updated tutorial mask for state: ${tutorialState} with ${cutouts.length} cutouts`);
@@ -247,29 +307,49 @@ export class TutorialSystem {
   /**
    * Get cutouts for keys and ignition tutorial
    */
-  private getKeysAndIgnitionCutouts(): Array<{x: number, y: number, width: number, height: number}> {
+  private getKeysAndIgnitionCutouts(timer: number = 0): Array<{x: number, y: number, width: number, height: number}> {
     const cutouts: Array<{x: number, y: number, width: number, height: number}> = [];
     
+    // Calculate pulsing animation every second (alternate between normal and 30% bigger)
+    const pulseScale = (timer % 2 === 0) ? 1.0 : 1.3; // Normal on even seconds, 30% bigger on odd seconds
+    
+    // Only log pulse debug when timer is low to avoid spam
+    if (timer < 20) {
+      console.log('💓 Pulse Debug:', {
+        timer: timer,
+        pulseScale: pulseScale.toFixed(1)
+      });
+    }
+    
     // Keys cutout with 20% padding (convert world -> screen if needed)
+    console.log('🔑 Checking for frontseat keys:', {
+      frontseatKeys: !!this.frontseatKeys,
+      gameObject: !!this.frontseatKeys?.gameObject
+    });
+    
     if (this.frontseatKeys?.gameObject) {
-      const keysPos = this.frontseatKeys.gameObject;
-      let sx = keysPos.x;
-      let sy = keysPos.y;
-      try {
-        const gc: any = (this.scene as any).gameContentContainer;
-        if (gc && gc.getWorldTransformMatrix) {
-          const m = gc.getWorldTransformMatrix();
-          const p = m.transformPoint(keysPos.x, keysPos.y);
-          sx = p.x; sy = p.y;
-        }
-      } catch {}
-      const keysHoleRadius = this.config.keysHoleRadius * 1.2; // 20% larger
+      // Get live position from the physics body
+      const keysBody = this.frontseatKeys.gameObject.body;
+      let sx = keysBody ? keysBody.position.x : this.frontseatKeys.gameObject.x;
+      let sy = keysBody ? keysBody.position.y : this.frontseatKeys.gameObject.y;
+      
+      console.log('🔑 Keys live position:', { x: sx, y: sy, hasBody: !!keysBody });
+      const keysHoleRadius = this.config.keysHoleRadius * 1.2 * pulseScale; // 20% larger + pulsing
       cutouts.push({
         x: sx - keysHoleRadius,
         y: sy - keysHoleRadius,
         width: keysHoleRadius * 2,
         height: keysHoleRadius * 2
       });
+      
+      console.log('🔑 Keys cutout:', {
+        keysPos: { x: sx, y: sy },
+        screenPos: { x: sx, y: sy },
+        radius: keysHoleRadius,
+        cutout: cutouts[cutouts.length - 1]
+      });
+    } else {
+      console.log('🔑 No frontseat keys found for cutout');
     }
     
     // Ignition cutout with 20% padding (use actual magnetic target position from GameElements)
@@ -290,12 +370,18 @@ export class TutorialSystem {
         ignitionY = magneticBody.position.y;
       }
     } catch {}
-    const ignitionHoleRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2; // 20% larger
+    const ignitionHoleRadius = this.config.magneticTargetRadius * this.config.targetHoleMultiplier * 1.2 * pulseScale; // 20% larger + pulsing
     cutouts.push({
       x: ignitionX - ignitionHoleRadius,
       y: ignitionY - ignitionHoleRadius,
       width: ignitionHoleRadius * 2,
       height: ignitionHoleRadius * 2
+    });
+    
+    console.log('🚗 Ignition cutout:', {
+      ignitionPos: { x: ignitionX, y: ignitionY },
+      radius: ignitionHoleRadius,
+      cutout: cutouts[cutouts.length - 1]
     });
     
     return cutouts;
@@ -367,17 +453,124 @@ export class TutorialSystem {
     this.blinkText.setText(text || '');
   }
 
+  /** Call on each half-step for faster text flashing (every 0.5 seconds) */
+  public handleHalfStep(halfStep: number) {
+    try {
+      console.log('💓 handleHalfStep called with halfStep:', halfStep);
+      
+      // Update flash timer (increment by 0.5 seconds each half-step)
+      this.flashTimer = halfStep * 0.5;
+      
+      console.log('💓 Using half-step counter:', halfStep, 'flash timer:', this.flashTimer);
+    
+      // Update mask if tutorial is visible (for pulsing animation)
+      const overlayVisible = this.isTutorialVisible();
+      if (overlayVisible && this.lastTutorialState === 'keys-and-ignition') {
+        console.log('💓 handleHalfStep: Updating mask with pulse, timer:', this.pulseTimer);
+        this.updateTutorialMaskWithPulse();
+      }
+      
+      if (!this.blinkText) return;
+      if (!overlayVisible || !this.blinkText.text) {
+        this.blinkText.setAlpha(0);
+        return;
+      }
+      // Animate alpha between 0 and 1 every 0.5 seconds: flash twice as quickly as dither mask pulse
+      // Use half-step counter directly for true 0.5-second intervals
+      const phase = halfStep % 2; // 0 or 1, changes every half-step (every 0.5 seconds)
+      const alpha = phase === 0 ? 0 : 1;
+      this.blinkText.setAlpha(alpha);
+      
+      // Debug logging for alpha animation
+      if (halfStep % 20 === 0) { // Log every 20th half-step to avoid spam
+        console.log('💓 Tutorial text alpha animation (half-step):', {
+          halfStep: halfStep,
+          phase: phase,
+          alpha: alpha,
+          textVisible: this.blinkText.visible,
+          textAlpha: this.blinkText.alpha,
+          textText: this.blinkText.text
+        });
+      }
+    } catch (error) {
+      console.error('💓 Error in handleHalfStep:', error);
+    }
+  }
+
   /** Call on each step to toggle blink visibility every 5 steps on/off when overlay is active */
   public handleStep(step: number) {
-    if (!this.blinkText) return;
-    const overlayVisible = this.isTutorialVisible();
-    if (!overlayVisible || !this.blinkText.text) {
-      this.blinkText.setVisible(false);
+    try {
+      console.log('💓 handleStep called with step:', step);
+      
+      // Use the actual global step number
+      this.stepCounter = step;
+      
+      // Update pulse timer (increment by 1 second each step)
+      this.pulseTimer += 1;
+      
+    console.log('💓 Using global step counter:', this.stepCounter, 'pulse timer:', this.pulseTimer);
+  
+  // Debug: Log every 5th step to avoid spam
+  if (this.stepCounter % 5 === 0) {
+    console.log('💓 handleStep called, step:', this.stepCounter, 'overlay visible:', this.isTutorialVisible(), 'tutorial state:', this.lastTutorialState);
+  }
+  
+  // Update mask if tutorial is visible (for pulsing animation)
+  const overlayVisible = this.isTutorialVisible();
+  if (overlayVisible && this.lastTutorialState === 'keys-and-ignition') {
+    console.log('💓 handleStep: Updating mask with pulse, timer:', this.pulseTimer);
+    this.updateTutorialMaskWithPulse();
+  }
+  
+  // Text animation is now handled by handleHalfStep for true 0.5-second intervals
+    } catch (error) {
+      console.error('💓 Error in handleStep:', error);
+    }
+  }
+
+  /**
+   * Update tutorial mask with pulsing animation (called from handleStep)
+   */
+  private updateTutorialMaskWithPulse() {
+    if (!this.tutorialOverlay) {
       return;
     }
-    // Toggle visibility every 5 steps: visible on steps 0,1,2,3,4, hidden on 5,6,7,8,9, etc.
-    const phase = Math.floor(step / this.blinkIntervalSteps) % 2; // 0 or 1
-    this.blinkText.setVisible(phase === 0);
+    
+    console.log('💓 Updating mask with pulse, timer:', this.pulseTimer);
+    
+    // Get cutouts with current pulse timer for pulsing
+    const cutouts = this.getKeysAndIgnitionCutouts(this.pulseTimer);
+    
+    // Update existing overlay's mask
+    const overlayInstance = (this.tutorialOverlay as any).overlayInstance;
+    console.log('💓 Mask update debug:', {
+      overlayInstance: !!overlayInstance,
+      existingMask: !!overlayInstance?.mask,
+      cutoutsCount: cutouts.length
+    });
+    
+    if (overlayInstance) {
+      // Destroy old mask if it exists
+      if (overlayInstance.mask) {
+        overlayInstance.mask.destroy();
+      }
+      
+      // Create new mask with updated cutouts
+      const maskGraphics = this.scene.make.graphics();
+      cutouts.forEach(cutout => {
+        maskGraphics.fillStyle(0xffffff);
+        // Draw circular cutouts instead of rectangular ones
+        const centerX = cutout.x + cutout.width / 2;
+        const centerY = cutout.y + cutout.height / 2;
+        const radius = Math.min(cutout.width, cutout.height) / 2;
+        maskGraphics.fillCircle(centerX, centerY, radius);
+      });
+      
+      // Apply new mask
+      overlayInstance.mask = this.scene.add.bitmapMask(maskGraphics);
+      overlayInstance.mask.invertAlpha = true;
+      overlayInstance.background.setMask(overlayInstance.mask);
+    }
   }
 
   /**
@@ -385,6 +578,37 @@ export class TutorialSystem {
    */
   public getCurrentTutorialState(): string {
     return this.lastTutorialState;
+  }
+
+  /**
+   * Debug method to force show tutorial overlay
+   */
+  public debugForceShowTutorial() {
+    console.log('🐛 DEBUG: Forcing tutorial overlay to show');
+    console.log('🐛 DEBUG: Tutorial overlay exists:', !!this.tutorialOverlay);
+    console.log('🐛 DEBUG: handleStep method exists:', typeof this.handleStep === 'function');
+    
+    if (this.tutorialOverlay) {
+      console.log('🐛 DEBUG: Tutorial overlay visible before:', this.tutorialOverlay.visible);
+      this.tutorialOverlay.setVisible(true);
+      console.log('🐛 DEBUG: Tutorial overlay visible after:', this.tutorialOverlay.visible);
+      this.updateTutorialMask('keys-and-ignition');
+      if (this.blinkText) {
+        this.blinkText.setText('DEBUG: Place keys in ignition');
+        this.blinkText.setVisible(true);
+        this.blinkText.setAlpha(1); // Set to full opacity for debug
+        console.log('🐛 DEBUG: Blink text visible:', this.blinkText.visible, 'alpha:', this.blinkText.alpha);
+      }
+      // Reset step counter to start pulsing animation
+      this.stepCounter = 0;
+      console.log('🐛 DEBUG: Reset step counter to 0 for pulsing animation');
+      
+      // Test handleStep directly
+      console.log('🐛 DEBUG: Testing handleStep directly...');
+      this.handleStep(999);
+    } else {
+      console.log('🐛 DEBUG: No tutorial overlay found');
+    }
   }
 
   /**

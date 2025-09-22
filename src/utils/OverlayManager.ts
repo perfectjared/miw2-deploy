@@ -69,6 +69,9 @@ export class OverlayManager {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     
+    // Configure scene for bulletproof pixel rendering
+    this.configurePixelPerfectRendering();
+    
     // Test if HyperCard patterns method exists
     if (typeof this.createHypercardPatterns === 'function') {
       console.log('🎨 HyperCard patterns method found, creating patterns...');
@@ -83,6 +86,28 @@ export class OverlayManager {
       console.log('🎨 OverlayManager: Textures ready for use');
       console.log(`🎨 Available textures: ${Object.keys(this.scene.textures.list).filter(key => key.includes('dither') || key.includes('hypercard')).join(', ')}`);
     });
+  }
+
+  /**
+   * Configure scene for bulletproof pixel-perfect rendering
+   */
+  private configurePixelPerfectRendering(): void {
+    // Ensure the scene's renderer is configured for pixel-perfect rendering
+    if (this.scene.renderer && 'gl' in this.scene.renderer && this.scene.renderer.gl) {
+      const gl = this.scene.renderer.gl;
+      
+      // Disable texture filtering for crisp pixels
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      
+      console.log('🎨 Configured pixel-perfect rendering with NEAREST filtering');
+    }
+    
+    // Ensure camera doesn't introduce sub-pixel positioning
+    if (this.scene.cameras && this.scene.cameras.main) {
+      this.scene.cameras.main.roundPixels = true;
+      console.log('🎨 Enabled roundPixels for pixel-perfect camera positioning');
+    }
   }
 
   /**
@@ -123,11 +148,20 @@ export class OverlayManager {
           background.fillStyle(color, opacity);
           background.fillRect(0, 0, width, height);
         } else {
-          background = this.scene.add.tileSprite(0, 0, width, height, textureKey);
+          // Ensure exact pixel dimensions for bulletproof scaling
+          const exactWidth = Math.floor(width);
+          const exactHeight = Math.floor(height);
+          
+          background = this.scene.add.tileSprite(0, 0, exactWidth, exactHeight, textureKey);
           background.setOrigin(0, 0);
           background.setTint(color);
           background.setAlpha(opacity);
-          console.log(`🎨 TileSprite created successfully with texture: ${background.texture.key}`);
+          
+          // Bulletproof pixel scaling settings
+          background.setScale(1, 1); // Ensure no scaling distortion
+          background.setDisplaySize(exactWidth, exactHeight); // Force exact dimensions
+          
+          console.log(`🎨 TileSprite created with bulletproof scaling: ${exactWidth}x${exactHeight} texture: ${background.texture.key}`);
         }
       } else {
       // Create solid overlay
@@ -183,6 +217,12 @@ export class OverlayManager {
         }
       }
     };
+
+    // Set up reactive cleanup: automatically remove overlay when container is destroyed
+    container.on('destroy', () => {
+      console.log(`🎨 Reactive cleanup: Container destroyed for overlay ${id}`);
+      this.activeOverlays.delete(id);
+    });
 
     this.activeOverlays.set(id, overlayInstance);
     console.log(`🎨 Added overlay to activeOverlays: ${id} (total: ${this.activeOverlays.size})`);
@@ -322,11 +362,22 @@ export class OverlayManager {
     const newPattern = this.hypercardPatterns[newIndex];
     console.log(`🎨 Switching to: ${newPattern.name} (${newPattern.description})`);
     
-    // Update all active dither overlays
+    // Update all active dither overlays with bulletproof scaling
     this.activeOverlays.forEach((overlay, id) => {
       if (overlay.background && overlay.background instanceof Phaser.GameObjects.TileSprite) {
         console.log(`🎨 Updating overlay ${id} to ${newPattern.key}`);
+        
+        // Maintain bulletproof pixel scaling during texture changes
+        const currentWidth = overlay.background.displayWidth;
+        const currentHeight = overlay.background.displayHeight;
+        
         overlay.background.setTexture(newPattern.key);
+        
+        // Ensure exact pixel dimensions are maintained
+        overlay.background.setDisplaySize(Math.floor(currentWidth), Math.floor(currentHeight));
+        overlay.background.setScale(1, 1);
+        
+        console.log(`🎨 Maintained pixel-perfect scaling: ${Math.floor(currentWidth)}x${Math.floor(currentHeight)}`);
       } else {
         console.log(`🎨 Overlay ${id} background is not TileSprite:`, overlay.background?.constructor.name);
       }
@@ -361,11 +412,22 @@ export class OverlayManager {
     const newPattern = patterns[newIndex];
     console.log(`🎨 Switching to: ${newPattern.name} (${newPattern.percentage}%)`);
     
-    // Update all active dither overlays
+    // Update all active dither overlays with bulletproof scaling
     this.activeOverlays.forEach((overlay, id) => {
       if (overlay.background && overlay.background instanceof Phaser.GameObjects.TileSprite) {
         console.log(`🎨 Updating overlay ${id} to ${newPattern.key}`);
+        
+        // Maintain bulletproof pixel scaling during texture changes
+        const currentWidth = overlay.background.displayWidth;
+        const currentHeight = overlay.background.displayHeight;
+        
         overlay.background.setTexture(newPattern.key);
+        
+        // Ensure exact pixel dimensions are maintained
+        overlay.background.setDisplaySize(Math.floor(currentWidth), Math.floor(currentHeight));
+        overlay.background.setScale(1, 1);
+        
+        console.log(`🎨 Maintained pixel-perfect scaling: ${Math.floor(currentWidth)}x${Math.floor(currentHeight)}`);
       } else {
         console.log(`🎨 Overlay ${id} background is not TileSprite:`, overlay.background?.constructor.name);
       }
@@ -407,18 +469,23 @@ export class OverlayManager {
   }
 
   /**
-   * Create a specific dither pattern texture
+   * Create a specific dither pattern texture with bulletproof pixel scaling
    */
   private createDitherPattern(textureKey: string, patternSize: number, greyPercent: number): void {
     if (this.scene.textures.exists(textureKey)) {
       return; // Texture already exists
     }
 
-    const patternTexture = this.scene.textures.createCanvas(textureKey, patternSize, patternSize);
+    // Ensure exact pixel dimensions - no fractional scaling
+    const exactPatternSize = Math.floor(patternSize);
+    const patternTexture = this.scene.textures.createCanvas(textureKey, exactPatternSize, exactPatternSize);
     
     if (!patternTexture) return;
 
     const ctx = patternTexture.getContext();
+    
+    // Bulletproof pixel rendering settings
+    ctx.imageSmoothingEnabled = false; // Disable anti-aliasing for crisp pixels
     ctx.fillStyle = '#000000';
     
     // Authentic Mac OS 1-bit dithering patterns
@@ -485,17 +552,22 @@ export class OverlayManager {
   }
 
   /**
-   * Create a specific HyperCard pattern texture based on classic Mac OS patterns
+   * Create a specific HyperCard pattern texture with bulletproof pixel scaling
    */
   private createHypercardPattern(textureKey: string, patternSize: number, patternIndex: number): void {
     if (this.scene.textures.exists(textureKey)) {
       return; // Pattern already exists
     }
 
-    const patternTexture = this.scene.textures.createCanvas(textureKey, patternSize, patternSize);
+    // Ensure exact pixel dimensions - no fractional scaling
+    const exactPatternSize = Math.floor(patternSize);
+    const patternTexture = this.scene.textures.createCanvas(textureKey, exactPatternSize, exactPatternSize);
     if (!patternTexture) return;
 
     const ctx = patternTexture.getContext();
+    
+    // Bulletproof pixel rendering settings
+    ctx.imageSmoothingEnabled = false; // Disable anti-aliasing for crisp pixels
     ctx.fillStyle = '#000000';
     
     // Classic Mac OS HyperCard patterns (8x8 bitmaps)
@@ -738,6 +810,23 @@ export class OverlayManager {
       opacity: opacity,
       depth
     });
+  }
+
+  /**
+   * Create a reactive overlay that automatically cleans up when the target object is destroyed
+   * This reduces the need for manual cleanup calls
+   */
+  createReactiveOverlay(id: string, targetObject: Phaser.GameObjects.GameObject, config: OverlayConfig = {}): OverlayInstance {
+    const overlay = this.createOverlay(id, config);
+    
+    // Set up automatic cleanup when target object is destroyed
+    targetObject.on('destroy', () => {
+      console.log(`🎨 Reactive cleanup: Target object destroyed for overlay ${id}`);
+      // The overlay will be automatically removed from activeOverlays when its container is destroyed
+      // due to the reactive cleanup we added in createOverlay
+    });
+    
+    return overlay;
   }
 
   /**

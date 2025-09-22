@@ -111,7 +111,7 @@ if (import.meta && (import.meta as any).hot) {
 (() => {
   const originalLog = console.log.bind(console);
   if (typeof window !== 'undefined') {
-    window.__ENABLE_LOGS = true; // Enable logs for debugging
+    window.__ENABLE_LOGS = false; // Disable logs by default to reduce spam
   }
   console.log = (...args: any[]) => {
     if ((window as any)?.__ENABLE_LOGS) {

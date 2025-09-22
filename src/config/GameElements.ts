@@ -84,7 +84,7 @@ const DEFAULT_CONFIG: GameElementsConfig = {
       { x: 0.35, y: 0.88, scale: 0.8 },
       { x: 0.55, y: 0.98, scale: 0.8 },
       { x: 0.75, y: 0.90, scale: 0.8 },
-      { x: 0.95, y: 0.96, scale: 0.8 }
+      { x: 0.95, y: 0.85, scale: 0.8 } // Moved pet 5 up to prevent overlap with pet 4
     ]
   },
   itemSizes: {
@@ -208,4 +208,3 @@ class GameElementsManager {
 
 // Export singleton instance
 export const gameElements = new GameElementsManager();
-export type { GameElementsConfig, Position, Size, Scale, PetConfig, ItemSizeConfig };

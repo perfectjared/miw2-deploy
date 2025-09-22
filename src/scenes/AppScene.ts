@@ -214,14 +214,20 @@ export class AppScene extends Phaser.Scene {
   }
 
   private incrementStep() {
-    if (!this.gameStarted || this.isPaused) return; // Don't increment if game hasn't started or is paused
+    console.log('📊 AppScene: incrementStep called, gameStarted:', this.gameStarted, 'isPaused:', this.isPaused);
+    if (!this.gameStarted || this.isPaused) {
+      console.log('📊 AppScene: Step increment blocked - game not started or paused');
+      return; // Don't increment if game hasn't started or is paused
+    }
     
     this.step++;
+    console.log('📊 AppScene: Step incremented to:', this.step);
     // this.stepText.setText(`Step: ${this.step}`);
     
     // Emit step event to GameScene
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
+      console.log('📊 AppScene: Emitting step event to GameScene:', this.step);
       gameScene.events.emit('step', this.step);
     }
     // Also emit step to MenuScene for non-blocking overlays (e.g., story window)
@@ -236,7 +242,8 @@ export class AppScene extends Phaser.Scene {
     
     this.halfStep++;
     
-    // Always emit half-step event for UI animations, even when paused
+    // Always emit half-step events for UI animations, even when paused
+    // This ensures story windows continue animating during exit menus
     const gameScene = this.scene.get('GameScene');
     if (gameScene) {
       gameScene.events.emit('halfStep', this.halfStep);
@@ -342,14 +349,22 @@ export class AppScene extends Phaser.Scene {
 
   // Method to start the game (called from MenuScene)
   public startGame() {
+    console.log('📊 AppScene: startGame called');
+    console.log('📊 AppScene: gameStarted was:', this.gameStarted);
+    console.log('📊 AppScene: isPaused was:', this.isPaused);
     this.gameStarted = true;
     // Resume the step timer
     if (this.stepTimer) {
+      console.log('📊 AppScene: Step timer exists, unpausing...');
       this.stepTimer.paused = false;
+      console.log('📊 AppScene: Step timer unpaused, paused state:', this.stepTimer.paused);
+    } else {
+      console.error('📊 AppScene: Step timer does not exist!');
     }
     // Resume the half-step timer
     if (this.halfStepTimer) {
       this.halfStepTimer.paused = false;
+      console.log('📊 AppScene: Half-step timer unpaused');
     }
     
     // Also start the GameScene

@@ -2707,6 +2707,38 @@ export class WindowShapes {
   }
   
   /**
+   * Check if there's currently an active narrative window
+   */
+  hasActiveNarrativeWindow(): boolean {
+    return this.activeNarrativeWindow !== null && this.activeNarrativeWindow.scene !== null;
+  }
+  
+  /**
+   * Wait for the active narrative window to be cleared, then call a callback
+   */
+  waitForActiveWindowClear(callback: () => void): void {
+    if (!this.hasActiveNarrativeWindow()) {
+      // No active window, call callback immediately
+      callback();
+      return;
+    }
+    
+    // Set up a listener to wait for the active window to be cleared
+    const checkActiveWindow = () => {
+      if (!this.hasActiveNarrativeWindow()) {
+        console.log('📋 Active narrative window cleared - executing callback');
+        callback();
+      } else {
+        // Still have active window, check again in 50ms
+        this.scene.time.delayedCall(50, checkActiveWindow);
+      }
+    };
+    
+    // Start checking after a short delay
+    this.scene.time.delayedCall(50, checkActiveWindow);
+  }
+  
+  /**
    * Clear all queued narrative windows
    */
   clearNarrativeQueue(): void {

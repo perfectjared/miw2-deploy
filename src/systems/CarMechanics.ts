@@ -143,7 +143,14 @@ export class CarMechanics {
     height: number;
     previewSpawned: boolean;
     exitSpawned: boolean;
+    previewWaiting: boolean; // Whether this preview is waiting due to collision
+    previewObstacle?: Phaser.GameObjects.Rectangle; // Reference to preview obstacle
+    previewVisual?: Phaser.GameObjects.Rectangle; // Reference to preview visual
+    previewText?: Phaser.GameObjects.Text; // Reference to preview text
   }> = [];
+
+  // Exit Preview Collision Detection
+  private exitPreviewMinSpacing: number = 150; // Minimum pixel distance between exit previews
 
   // CYOA Planning System - simple choose-your-own-adventure events during driving
   private plannedCyoa: Array<{
@@ -247,9 +254,10 @@ export class CarMechanics {
     const minSpacing = 12; // Minimum spacing between any events (12%)
     const totalEvents = numExits + numCyoa;
     
-    // Check if this is the first driving sequence (for testing)
+    // Check if this is the very first driving sequence of the entire game
     const gameScene = this.scene.scene.get('GameScene') as any;
-    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    const gameState = gameScene?.gameState?.getState();
+    const isFirstSequence = gameState?.showsInCurrentRegion === 0 && gameState?.regionHistory?.length <= 1;
     
     // Define ranges for different event types
     let exitRange, cyoaRange;
@@ -529,9 +537,10 @@ export class CarMechanics {
     this.plannedStory = null;
     this.currentSequenceProgress = 0;
     
-    // Check if this is the first driving sequence (for testing)
+    // Check if this is the very first driving sequence of the entire game
     const gameScene = this.scene.scene.get('GameScene') as any;
-    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    const gameState = gameScene?.gameState?.getState();
+    const isFirstSequence = gameState?.showsInCurrentRegion === 0 && gameState?.regionHistory?.length <= 1;
     
     // Plan exits per sequence
     let numExits: number;
@@ -622,7 +631,8 @@ export class CarMechanics {
         width: exitWidthPx,
         height: this.config.exitHeight,
         previewSpawned: false,
-        exitSpawned: false
+        exitSpawned: false,
+        previewWaiting: false
       });
     });
     
@@ -733,7 +743,8 @@ export class CarMechanics {
    */
   private planStoryForSequence(numExits: number) {
     const gameScene = this.scene.scene.get('GameScene') as any;
-    const isFirstSequence = gameScene?.gameState?.getState()?.showsInCurrentRegion === 0;
+    const gameState = gameScene?.gameState?.getState();
+    const isFirstSequence = gameState?.showsInCurrentRegion === 0 && gameState?.regionHistory?.length <= 1;
     
     let storyThreshold: number;
     let isExitRelated: boolean = false;
@@ -828,12 +839,9 @@ export class CarMechanics {
     
     this.currentSequenceProgress = progress;
     
-    // Debug logging for exit spawning
-    if (progress % 10 === 0) { // Log every 10 progress points
+    // Debug logging for exit spawning (reduced frequency)
+    if (progress % 25 === 0) { // Log every 25 progress points to reduce spam
       console.log(`Progress: ${progress}%, Planned exits: ${this.plannedExits.length}`);
-      this.plannedExits.forEach(exit => {
-        console.log(`  Exit ${exit.number}: Preview ${exit.previewThreshold}% (spawned: ${exit.previewSpawned}), Exit ${exit.exitThreshold}% (spawned: ${exit.exitSpawned})`);
-      });
     }
     
     // Check if any planned exits should be spawned
@@ -869,6 +877,87 @@ export class CarMechanics {
         plannedCyoa.triggered = true;
       }
     });
+  }
+
+  /**
+   * Check if exit previews are too close to each other and manage spacing
+   */
+  private checkExitPreviewCollisions() {
+    const spawnedPreviews = this.plannedExits.filter(exit => exit.previewSpawned && !exit.exitSpawned);
+    
+    if (spawnedPreviews.length < 2) {
+      return; // Need at least 2 previews to check for collisions
+    }
+    
+    // Find all preview obstacles that are currently spawned
+    const previewObstacles = spawnedPreviews.map(exit => exit.previewObstacle).filter(Boolean);
+    
+    for (let i = 0; i < previewObstacles.length; i++) {
+      for (let j = i + 1; j < previewObstacles.length; j++) {
+        const obstacle1 = previewObstacles[i];
+        const obstacle2 = previewObstacles[j];
+        
+        if (!obstacle1 || !obstacle2) continue;
+        
+        const visual1 = obstacle1.getData('visual');
+        const visual2 = obstacle2.getData('visual');
+        
+        if (!visual1 || !visual2) continue;
+        
+        // Calculate distance between preview centers
+        const distance = Phaser.Math.Distance.Between(visual1.x, visual1.y, visual2.x, visual2.y);
+        
+        if (distance < this.exitPreviewMinSpacing) {
+          // Find which planned exit corresponds to each obstacle
+          const exit1 = this.plannedExits.find(e => e.previewObstacle === obstacle1);
+          const exit2 = this.plannedExits.find(e => e.previewObstacle === obstacle2);
+          
+          if (!exit1 || !exit2) continue;
+          
+          // Determine which preview should wait (the one with higher exit number waits)
+          const waitingExit = exit1.number > exit2.number ? exit1 : exit2;
+          const proceedingExit = exit1.number > exit2.number ? exit2 : exit1;
+          
+          // Mark the waiting exit as waiting
+          waitingExit.previewWaiting = true;
+          proceedingExit.previewWaiting = false;
+          
+          // Make the waiting preview more transparent to indicate it's waiting
+          const waitingVisual = waitingExit.previewVisual;
+          if (waitingVisual) {
+            waitingVisual.setAlpha(0.1); // Very transparent when waiting
+          }
+          
+          // Make the proceeding preview more visible
+          const proceedingVisual = proceedingExit.previewVisual;
+          if (proceedingVisual) {
+            proceedingVisual.setAlpha(0.3); // More visible when proceeding
+          }
+          
+          console.log(`🚦 Exit ${waitingExit.number} waiting for Exit ${proceedingExit.number} (distance: ${distance.toFixed(1)}px)`);
+        } else {
+          // Distance is sufficient, clear waiting states
+          const exit1 = this.plannedExits.find(e => e.previewObstacle === obstacle1);
+          const exit2 = this.plannedExits.find(e => e.previewObstacle === obstacle2);
+          
+          if (exit1 && exit1.previewWaiting) {
+            exit1.previewWaiting = false;
+            const visual1 = exit1.previewVisual;
+            if (visual1) {
+              visual1.setAlpha(0.2); // Normal transparency
+            }
+          }
+          
+          if (exit2 && exit2.previewWaiting) {
+            exit2.previewWaiting = false;
+            const visual2 = exit2.previewVisual;
+            if (visual2) {
+              visual2.setAlpha(0.2); // Normal transparency
+            }
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -2029,6 +2118,8 @@ export class CarMechanics {
       }
     });
     
+    // Check for exit preview collisions and manage spacing
+    this.checkExitPreviewCollisions();
 
     // Record last steering value used for visual horizontal updates
     this.lastSteeringValueForVisual = this.currentSteeringValue;
@@ -2048,7 +2139,19 @@ export class CarMechanics {
       // Let GameScene schedule the overlay cleanly (avoids double-show conflicts)
       this.scene.events.emit('potholeHit');
       // Auto-resume a bit later since pothole menu is ephemeral/non-blocking
-      this.scene.time.delayedCall(500, () => this.resumeDriving(), [], this);
+      // But only if no story menus are active
+      this.scene.time.delayedCall(500, () => {
+        // Check if story menus are active before resuming
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene && (gameScene as any).windowShapes) {
+          const queuedCount = (gameScene as any).windowShapes.getQueuedNarrativeCount();
+          if (queuedCount > 0) {
+            console.log('🚗 Pothole auto-resume blocked: story windows still in queue');
+            return;
+          }
+        }
+        this.resumeDriving();
+      }, [], this);
     }
     if (isExit) {
       // Clean up exit text before showing menu
@@ -2086,22 +2189,39 @@ export class CarMechanics {
         }
         console.log('🎭 handleCollisionWithObstacle(exit): resolved exitNumber =', exitNumber);
 
-        // Check for skipped stories before showing destination menu
-        if (this.hasSkippedStory()) {
-          console.log(`📖 CarMechanics: Skipped story detected, storing destination menu and showing story first`);
-          // Store the destination menu data to show after story completion
-          this.pendingDestinationMenu = { shopCount, exitNumber: exitNumber || 1 };
-          this.triggerSkippedStory();
-        } else {
-          // Show the exit menu immediately (no more exit-related CYOAs)
-          if (exitNumber != null) {
-            console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
-            console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
-            console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
-            (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
-            console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
-            this.scene.scene.bringToTop('MenuScene');
-          }
+        // Check menu stack before attempting to show exit menu
+        const menuManager = (menuScene as any).menuManager;
+        if (menuManager) {
+          console.log(`🎭 CarMechanics: Current menu stack before exit menu:`, menuManager.menuStack?.map((m: any) => `${m.type}:${m.priority}`));
+          console.log(`🎭 CarMechanics: Current displayed menu type:`, menuManager.currentDisplayedMenuType);
+        }
+
+        // Show the exit menu immediately - exit collisions take priority over skipped stories
+        // This prevents stories from interfering with exit menu functionality
+        if (exitNumber != null) {
+          console.log(`🎭 CarMechanics: emitting showObstacleMenu with exitNumber=`, exitNumber);
+          console.log(`🎭 CarMechanics: menuScene exists:`, !!menuScene);
+          console.log(`🎭 CarMechanics: menuScene.events exists:`, !!(menuScene as any)?.events);
+          (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+          console.log(`🎭 CarMechanics: showObstacleMenu event emitted`);
+          this.scene.scene.bringToTop('MenuScene');
+          
+          // Check if menu was actually shown
+          setTimeout(() => {
+            if (menuManager) {
+              console.log(`🎭 CarMechanics: Menu stack after exit menu attempt:`, menuManager.menuStack?.map((m: any) => `${m.type}:${m.priority}`));
+              console.log(`🎭 CarMechanics: Current displayed menu type after attempt:`, menuManager.currentDisplayedMenuType);
+              if (!menuManager.currentDisplayedMenuType) {
+                console.log(`🚨 CarMechanics: EXIT MENU FAILED TO SHOW - RESUMING GAME TO PREVENT STUCK STATE`);
+                // Resume the game to prevent it from being stuck
+                const appScene = this.scene.scene.get('AppScene');
+                if (appScene) {
+                  (appScene as any).isPaused = false;
+                }
+                this.resumeDriving();
+              }
+            }
+          }, 100);
         }
       }
     }
@@ -2425,6 +2545,12 @@ export class CarMechanics {
 
   private onStepChanged(step: number) {
     console.log('Step changed to:', step);
+    
+    // Don't update visuals if driving is paused (e.g., during exit menu)
+    if (this.drivingPaused) {
+      console.log('Step changed but driving is paused - skipping visual updates');
+      return;
+    }
     
     // Update road lines and obstacle visuals on every step
     const gameHeight = this.scene.cameras.main.height;

@@ -130,6 +130,7 @@ export class GameScene extends Phaser.Scene {
   
   // Tutorial update throttling
   private tutorialUpdateScheduled: boolean = false;
+  private tutorialUpdateCounter: number = 0;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -254,6 +255,25 @@ export class GameScene extends Phaser.Scene {
         this.createDebugSpeechBubble();
       });
 
+      // Debug: Add 'U' key to force show tutorial overlay
+      const keyU = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.U, true, false);
+      keyU?.on('down', () => {
+        console.log('Debug: Forcing tutorial overlay to show');
+        this.tutorialSystem.debugForceShowTutorial();
+      });
+
+      // Debug: Add 'K' key to test handleStep directly
+      const keyK = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.K, true, false);
+      keyK?.on('down', () => {
+        console.log('Debug: Testing handleStep directly');
+        try {
+          this.tutorialSystem.handleStep(999);
+          console.log('Debug: handleStep test successful');
+        } catch (error) {
+          console.error('Debug: handleStep test failed:', error);
+        }
+      });
+
       // Debug: Add 'T' key to create story dialog (with queue support)
       const keyT = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.T, true, false);
       keyT?.on('down', () => {
@@ -293,6 +313,13 @@ export class GameScene extends Phaser.Scene {
       keyRightBracket?.on('down', () => {
         console.log('🎨 Cycling to next dither pattern...');
         this.windowShapes.overlayManager.cycleDitherPattern('next');
+      });
+
+      // Debug: Add 'E' key to trigger next scheduled exit menu for testing
+      const keyE = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E, true, false);
+      keyE?.on('down', () => {
+        console.log('🚪 Debug: Triggering next scheduled exit menu');
+        this.triggerNextExitMenu();
       });
 
       // Add keyboard shortcuts for virtual pets 1-5 using keydown-ONE..FIVE for reliability
@@ -1315,19 +1342,26 @@ export class GameScene extends Phaser.Scene {
       keyGO._justReleasedAt = undefined;
     }
 
-    // Fast tutorial updates while keys are out (no menu)
+    // Fast tutorial updates while keys are out (no menu) - throttled to reduce spam
     const menuScene = this.scene.get('MenuScene');
     const hasOpenMenu = !!(menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog);
     if (!hasOpenMenu && !this.keysInIgnition) {
-      // Recompute state and update immediately
-      this.tutorialSystem.updateTutorialOverlay({
-        keysInIgnition: this.keysInIgnition,
-        carStarted: this.carStarted,
-        // Speed crank removed - using automatic speed progression
-        hasOpenMenu: false,
-        currentMenuType: null,
-        steeringUsed: this.steeringUsed
-      } as any);
+      // Throttle tutorial updates to every 5 frames to reduce console spam
+      if (!this.tutorialUpdateCounter) this.tutorialUpdateCounter = 0;
+      this.tutorialUpdateCounter++;
+      
+      if (this.tutorialUpdateCounter % 5 === 0) {
+        // Recompute state and update immediately
+        this.tutorialSystem.updateTutorialOverlay({
+          keysInIgnition: this.keysInIgnition,
+          carStarted: this.carStarted,
+          // Speed crank removed - using automatic speed progression
+          hasOpenMenu: false,
+          currentMenuType: null,
+          steeringUsed: this.steeringUsed
+        } as any);
+      }
+      
       // Keep mask aligned to moving keys each frame
       if ((this.tutorialSystem as any).updateTutorialMaskRealTime) {
         (this.tutorialSystem as any).updateTutorialMaskRealTime();
@@ -2261,6 +2295,13 @@ export class GameScene extends Phaser.Scene {
   private onStepEvent(step: number) {
     this.gameState.updateState({ step });
     
+    // Drive tutorial blink text every step (moved here to work in tutorial mode too)
+    try {
+      this.tutorialSystem.handleStep(step);
+    } catch (error) {
+      console.error('🎮 GameScene: Error calling handleStep:', error);
+    }
+    
     // Handle tutorial sequence
     if (this.gameState.isInTutorial()) {
       this.handleTutorialStep(step);
@@ -2278,25 +2319,26 @@ export class GameScene extends Phaser.Scene {
     const stateAtStep = this.gameState.getState();
     const carOn = !!(stateAtStep.carStarted && this.carStarted);
     
+    // Check if there's an active menu that should pause game effects
+    const menuScene = this.scene.get('MenuScene');
+    const hasActiveMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDisplayedMenuType;
+    const shouldPauseEffects = hasActiveMenu && ['EXIT', 'SHOP', 'STORY_OUTCOME'].includes((menuScene as any).menuManager.currentDisplayedMenuType);
+    
     // Update car mechanics speed progression on step events
     if (carOn && this.carMechanics && this.carMechanics.onStepEvent) {
       this.carMechanics.onStepEvent(step);
     }
     
     // Apply small bump effect to all matter physics objects every step
-    if (carOn) {
+    if (carOn && !shouldPauseEffects) {
       this.applySmallBumpEffectToAllMatterObjects();
     }
     
     // Apply larger bump effect to all matter physics objects every fourth step
-    if (step % 4 === 0 && carOn) {
+    if (step % 4 === 0 && carOn && !shouldPauseEffects) {
       this.applyBumpEffectToAllMatterObjects();
     }
     
-    // Drive tutorial blink text every step
-    if ((this.tutorialSystem as any).handleStep) {
-      (this.tutorialSystem as any).handleStep(step);
-    }
     
     // Step-based countdown: only when game and car have both started, and every sixteenth step
     const state = this.gameState.getState();
@@ -2324,25 +2366,36 @@ export class GameScene extends Phaser.Scene {
 
     // Increment progress by speed multiplier per step while driving (scales with speed)
     if (state.gameStarted && carOn && this.carMechanics.isDriving()) {
-      const cur = this.gameState.getState().progress || 0;
-      const speedMultiplier = this.carMechanics.getSpeedMultiplier();
-      const speedPercentage = speedMultiplier * 100; // Convert to percentage for gravity
+      // Check if there's an active menu that should pause progress updates
+      const menuScene = this.scene.get('MenuScene');
+      const hasActiveMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDisplayedMenuType;
+      const shouldPauseProgress = hasActiveMenu && ['EXIT', 'SHOP', 'STORY_OUTCOME'].includes((menuScene as any).menuManager.currentDisplayedMenuType);
       
-      // Update gravity based on speed percentage
-      this.carMechanics.updateGravityBasedOnSpeed(speedPercentage);
+      let next = this.gameState.getState().progress || 0; // Default to current progress
       
-      const progressIncrement = Math.max(0.3, speedMultiplier * 2); // Minimum 0.3 progress per step, 2x multiplier for faster progress
-      const next = cur + progressIncrement;
-      this.gameState.updateState({ progress: next });
-      
-      // Debug logging every 10 steps to show speed-progress relationship
-      if (state.step && state.step % 10 === 0) {
-        const speedPercent = Math.round(speedMultiplier * 100);
-        // Speed progress calculation
+      if (!shouldPauseProgress) {
+        const cur = this.gameState.getState().progress || 0;
+        const speedMultiplier = this.carMechanics.getSpeedMultiplier();
+        const speedPercentage = speedMultiplier * 100; // Convert to percentage for gravity
+        
+        // Update gravity based on speed percentage
+        this.carMechanics.updateGravityBasedOnSpeed(speedPercentage);
+        
+        const progressIncrement = Math.max(0.3, speedMultiplier * 2); // Minimum 0.3 progress per step, 2x multiplier for faster progress
+        next = cur + progressIncrement;
+        this.gameState.updateState({ progress: next });
+        
+        // Debug logging every 10 steps to show speed-progress relationship
+        if (state.step && state.step % 10 === 0) {
+          const speedPercent = Math.round(speedMultiplier * 100);
+          // Speed progress calculation
+        }
+        
+        // Update car mechanics with progress for exit planning
+        this.carMechanics.updateProgress(next);
+      } else {
+        console.log('🎮 Progress update paused due to active menu:', (menuScene as any).menuManager.currentDisplayedMenuType);
       }
-      
-      // Update car mechanics with progress for exit planning
-      this.carMechanics.updateProgress(next);
       
       if (next >= 100 && !this.stopMenuOpen) {
         this.stopMenuOpen = true;
@@ -2449,6 +2502,11 @@ export class GameScene extends Phaser.Scene {
     if (this.windowShapes) {
       this.windowShapes.onHalfStep(halfStep);
     }
+    
+    // Update tutorial text flashing on half-steps for faster animation
+    if (this.tutorialSystem) {
+      this.tutorialSystem.handleHalfStep(halfStep);
+    }
   }
 
   private onGamePaused() {
@@ -2499,6 +2557,17 @@ export class GameScene extends Phaser.Scene {
   private onStoryCompleted(storyData: { storyline: string; outcome: string; choices: string[] }) {
     console.log(`📖 Story completed: ${storyData.storyline} with outcome: ${storyData.outcome}`);
     
+    // Check if there are still narrative windows in the queue OR an active window before resuming
+    const queuedCount = this.windowShapes.getQueuedNarrativeCount();
+    const hasActiveWindow = this.windowShapes.hasActiveNarrativeWindow();
+    
+    if (queuedCount > 0 || hasActiveWindow) {
+      console.log(`📖 Story completed but ${queuedCount} narrative windows in queue and active window: ${hasActiveWindow} - waiting for all to clear`);
+      // Set up a listener to resume when everything is clear
+      this.setupStoryQueueCompletionListener();
+      return;
+    }
+    
     // Check if there's a pending destination menu to show
     if (this.carMechanics.hasPendingDestinationMenu()) {
       console.log(`📖 Story completed, now showing pending destination menu`);
@@ -2507,6 +2576,32 @@ export class GameScene extends Phaser.Scene {
       // Resume driving after story completion
       this.resumeAfterCyoa();
     }
+  }
+  
+  private setupStoryQueueCompletionListener(): void {
+    // Check queue and active window every 100ms until everything is clear
+    const checkQueue = () => {
+      const queuedCount = this.windowShapes.getQueuedNarrativeCount();
+      const hasActiveWindow = this.windowShapes.hasActiveNarrativeWindow();
+      
+      if (queuedCount === 0 && !hasActiveWindow) {
+        console.log(`📖 Narrative queue and active window are now clear - resuming story completion`);
+        // Queue is empty and no active window, now proceed with normal story completion
+        if (this.carMechanics.hasPendingDestinationMenu()) {
+          console.log(`📖 Story completed, now showing pending destination menu`);
+          this.carMechanics.showPendingDestinationMenu();
+        } else {
+          this.resumeAfterCyoa();
+        }
+      } else {
+        // Still have windows in queue or active window, check again in 100ms
+        console.log(`📖 Still waiting: ${queuedCount} queued, active window: ${hasActiveWindow}`);
+        this.time.delayedCall(100, checkQueue);
+      }
+    };
+    
+    // Start checking after a short delay
+    this.time.delayedCall(100, checkQueue);
   }
 
   // Speed crank input handler removed - using automatic speed progression
@@ -2802,6 +2897,33 @@ export class GameScene extends Phaser.Scene {
       console.log('✅ CYOA dialog created with H menu styling');
     } else {
       console.log('CYOA dialog was queued (another narrative is active)');
+    }
+  }
+
+  /**
+   * Debug method to trigger the next scheduled exit menu
+   */
+  private triggerNextExitMenu() {
+    console.log('🚪 Debug: Triggering next exit menu for testing');
+    
+    // Pause driving like a normal exit collision would
+    if (this.carMechanics) {
+      console.log('🚪 Debug: Pausing driving for exit menu test');
+      this.carMechanics.pauseDriving();
+    }
+    
+    // Get the MenuScene to emit the showObstacleMenu event
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      // Use a default shop count and exit number for testing
+      const shopCount = 3;
+      const exitNumber = 1; // Default to exit 1 for testing
+      
+      console.log(`🚪 Debug: Emitting showObstacleMenu event with shopCount=${shopCount}, exitNumber=${exitNumber}`);
+      (menuScene as any).events.emit('showObstacleMenu', 'exit', shopCount, exitNumber);
+      this.scene.bringToTop('MenuScene');
+    } else {
+      console.warn('🚪 Debug: MenuScene not found - cannot trigger exit menu');
     }
   }
 }

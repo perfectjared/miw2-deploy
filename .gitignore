@@ -1,2 +1,5 @@
 node_modules
 examples/
+
+# Unused assets directory (large collection of textures, backgrounds, etc.)
+assets/unused/

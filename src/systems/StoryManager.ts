@@ -50,6 +50,7 @@ export class StoryManager {
   private currentProgress: StoryProgress | null = null;
   private novelElement: HTMLElement | null = null;
   private isStoryActive: boolean = false;
+  private pendingCompletion: boolean = false;
   
   // Debug story system
   private debugStoryActive: boolean = false;
@@ -320,11 +321,23 @@ export class StoryManager {
 
     // Check if this is the last event
     if (this.currentProgress.currentEvent >= 4) {
-      this.completeStory();
+      // For the last event, don't complete immediately - wait for outcome window to be closed
+      console.log(`StoryManager: Last event completed, waiting for outcome window to close before completing story`);
+      this.pendingCompletion = true;
     } else {
       // Move to next event
       this.currentProgress.currentEvent++;
       this.continueStory();
+    }
+  }
+  
+  /**
+   * Complete the story after the outcome window has been closed
+   */
+  public completeStoryAfterOutcome(): void {
+    if (this.pendingCompletion) {
+      this.pendingCompletion = false;
+      this.completeStory();
     }
   }
 

@@ -53,7 +53,6 @@ export interface MenuConfig {
  * 
  * MENUS WITH AUTO-COMPLETION:
  * - TURN_KEY (ignition) - Prevents game from getting stuck
- * - SHOP - Prevents game from getting stuck
  * - PAUSE - Prevents game from getting stuck
  * - STORY - Prevents game from getting stuck
  * 
@@ -62,6 +61,7 @@ export interface MenuConfig {
  * - CYOA - Interactive story content that players should engage with
  * - DESTINATION - Interactive planning content that players should engage with
  * - EXIT - Interactive shop selection that players should engage with
+ * - SHOP - Interactive shopping content that players should engage with
  * 
  * MENU CATEGORIES:
  * - PERSISTENT: Can be restored (PAUSE, SAVE, LOAD)
@@ -152,7 +152,7 @@ export class MenuManager {
   private readonly MENU_CATEGORIES = {
     PERSISTENT: ['START', 'PAUSE', 'GAME_OVER', 'TURN_KEY'], // Menus that should be restored
     TEMPORARY: ['OBSTACLE', 'EXIT', 'SHOP', 'SAVE'], // Menus that can be restored but are context-dependent
-    ONE_TIME: ['CYOA', 'STORY', 'MORAL_DECISION'], // Menus that should never be restored
+    ONE_TIME: ['CYOA', 'STORY', 'MORAL_DECISION', 'REGION_CHOICE'], // Menus that should never be restored
     OVERLAY: ['TUTORIAL', 'PET_STORY'] // Non-blocking overlays
   };
   
@@ -181,7 +181,7 @@ export class MenuManager {
    */
   private startMenuAutoComplete(menuType: string) {
     // Skip auto-completion for interactive menus that players should engage with
-    if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION' || menuType === 'EXIT') {
+    if (menuType === 'START' || menuType === 'CYOA' || menuType === 'DESTINATION' || menuType === 'EXIT' || menuType === 'SHOP') {
       return;
     }
     
@@ -359,8 +359,12 @@ export class MenuManager {
     const currentMenu = this.menuStack[this.menuStack.length - 1];
     
     if (currentMenu && currentMenu.priority > newPriority) {
+      console.log(`🚫 MenuManager: Cannot show ${menuType} menu (priority ${newPriority}) - blocked by ${currentMenu.type} menu (priority ${currentMenu.priority})`);
+      console.log(`🚫 MenuManager: Current menu stack:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
       return false;
     }
+    
+    console.log(`✅ MenuManager: Can show ${menuType} menu (priority ${newPriority})`);
     return true;
   }
   
@@ -368,6 +372,9 @@ export class MenuManager {
     const priority = this.MENU_PRIORITIES[menuType as keyof typeof this.MENU_PRIORITIES];
     if (priority) {
       this.menuStack.push({ type: menuType, priority, config });
+      console.log(`📚 MenuManager: Pushed ${menuType} menu (priority ${priority}) to stack. Stack now:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
+    } else {
+      console.log(`⚠️ MenuManager: No priority found for menu type: ${menuType}`);
     }
   }
   
@@ -381,8 +388,10 @@ export class MenuManager {
     const index = this.menuStack.findIndex(menu => menu.type === menuType);
     if (index !== -1) {
       const popped = this.menuStack.splice(index, 1)[0];
+      console.log(`🗑️ MenuManager: Popped ${menuType} menu from stack. Remaining stack:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
       return popped;
     }
+    console.log(`⚠️ MenuManager: Could not find ${menuType} menu in stack to pop. Current stack:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
     return null;
   }
 
@@ -498,6 +507,45 @@ export class MenuManager {
       if ((this.currentDialog as any).stepsRemaining <= 0) {
         this.clearCurrentDialog();
       }
+    }
+    
+    // Update pet menu values every step
+    if (this.currentDialog && (this.currentDialog as any).isPetMenu) {
+      this.updatePetMenuValues();
+    }
+  }
+  
+  private updatePetMenuValues() {
+    if (!this.currentDialog || !(this.currentDialog as any).isPetMenu) return;
+    
+    const gameScene = this.scene.scene.get('GameScene');
+    if (!gameScene || !(gameScene as any).getVirtualPet) return;
+    
+    const petIndex = (this.currentDialog as any).petIndex;
+    const pet = (gameScene as any).getVirtualPet(petIndex);
+    if (!pet) return;
+    
+    const foodBarFill = (this.currentDialog as any).foodBarFill;
+    const bathroomBarFill = (this.currentDialog as any).bathroomBarFill;
+    const boredBarFill = (this.currentDialog as any).boredBarFill;
+    const foodBarWidth = (this.currentDialog as any).foodBarWidth;
+    
+    if (foodBarFill) {
+      const foodValue = pet.getFoodValue?.() || 0;
+      const foodFillWidth = Math.floor(foodBarWidth * (foodValue / 10));
+      foodBarFill.setDisplaySize(foodFillWidth, foodBarFill.displayHeight);
+    }
+    
+    if (bathroomBarFill) {
+      const bathroomValue = pet.getBathroomValue?.() || 0;
+      const bathroomFillWidth = Math.floor(foodBarWidth * (bathroomValue / 10));
+      bathroomBarFill.setDisplaySize(bathroomFillWidth, bathroomBarFill.displayHeight);
+    }
+    
+    if (boredBarFill) {
+      const boredValue = pet.getBoredValue?.() || 0;
+      const boredFillWidth = Math.floor(foodBarWidth * (boredValue / 10));
+      boredBarFill.setDisplaySize(boredFillWidth, boredBarFill.displayHeight);
     }
   }
   
@@ -661,8 +709,13 @@ export class MenuManager {
     
     this.currentDialog.add([foodLabel, foodBarBG, foodBarFill, bathroomLabel, bathroomBarBG, bathroomBarFill, boredLabel, boredBarBG, boredBarFill]);
     
-    (this.currentDialog as any).stepsRemaining = 3;
-    (this.currentDialog as any).isStory = true;
+    // Store references for step-based updates
+    (this.currentDialog as any).isPetMenu = true;
+    (this.currentDialog as any).petIndex = petIndex;
+    (this.currentDialog as any).foodBarFill = foodBarFill;
+    (this.currentDialog as any).bathroomBarFill = bathroomBarFill;
+    (this.currentDialog as any).boredBarFill = boredBarFill;
+    (this.currentDialog as any).foodBarWidth = foodBarWidth;
   }
   
   public getCurrentMenuType(): string | null {
@@ -1045,9 +1098,16 @@ export class MenuManager {
   }
 
   public showExitMenu(shopCount: number = 3, exitNumber?: number) {
+    console.log(`🚪 MenuManager: showExitMenu called with shopCount=${shopCount}, exitNumber=${exitNumber}`);
+    console.log(`🚪 MenuManager: Current menu stack length:`, this.menuStack.length);
+    
     // Persist the last exit number so nested menus (e.g., Shop -> Back) can restore it
     (this as any)._lastExitNumber = exitNumber ?? (this as any)._lastExitNumber;
-    if (!this.canShowMenu('EXIT')) return;
+    if (!this.canShowMenu('EXIT')) {
+      console.log(`🚫 MenuManager: showExitMenu blocked by canShowMenu check`);
+      return;
+    }
+    console.log(`✅ MenuManager: showExitMenu proceeding after canShowMenu check`);
     this.clearCurrentDialog();
     // Determine the exit number for this menu instance with robust fallbacks
     let exitNumForMenu = exitNumber ?? (this as any)._lastExitNumber;
@@ -1136,7 +1196,22 @@ export class MenuManager {
 
   public showShopMenu() {
     if (!this.canShowMenu('SHOP')) return;
-    this.clearCurrentDialog();
+    // Don't call clearCurrentDialog() here as it would resume the game prematurely
+    // Instead, just clear the visual dialog without closing the menu stack
+    if (this.currentDialog) {
+      // Clean up overlay before destroying dialog
+      if ((this.currentDialog as any).background) {
+        const background = (this.currentDialog as any).background;
+        if ((background as any).overlayInstance) {
+          console.log('MenuManager: Cleaning up overlay instance in showShopMenu');
+          (background as any).overlayInstance.destroy();
+        } else {
+          background.destroy();
+        }
+      }
+      this.currentDialog.destroy();
+      this.currentDialog = null;
+    }
     this.pushMenu('SHOP');
     
     // Get current money from GameScene
@@ -1166,7 +1241,22 @@ export class MenuManager {
         {
           text: 'Back',
           onClick: () => {
-            this.closeDialog();
+            // Simply destroy the current dialog and show exit menu
+            // Don't call clearCurrentDialog() as it would trigger driving resumption
+            if (this.currentDialog) {
+              // Clean up overlay before destroying dialog
+              if ((this.currentDialog as any).background) {
+                const background = (this.currentDialog as any).background;
+                if ((background as any).overlayInstance) {
+                  console.log('MenuManager: Cleaning up overlay instance in shop back button');
+                  (background as any).overlayInstance.destroy();
+                } else {
+                  background.destroy();
+                }
+              }
+              this.currentDialog.destroy();
+              this.currentDialog = null;
+            }
             this.showExitMenu();
           },
           style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
@@ -1181,8 +1271,7 @@ export class MenuManager {
     
     this.createDialog(menuConfig, 'SHOP');
     
-    // Start universal auto-completion
-    this.startMenuAutoComplete('SHOP');
+    // Shops are interactive menus - no auto-completion needed
   }
 
   private handleShopPurchase(itemName: string, cost: number) {
@@ -1745,8 +1834,11 @@ export class MenuManager {
                 this.closeDialog();
               } else {
                 // Real story mode - make choice in story manager
+                console.log(`Real Story: Making choice - ${choice.outcome}`);
                 storyManager.makeChoice(choice.outcome);
-                this.closeDialog();
+                
+                // Don't close dialog here - let the outcome window callback handle story completion
+                // The story completion will be triggered when the outcome window is closed
               }
             } else {
               this.closeDialog();
@@ -1779,6 +1871,9 @@ export class MenuManager {
     this.clearCurrentDialog();
     this.pushMenu('STORY_OUTCOME');
     
+    // Pause game immediately when outcome window opens
+    this.pauseGame();
+    
     const outcomeText = storylineData.outcomes[outcome] || storylineData.outcomes['a'];
     const title = 'Outcome';
     
@@ -1807,8 +1902,37 @@ export class MenuManager {
                 console.log('🗑️ Destroying story outcome WindowShapes container');
                 container.destroy();
               }
-              // Then call the original callback
-              onContinue();
+              
+              // Wait for the WindowShapes container to be fully cleared before completing story
+              const gameScene = this.scene.scene.get('GameScene') as any;
+              if (gameScene && gameScene.windowShapes) {
+                gameScene.windowShapes.waitForActiveWindowClear(() => {
+                  // Complete the story after outcome window is closed and queue is processed
+                  if (gameScene && gameScene.storyManager) {
+                    console.log('📖 Completing story after outcome window cleared');
+                    gameScene.storyManager.completeStoryAfterOutcome();
+                  }
+                  
+                  // Resume game after outcome window is dismissed
+                  this.resumeGame();
+                  
+                  // Then call the original callback
+                  onContinue();
+                });
+              } else {
+                // Fallback to delay if WindowShapes not available
+                this.scene.time.delayedCall(500, () => {
+                  if (gameScene && gameScene.storyManager) {
+                    console.log('📖 Completing story after outcome window closed (fallback)');
+                    gameScene.storyManager.completeStoryAfterOutcome();
+                  }
+                  
+                  // Resume game after outcome window is dismissed
+                  this.resumeGame();
+                  
+                  onContinue();
+                });
+              }
             }
           }
         ]
@@ -1821,7 +1945,18 @@ export class MenuManager {
         buttons: [
           {
             text: 'Continue',
-            onClick: onContinue,
+          onClick: () => {
+            // Delay story completion to ensure proper cleanup
+            this.scene.time.delayedCall(500, () => {
+              // Complete the story after outcome window is closed
+              const gameScene = this.scene.scene.get('GameScene') as any;
+              if (gameScene && gameScene.storyManager) {
+                console.log('📖 Completing story after outcome window closed (fallback)');
+                gameScene.storyManager.completeStoryAfterOutcome();
+              }
+              onContinue();
+            });
+          },
             style: { fontSize: '18px', color: '#ffffff', backgroundColor: '#333333', padding: { x: 10, y: 5 } }
           }
         ]
@@ -2449,6 +2584,8 @@ export class MenuManager {
   private createOverlayBackground(gameWidth: number, gameHeight: number, cutouts: Array<{x: number, y: number, width: number, height: number}>, opacity: number = 0.3) {
     const overlayId = `menu_overlay_${Date.now()}`;
     const overlay = this.overlayManager.createMenuOverlay(overlayId, cutouts, opacity);
+    // Store the overlay instance for backward compatibility (though reactive cleanup handles it automatically)
+    (overlay.container as any).overlayInstance = overlay;
     return overlay.container;
   }
 
@@ -2456,7 +2593,16 @@ export class MenuManager {
     if (this.currentDialog) {
       // Clean up background if it exists
       if ((this.currentDialog as any).background) {
-        (this.currentDialog as any).background.destroy();
+        const background = (this.currentDialog as any).background;
+        // Check if this background has an overlay instance for proper cleanup
+        if ((background as any).overlayInstance) {
+          console.log('MenuManager: Cleaning up overlay instance properly');
+          (background as any).overlayInstance.destroy();
+        } else {
+          // Fallback to direct container destruction
+          // Note: With reactive overlay system, overlays auto-cleanup when containers are destroyed
+          background.destroy();
+        }
       }
       
       // Clean up turn key slider if it exists
@@ -2491,6 +2637,12 @@ export class MenuManager {
       // Clean up momentum timer
       if ((this.currentDialog as any).momentumTimer) {
         (this.currentDialog as any).momentumTimer.destroy();
+      }
+      
+      // Clean up countdown text if it exists
+      if ((this.currentDialog as any).countdownText) {
+        (this.currentDialog as any).countdownText.destroy();
+        (this.currentDialog as any).countdownText = null;
       }
       
       // Clean up text display callbacks
@@ -2553,9 +2705,19 @@ export class MenuManager {
       if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP') {
         console.log('MenuManager: Resuming game after show/destination menu closed');
         this.resumeGameAfterDestinationMenu(true); // reset car and remove keys after shows only
-      } else if (this.currentDisplayedMenuType === 'EXIT' || this.currentDisplayedMenuType === 'SHOP') {
-        console.log('MenuManager: Resuming game after exit/shop menu closed');
+      } else if (this.currentDisplayedMenuType === 'EXIT') {
+        console.log('MenuManager: Resuming game after exit menu closed');
         this.resumeGameAfterDestinationMenu(false); // do NOT reset car/keys after exits
+      } else if (this.currentDisplayedMenuType === 'SHOP') {
+        console.log('MenuManager: Shop menu closed - checking if we should resume driving');
+        // Only resume driving if we're not transitioning to another menu
+        // Check if there's a pending menu restoration
+        if (!this.shouldRestorePreviousMenu()) {
+          console.log('MenuManager: No menu restoration pending - resuming driving');
+          this.resumeGameAfterDestinationMenu(false);
+        } else {
+          console.log('MenuManager: Menu restoration pending - not resuming driving');
+        }
         
         // Exit CYOA triggering moved to Close button - no automatic triggering
       }
@@ -2597,6 +2759,9 @@ export class MenuManager {
     if (!this.canShowMenu('REGION_CHOICE')) return;
     this.clearCurrentDialog();
     this.pushMenu('REGION_CHOICE');
+    
+    // Set the current displayed menu type so it can be properly cleaned up
+    this.currentDisplayedMenuType = 'REGION_CHOICE';
     
     const { currentRegion, connectedRegions } = config;
     
@@ -2710,7 +2875,8 @@ export class MenuManager {
    * Handle region selection
    */
   private selectRegion(regionId: string) {
-    console.log(`MenuManager: Region selected: ${regionId}`);
+    console.log(`🌍 MenuManager: Region selected: ${regionId}`);
+    console.log(`🌍 MenuManager: Current menu stack before region selection:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
     
     // Notify GameScene of region selection
     const gameScene = this.scene.scene.get('GameScene');
@@ -2719,10 +2885,15 @@ export class MenuManager {
     }
     
     // Close the menu
+    console.log(`🌍 MenuManager: Calling closeDialog() to clean up region choice menu`);
     this.closeDialog();
+    console.log(`🌍 MenuManager: Menu stack after region selection cleanup:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
   }
 
   private closeDialog() {
+    console.log(`🚪 MenuManager: closeDialog() called. Current menu type: ${this.currentDisplayedMenuType}`);
+    console.log(`🚪 MenuManager: Menu stack before closeDialog:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
+    
     // Stop universal menu auto-completion
     this.stopMenuAutoComplete();
     
@@ -2735,17 +2906,27 @@ export class MenuManager {
       
       if (this.MENU_CATEGORIES.ONE_TIME.includes(menuType)) {
         // One-time menus: Clean up all instances from stack
+        console.log(`🚪 MenuManager: Cleaning up ONE_TIME menu: ${menuType}`);
         this.clearMenusFromStack(menuType);
       } else {
         // All other menus: Just pop this instance
+        console.log(`🚪 MenuManager: Popping menu: ${menuType}`);
         this.popSpecificMenu(menuType);
       }
       
-      // Always resume game when closing any menu
-      this.resumeGame();
+      // Only resume game for non-story menus
+      const storyMenuTypes = ['STORY', 'NOVEL_STORY', 'STORY_OUTCOME', 'PET_STORY'];
+      if (!storyMenuTypes.includes(menuType)) {
+        // Always resume game when closing any non-story menu
+        console.log(`🚪 MenuManager: Resuming game after closing ${menuType} menu`);
+        this.resumeGame();
+      } else {
+        console.log(`MenuManager: Not resuming game for story menu type: ${menuType}`);
+      }
     }
     
     this.clearCurrentDialog();
+    console.log(`🚪 MenuManager: Menu stack after closeDialog:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
   }
 
   public closeCurrentDialog() {

@@ -8,31 +8,31 @@ import { polkaBackground } from './PolkaBackground';
 
 export class PolkaController {
   /**
-   * Trigger a wave animation from the center outward
+   * Trigger a step animation
    */
   static triggerWave() {
-    polkaBackground.startWaveAnimation();
+    polkaBackground.step();
   }
 
   /**
    * Pulse all dots simultaneously
    */
   static pulse() {
-    polkaBackground.pulseAll();
+    polkaBackground.step();
   }
 
   /**
    * Trigger wave on game events
    */
   static onGameStart() {
-    polkaBackground.startWaveAnimation();
+    polkaBackground.step();
   }
 
   /**
    * Pulse on menu interactions
    */
   static onMenuClick() {
-    polkaBackground.pulseAll();
+    polkaBackground.step();
   }
 
   /**
@@ -40,7 +40,7 @@ export class PolkaController {
    */
   static onScoreIncrease() {
     // Quick pulse with shorter duration
-    polkaBackground.pulseAll();
+    polkaBackground.step();
   }
 
   /**
@@ -49,7 +49,7 @@ export class PolkaController {
   static ambientPulse() {
     // This could be called on a timer for ambient animation
     setTimeout(() => {
-      polkaBackground.pulseAll();
+      polkaBackground.step();
     }, Math.random() * 10000 + 5000); // Random delay 5-15 seconds
   }
 }
