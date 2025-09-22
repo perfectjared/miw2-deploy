@@ -711,6 +711,7 @@ export class GameScene extends Phaser.Scene {
     
     // Create key SVG overlay that will follow the key's position
     const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
     const keysX = gameWidth * 0.8; // Match the keys position (80% from left edge)
     this.keySVG = this.add.sprite(keysX, 300, 'key-white'); // Start at key's initial position (right side)
     this.keySVG.setScale(0.08); // Scaled to match key physics object (radius 15)
@@ -984,6 +985,17 @@ export class GameScene extends Phaser.Scene {
     this.gameContentContainer = this.add.container(0, 0);
     this.gameContentContainer.setName('gameContentContainer');
     // No depth needed - items will be rendered by dedicated items camera
+    
+    // Create dash box early so it can be added to camera allow lists
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const boxWidth = gameWidth * 1.2; // 20% wider than game width
+    const boxHeight = gameHeight * 0.4; // 40% of game height
+    const boxX = gameWidth / 2; // Horizontally centered
+    const boxY = gameHeight - (boxHeight / 2); // Against bottom of game
+    
+    // REMOVED - all approaches caused steering wheel visibility issues
+    // Will try modifying background scene instead
     
     // Add physics objects to container
     this.gameContentContainer.add(this.frontseatTrash.gameObject);

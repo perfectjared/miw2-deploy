@@ -39,5 +39,14 @@ export class BackgroundScene extends Phaser.Scene {
       graphics.lineTo(gameWidth, y);
     }
     graphics.stroke();
+    
+    // Add white dash area behind steering wheel/items
+    const boxWidth = gameWidth * 1.2; // 20% wider than game width
+    const boxHeight = gameHeight * 0.4; // 40% of game height
+    const boxX = gameWidth / 2; // Horizontally centered
+    const boxY = gameHeight - (boxHeight / 2); // Against bottom of game
+    
+    graphics.fillStyle(0xffffff, 1.0); // White fill
+    graphics.fillRect(boxX - boxWidth/2, boxY - boxHeight/2, boxWidth, boxHeight);
   }
 }

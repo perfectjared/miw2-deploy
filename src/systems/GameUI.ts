@@ -188,6 +188,7 @@ export class GameUI {
   // Monthly Listeners UI Elements
   private monthlyListenersText!: Phaser.GameObjects.Text;
   private buzzText!: Phaser.GameObjects.Text;
+  private encumbranceText!: Phaser.GameObjects.Text;
   
   // Speed Crank Elements
   private speedCrankTrack!: Phaser.GameObjects.Graphics;
@@ -263,6 +264,7 @@ export class GameUI {
     // updateStopsCounter removed - stopsCounterText now shows sequence fraction
     this.updateMonthlyListeners(state.monthlyListeners);
     this.updateBuzz(state.buzz);
+    this.updateEncumbrance(2); // Default to 2 items (keys and hotdog)
     // Speed crank removed - using automatic speed progression
   }
 
@@ -518,16 +520,16 @@ export class GameUI {
     // Money text - positioned above monthly listeners
     const steeringConfig = gameElements.getSteeringWheel();
     const steeringX = gameWidth * steeringConfig.position.x;
-    const moneyX = steeringX + 200; // Same X as monthly listeners
-    const moneyY = gameHeight * 0.7 - 60; // Above monthly listeners (listenersY - 20, so moneyY = listenersY - 60)
+    const moneyX = steeringX + 250; // Same X as monthly listeners (aligned with other texts)
+    const moneyY = gameHeight * 0.7 - 60; // Above monthly listeners
     
     this.moneyText = this.scene.add.text(moneyX, moneyY, '$0', {
       fontSize: this.config.moneyHealthFontSize,
-      color: `#${this.config.moneyColor.toString(16).padStart(6, '0')}`,
+      color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`, // Use white color
       fontStyle: 'bold',
       backgroundColor: '#000000',
-      padding: { x: 4, y: 2 }
-    });
+      padding: { x: 8, y: 4 }
+    }).setOrigin(1, 0.5); // Right-justified like other texts
     
     this.moneyText.setScrollFactor(0);
     this.moneyText.setDepth(10000);
@@ -821,8 +823,8 @@ export class GameUI {
     // Position directly above the steering wheel
     const dialX = gameWidth * UI_TUNABLES.steering.dialXPercent; // Same X as steering wheel
     const dialY = gameHeight * UI_TUNABLES.steering.dialYPercent; // Same Y as steering wheel
-    const speedDisplayX = dialX + 7; // 5px more to the right (was +2, now +7)
-    const speedDisplayY = dialY - 80; // 20px lower (was -100, now -80)
+    const speedDisplayX = dialX + 12; // Moved 5px more to the right (was +7, now +12)
+    const speedDisplayY = dialY - 42; // Moved down 8px more (was -50, now -42)
     
     // Create smaller radial speed meter
     const meterRadius = 25; // Smaller radius
@@ -1120,7 +1122,10 @@ export class GameUI {
       // Calculate minutes remaining in current hour
       const minutesRemaining = Math.max(0, Math.floor((stepsPerHour - currentStepInHour) / stepsPerMinute));
       
-      this.minutesText.setText(minutesRemaining.toString());
+      // Special case: if minutes would be 60, show '00' instead
+      const displayMinutes = minutesRemaining === 60 ? '00' : minutesRemaining.toString();
+      
+      this.minutesText.setText(displayMinutes);
     }
   }
 
@@ -1420,34 +1425,48 @@ export class GameUI {
     // Position to the right of steering wheel
     const steeringConfig = gameElements.getSteeringWheel();
     const steeringX = gameWidth * steeringConfig.position.x;
-    const listenersX = steeringX + 200; // 200px to the right of steering wheel
+    const listenersX = steeringX + 250; // 250px to the right of steering wheel (moved further right)
     const listenersY = gameHeight * 0.7; // Same Y as steering wheel
     
-    // Buzz text (to the left of listeners)
-    this.buzzText = this.scene.add.text(listenersX - 120, listenersY, 'BUZZ\n0', {
-      fontSize: '14px',
-      color: `#${GREYSCALE_PALETTE.lightGray.toString(16).padStart(6, '0')}`,
+    // Buzz text (closer to listeners)
+    this.buzzText = this.scene.add.text(listenersX - 80, listenersY, 'BUZZ\n0', {
+      fontSize: '12px', // Changed from 14px to match listeners and encumbrance
+      color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
-      padding: { x: 6, y: 3 },
-      align: 'center'
-    }).setOrigin(0.5);
+      padding: { x: 8, y: 4 },
+      align: 'right' // Changed from 'center' to match listeners and encumbrance
+    }).setOrigin(1, 0.5); // Right-justified (origin at right edge, center vertically)
     
     this.buzzText.setScrollFactor(0);
     this.buzzText.setDepth(10000);
     
     // Monthly listeners text
-    this.monthlyListenersText = this.scene.add.text(listenersX, listenersY, 'MONTHLY LISTENERS:\n2,000', {
+    this.monthlyListenersText = this.scene.add.text(listenersX, listenersY, 'LISTENERS\n2,000', {
       fontSize: '12px', // Smaller than BUZZ (14px) because of long word
       color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`,
       fontStyle: 'bold',
       backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
       padding: { x: 8, y: 4 },
-      align: 'center'
-    }).setOrigin(0.5);
+      align: 'right'
+    }).setOrigin(1, 0.5); // Right-justified (origin at right edge, center vertically)
     
     this.monthlyListenersText.setScrollFactor(0);
     this.monthlyListenersText.setDepth(10000);
+    
+    // Encumbrance text (below Buzz and Listeners)
+    const encumbranceY = listenersY + 40; // Below the Buzz/Listeners text
+    this.encumbranceText = this.scene.add.text(listenersX, encumbranceY, 'ENCUMBRANCE\n2/10', {
+      fontSize: '12px',
+      color: `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`,
+      fontStyle: 'bold',
+      backgroundColor: `#${GREYSCALE_PALETTE.black.toString(16).padStart(6, '0')}`,
+      padding: { x: 8, y: 4 },
+      align: 'right'
+    }).setOrigin(1, 0.5); // Right-justified (origin at right edge, center vertically)
+    
+    this.encumbranceText.setScrollFactor(0);
+    this.encumbranceText.setDepth(10000);
   }
 
   /**
@@ -1457,7 +1476,7 @@ export class GameUI {
     if (this.monthlyListenersText) {
       // Format with commas for readability
       const formattedListeners = listeners.toLocaleString();
-      this.monthlyListenersText.setText(`MONTHLY LISTENERS:\n${formattedListeners}`);
+      this.monthlyListenersText.setText(`LISTENERS\n${formattedListeners}`);
     }
   }
 
@@ -1467,18 +1486,16 @@ export class GameUI {
   private updateBuzz(buzz: number) {
     if (this.buzzText) {
       this.buzzText.setText(`BUZZ\n${buzz}`);
-      
-      // Change color based on buzz value
-      let buzzColorHex: string;
-      if (buzz > 0) {
-        buzzColorHex = `#${GREYSCALE_PALETTE.white.toString(16).padStart(6, '0')}`; // Positive buzz = white
-      } else if (buzz < 0) {
-        buzzColorHex = `#${GREYSCALE_PALETTE.mediumGray.toString(16).padStart(6, '0')}`; // Negative buzz = darker
-      } else {
-        buzzColorHex = `#${GREYSCALE_PALETTE.lightGray.toString(16).padStart(6, '0')}`; // Neutral buzz = light gray
-      }
-      
-      this.buzzText.setStyle({ color: buzzColorHex });
+      // Keep consistent white text - no color changes
+    }
+  }
+
+  /**
+   * Update encumbrance display
+   */
+  private updateEncumbrance(itemCount: number) {
+    if (this.encumbranceText) {
+      this.encumbranceText.setText(`ENCUMBRANCE\n${itemCount}/10`);
     }
   }
 

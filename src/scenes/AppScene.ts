@@ -22,11 +22,13 @@ export class AppScene extends Phaser.Scene {
   // Game state tracking
   private step: number = 0;
   private halfStep: number = 0;
+  private uiHalfStep: number = 0; // Always-running UI half-step
   private stepText!: Phaser.GameObjects.Text;
   private gameStarted: boolean = false;
   private isPaused: boolean = false;
   private stepTimer!: Phaser.Time.TimerEvent;
   private halfStepTimer!: Phaser.Time.TimerEvent;
+  private uiHalfStepTimer!: Phaser.Time.TimerEvent;
 
   constructor() {
     super({ key: 'AppScene' });
@@ -188,13 +190,21 @@ export class AppScene extends Phaser.Scene {
       paused: true // Start paused, will be unpaused when game starts
     });
 
-    // Start the half-step timer (every 500ms = 0.5 seconds) for UI animations
+    // Start the half-step timer (every 500ms = 0.5 seconds) for UI animations (game-tied)
     this.halfStepTimer = this.time.addEvent({
       delay: 500,
       callback: this.incrementHalfStep,
       callbackScope: this,
       loop: true,
       paused: true // Start paused, will be unpaused when game starts
+    });
+
+    // Always-on UI half-step for pre-game and paused-state UI animation
+    this.uiHalfStepTimer = this.time.addEvent({
+      delay: 500,
+      callback: this.incrementUiHalfStep,
+      callbackScope: this,
+      loop: true
     });
 
     // Listen for game events from other scenes
@@ -252,6 +262,19 @@ export class AppScene extends Phaser.Scene {
     const menuScene = this.scene.get('MenuScene');
     if (menuScene) {
       menuScene.events.emit('halfStep', this.halfStep);
+    }
+  }
+
+  private incrementUiHalfStep() {
+    // Runs regardless of gameStarted/paused to support menu/overlay animation
+    this.uiHalfStep++;
+    const gameScene = this.scene.get('GameScene');
+    if (gameScene) {
+      gameScene.events.emit('uiHalfStep', this.uiHalfStep);
+    }
+    const menuScene = this.scene.get('MenuScene');
+    if (menuScene) {
+      menuScene.events.emit('uiHalfStep', this.uiHalfStep);
     }
   }
 

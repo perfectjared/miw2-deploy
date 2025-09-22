@@ -1062,11 +1062,14 @@ export class CarMechanics {
       plannedExit.previewText = null;
     }
     
-    // Create collidable exit
+    // Create collidable exit - make collision box wider to the left for easier collision
+    const collisionWidth = plannedExit.width + 80; // Add 80px to the left for easier collision
+    const collisionX = plannedExit.exitBaseX - 40; // Move collision box 40px to the left
+    
     const obstacle = this.scene.add.rectangle(
-      plannedExit.exitBaseX,
+      collisionX,
       horizonY + 2,
-      plannedExit.width,
+      collisionWidth,
       plannedExit.height,
       this.config.exitColor,
       0.8 // Opaque for actual exit
@@ -1108,10 +1111,10 @@ export class CarMechanics {
     this.drivingContainer.add(visual);
     this.drivingContainer.add(exitText);
     
-    // Store data
-    obstacle.setData('baseX', plannedExit.exitBaseX);
-    obstacle.setData('laneOffset', (plannedExit.exitBaseX - gameWidth / 2) / this.laneSpacingBottom);
-    obstacle.setData('baseW', plannedExit.width);
+    // Store data - use collision box dimensions for movement calculations
+    obstacle.setData('baseX', collisionX);
+    obstacle.setData('laneOffset', (collisionX - gameWidth / 2) / this.laneSpacingBottom);
+    obstacle.setData('baseW', collisionWidth);
     obstacle.setData('baseH', plannedExit.height);
     obstacle.setData('visual', visual);
     obstacle.setData('text', exitText); // Store text reference
@@ -1714,13 +1717,15 @@ export class CarMechanics {
     //this.drivingBackground.fillStyle(this.config.skyColor);
     //this.drivingBackground.fillRect(0, 0, gameWidth, horizonY);
     
-    // Draw road
+    // Draw road - make it much wider to prevent visible movement
+    const roadWidth = gameWidth * 3; // 3x wider than screen to prevent visible sliding
+    const roadX = (gameWidth - roadWidth) / 2; // Center the wider road
     this.drivingBackground.fillStyle(this.config.roadColor);
-    this.drivingBackground.fillRect(0, horizonY, gameWidth, gameHeight - horizonY);
+    this.drivingBackground.fillRect(roadX, horizonY, roadWidth, gameHeight - horizonY);
 
-    // Horizon line effect
+    // Horizon line effect - also make it wider
     this.drivingBackground.fillStyle(0x000000, 0.15);
-    this.drivingBackground.fillRect(0, horizonY - 2, gameWidth, 2);
+    this.drivingBackground.fillRect(roadX, horizonY - 2, roadWidth, 2);
   }
 
   /**

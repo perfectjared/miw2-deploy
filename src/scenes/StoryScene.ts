@@ -27,14 +27,7 @@ export class StoryScene extends Phaser.Scene {
     this.setupOverlayCamera();
     
     // Add story content (HUD is now handled by GameScene)
-    const storyText = this.add.text(10, 70, 'Story content goes here...', {
-      fontSize: '14px',
-      color: '#ffffff',
-      backgroundColor: '#000000',
-      padding: { x: 10, y: 5 }
-    });
-    storyText.setScrollFactor(0);
-    storyText.setDepth(10000);
+    // Story text removed - no longer needed
   }
 
   private setupOverlayCamera() {

@@ -26,6 +26,7 @@
 
 import Phaser from 'phaser';
 import { OverlayManager } from './OverlayManager';
+import { WindowShapes } from './WindowShapes';
 import { SaveManager } from './SaveManager';
 import { MENU_CONFIG, UI_CONFIG } from '../config/GameConfig';
 
@@ -163,6 +164,7 @@ export class MenuManager {
   private currentDisplayedMenuType: string | null = null; // Track what menu is actually being displayed
   private userDismissedMenuType: string | null = null; // Track which specific menu was dismissed by user action
   private overlayManager: OverlayManager;
+  private windowShapes?: WindowShapes;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -174,6 +176,29 @@ export class MenuManager {
     this.scene.events.on('showCyoaMenu', this.showCyoaMenu, this);
     // Listen for step events for universal menu auto-completion
     this.scene.events.on('step', this.onStepEvent, this);
+    // Prepare WindowShapes for collage animations even pre-game
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      const gsWindowShapes = gameScene && (gameScene as any).windowShapes;
+      this.windowShapes = gsWindowShapes || new WindowShapes(this.scene);
+    } catch {
+      this.windowShapes = new WindowShapes(this.scene);
+    }
+    // Drive half-step animations for collage elements from GameScene only
+    // GameScene emits 'halfStep' even when paused for UI animation consistency
+    this.scene.events.on('halfStep', (halfStep: number) => {
+      try { (this.windowShapes as any)?.onHalfStep?.(halfStep); } catch {}
+    });
+
+    // Also handle always-on UI half-steps for pre-game menus (Start)
+    this.scene.events.on('uiHalfStep', (uiHalfStep: number) => {
+      try {
+        const appScene = this.scene.scene.get('AppScene');
+        const isGameStarted = !!(appScene && (appScene as any).gameStarted);
+        if (isGameStarted) return; // avoid double updates once game starts
+        (this.windowShapes as any)?.onHalfStep?.(uiHalfStep);
+      } catch {}
+    });
   }
 
   /**
@@ -1046,11 +1071,26 @@ export class MenuManager {
     // Store countdown state for step-based updates
     (this.currentDialog as any).tutorialCountdown = countdown;
     
-    // Find the button text object and store reference
-    const buttonText = this.currentDialog.list.find((child: any) => 
-      child instanceof Phaser.GameObjects.Text && child.text.includes('Continue')
-    ) as Phaser.GameObjects.Text;
-    
+    // Capture the button text object reference for countdown updates
+    // Prefer the reference set during collage button creation; otherwise, search recursively
+    let buttonText: Phaser.GameObjects.Text | undefined = (this.currentDialog as any).buttonText;
+    if (!buttonText) {
+      const findTextRecursive = (node: any): Phaser.GameObjects.Text | undefined => {
+        if (!node || !node.list) return undefined;
+        for (const child of node.list) {
+          if (child instanceof Phaser.GameObjects.Text && typeof child.text === 'string' && child.text.includes('Continue')) {
+            return child as Phaser.GameObjects.Text;
+          }
+          // Recurse into containers
+          if ((child as any).list) {
+            const found = findTextRecursive(child);
+            if (found) return found;
+          }
+        }
+        return undefined;
+      };
+      buttonText = findTextRecursive(this.currentDialog);
+    }
     if (buttonText) {
       (this.currentDialog as any).buttonText = buttonText;
       console.log('🎓 Tutorial interrupt: Button text found and stored');
@@ -1100,6 +1140,10 @@ export class MenuManager {
   public showExitMenu(shopCount: number = 3, exitNumber?: number) {
     console.log(`🚪 MenuManager: showExitMenu called with shopCount=${shopCount}, exitNumber=${exitNumber}`);
     console.log(`🚪 MenuManager: Current menu stack length:`, this.menuStack.length);
+    // If a virtual pet menu is open, close it immediately before showing exit
+    if (this.currentDisplayedMenuType === 'VIRTUAL_PET') {
+      try { this.closeCurrentDialog(); } catch {}
+    }
     
     // Persist the last exit number so nested menus (e.g., Shop -> Back) can restore it
     (this as any)._lastExitNumber = exitNumber ?? (this as any)._lastExitNumber;
@@ -2437,41 +2481,92 @@ export class MenuManager {
       (gameSceneInstance as any).gameState.updateState({ hasOpenMenu: true });
     }
     
-    // Background - use unified overlay system
-    // For story-type overlay, skip grey background; otherwise use default overlay
-    let background: Phaser.GameObjects.Container | null = null;
-    if (menuType !== 'STORY' && menuType !== 'PET_STORY') {
-      // Use lower opacity for tutorial interrupt
-      const opacity = menuType === 'TUTORIAL_INTERRUPT' ? 0.2 : 0.3;
-      background = this.createOverlayBackground(gameWidth, gameHeight, [
-        { x: gameWidth / 2 - 150, y: gameHeight / 2 - 175, width: 300, height: 350 }
-      ], opacity);
+    // Use unified dithered overlay from WindowShapes (matches story windows)
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
+      // Ensure our reference points to the instance that owns these shapes
+      if (windowShapes) this.windowShapes = windowShapes;
+      if (windowShapes && windowShapes.createDitheredOverlay) {
+        windowShapes.createDitheredOverlay(this.currentDialog);
+        // Track for cleanup parity with old system
+        (this.currentDialog as any).background = (this.currentDialog as any).ditheredOverlay || null;
+        // Ensure overlay renders below dialog and does not capture input
+        try {
+          const overlayContainer = (this.currentDialog as any).ditheredOverlay as Phaser.GameObjects.Container | undefined;
+          if (overlayContainer) {
+            overlayContainer.setDepth(this.currentDialog.depth - 1);
+            (overlayContainer as any).disableInteractive?.();
+          }
+        } catch {}
+      }
+    } catch {}
+    
+    // Collage-style dialog background (white window like story "S" windows)
+    const dialogWidth = menuConfig.width || 300;
+    const dialogHeight = menuConfig.height || 350;
+    const halfW = dialogWidth / 2;
+    const halfH = dialogHeight / 2;
+    let collageBackground: Phaser.GameObjects.Graphics | null = null;
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
+      if (windowShapes) this.windowShapes = windowShapes;
+      if (windowShapes && windowShapes.createCollageRect) {
+        // Create WITHOUT internal animation; register manually like story windows
+        collageBackground = windowShapes.createCollageRect({
+          x: -halfW,
+          y: -halfH,
+          width: dialogWidth,
+          height: dialogHeight,
+          fillColor: 0xffffff
+        }, false, 'window');
+        if (collageBackground) {
+          collageBackground.setDepth(-1);
+          // Position at container origin; drawing coords center the shape
+          collageBackground.setPosition(0, 0);
+          this.currentDialog.add(collageBackground);
+          // Prevent background from catching input; buttons handle interaction
+          try { (collageBackground as any).disableInteractive?.(); } catch {}
+          // Keep reference for animated open/close
+          (this.currentDialog as any).collageWindow = collageBackground;
+          // Manually register animated shape using drawing coordinates (offsets)
+          const shapeId = `menu_window_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          // Register using drawing coordinates relative to graphics position (0,0) == container center
+          try { (windowShapes as any).registerAnimatedShape(shapeId, collageBackground, 'window', -halfW, -halfH, dialogWidth, dialogHeight); } catch {}
+          (collageBackground as any).__shapeId = shapeId;
+
+          // Opening animation (match story window choppy expansion)
+          try {
+            collageBackground.setScale(0.01);
+            this.scene.tweens.add({
+              targets: collageBackground,
+              scaleX: 1,
+              scaleY: 1,
+              duration: 200,
+              ease: 'Back.easeOut'
+            });
+          } catch {}
+        }
+      }
+    } catch {}
+    
+    // Fallback simple background if collage couldn't be created
+    if (!collageBackground) {
+      const fallback = this.scene.add.graphics();
+      fallback.fillStyle(0x333333, 0.9);
+      fallback.fillRoundedRect(-halfW, -halfH, dialogWidth, dialogHeight, 10);
+      fallback.lineStyle(2, 0xffffff, 1);
+      fallback.strokeRoundedRect(-halfW, -halfH, dialogWidth, dialogHeight, 10);
+      fallback.setDepth(-1);
+      this.currentDialog.add(fallback);
     }
-    
-    // Store reference for cleanup
-    (this.currentDialog as any).background = background;
-    
-    console.log('MenuManager: Menu background created with cutout for dialog area');
-    
-    // Dialog background (visible background for the dialog itself)
-    const dialogBackground = this.scene.add.graphics();
-    if (menuType === 'STORY' || menuType === 'PET_STORY') {
-      // No grey background; draw only border for story overlay
-      dialogBackground.lineStyle(2, 0xffffff, 1);
-      dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
-    } else {
-      dialogBackground.fillStyle(0x333333, 0.9);
-      dialogBackground.fillRoundedRect(-150, -175, 300, 350, 10);
-      dialogBackground.lineStyle(2, 0xffffff, 1);
-      dialogBackground.strokeRoundedRect(-150, -175, 300, 350, 10);
-    }
-    dialogBackground.setDepth(-1); // Behind other dialog content
-    this.currentDialog.add(dialogBackground);
     
     // Title
-    const title = this.scene.add.text(0, -80, menuConfig.title, {
+    const titleYOffset = -halfH + 40;
+    const title = this.scene.add.text(0, titleYOffset, menuConfig.title, {
       fontSize: '24px',
-      color: '#ffffff',
+      color: '#000000',
       fontStyle: 'bold'
     });
     title.setOrigin(0.5);
@@ -2479,10 +2574,11 @@ export class MenuManager {
     
     // Content - instant display with brief pause
     if (menuConfig.content) {
-      const contentText = this.scene.add.text(0, -20, '', {
+      const contentY = titleYOffset + 50;
+      const contentText = this.scene.add.text(0, contentY, '', {
         fontSize: '16px',
-        color: '#ffffff',
-        wordWrap: { width: 250 },
+        color: '#000000',
+        wordWrap: { width: dialogWidth - 50 },
         align: 'center'
       }).setOrigin(0.5);
       
@@ -2502,42 +2598,92 @@ export class MenuManager {
     }
     
     // Buttons
-    const buttonY = menuConfig.content ? 20 : 0;
+    const buttonBaseY = (menuConfig.content ? (halfH - 70) : (halfH - 90));
     const buttonSpacing = 50;
     
     menuConfig.buttons.forEach((button, index) => {
-      const buttonText = this.scene.add.text(0, buttonY + (index * buttonSpacing), button.text, {
-        fontSize: '18px',
-        color: button.style?.color || '#ffffff',
-        backgroundColor: button.style?.backgroundColor || '#34495e',
-        padding: { x: 15, y: 8 }
-      });
-      buttonText.setOrigin(0.5);
-      buttonText.setInteractive();
+      const btnY = buttonBaseY - (menuConfig.buttons.length - 1 - index) * buttonSpacing;
+      const btnContainer = this.scene.add.container(0, btnY);
+      btnContainer.setDepth( (this.currentDialog.depth || 0) + 2 ); // Above background within dialog
+      btnContainer.setScrollFactor(0);
+      this.currentDialog.add(btnContainer);
+      try { (this.currentDialog as any).bringToTop?.(btnContainer); } catch {}
       
-      buttonText.on('pointerdown', () => {
-        button.onClick();
-      });
+      let btnGraphic: Phaser.GameObjects.Graphics | null = null;
+      try {
+        const gameScene = this.scene.scene.get('GameScene');
+        const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
+        if (windowShapes) this.windowShapes = windowShapes;
+        if (windowShapes && windowShapes.createCollageButton) {
+          // Create the button graphic at drawing offsets; container centers it
+          btnGraphic = windowShapes.createCollageButton(-80, -17, 160, 34);
+          if (btnGraphic) {
+            btnContainer.add(btnGraphic);
+            // Route clicks through the container to avoid duplicate listeners/hit area confusion
+            // Manually register button shape using drawing coordinates
+            const btnId = `menu_btn_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+            try { (windowShapes as any).registerAnimatedShape(btnId, btnGraphic, 'button', -80, -17, 160, 34); } catch {}
+            (btnGraphic as any).__shapeId = btnId;
+          }
+        }
+      } catch {}
       
-      buttonText.on('pointerover', () => {
-        this.scene.tweens.add({
-          targets: buttonText,
-          scaleX: 1.05,
-          scaleY: 1.05,
-          duration: 100
+      // Label placed within the button container, centered over the graphic
+      const label = this.scene.add.text(0, 0, button.text, {
+        fontSize: '14px',
+        color: '#000000',
+        fontStyle: 'bold'
+      }).setOrigin(0.5);
+      btnContainer.add(label);
+      // If this is the tutorial interrupt menu, store a direct reference for countdown updates
+      try {
+        if (menuType === 'TUTORIAL_INTERRUPT' && /Continue/i.test(button.text)) {
+          (this.currentDialog as any).buttonText = label;
+        }
+      } catch {}
+      
+      // Explicit invisible hit target rectangle on top (bypasses container hit quirks)
+      const hitTarget = this.scene.add.rectangle(0, 0, 160, 34, 0x000000, 0);
+      hitTarget.setOrigin(0.5);
+      hitTarget.setScrollFactor(0);
+      hitTarget.setDepth((btnContainer.depth || 1) + 1);
+      btnContainer.add(hitTarget);
+      hitTarget.setInteractive({ useHandCursor: true })
+        .on('pointerdown', (p: any) => {
+          console.log('🔴 button pointerdown (hitTarget)', { x: p.worldX, y: p.worldY, depth: hitTarget.depth });
+        })
+        .on('pointerup', (p: any) => {
+          console.log('🟢 button pointerup (hitTarget)', { x: p.worldX, y: p.worldY, depth: hitTarget.depth });
+          try { button.onClick(); } catch (e) { console.warn('button onClick error', e); }
         });
-      });
-      
-      buttonText.on('pointerout', () => {
-        this.scene.tweens.add({
-          targets: buttonText,
-          scaleX: 1,
-          scaleY: 1,
-          duration: 100
-        });
-      });
-      
-      this.currentDialog.add(buttonText);
+
+      if (!btnGraphic) {
+        // Fallback: add a simple rounded rect behind label inside the button container
+        const fallback = this.scene.add.graphics();
+        fallback.fillStyle(0x34495e, 1);
+        fallback.fillRoundedRect(-80, -17, 160, 34, 6);
+        fallback.lineStyle(2, 0xffffff, 1);
+        fallback.strokeRoundedRect(-80, -17, 160, 34, 6);
+        btnContainer.addAt(fallback, 0);
+        // Ensure label readable on dark fallback
+        label.setColor('#ffffff');
+      }
+
+      // Visual debug for hit rectangle (pulsing outline) - auto-destroy after 2 seconds
+      try {
+        const dbg = this.scene.add.graphics();
+        dbg.lineStyle(1, 0xff0000, 1);
+        dbg.strokeRect(-80, -17, 160, 34);
+        btnContainer.addAt(dbg, 0);
+        dbg.setAlpha(0.9);
+        dbg.setDepth((btnContainer.depth || 1) + 1);
+        this.scene.tweens.add({ targets: dbg, alpha: 0.2, yoyo: true, repeat: 5, duration: 150 });
+        this.scene.time.delayedCall(2000, () => { try { dbg.destroy(); } catch {} });
+      } catch {}
+
+      // Cursor hint
+      hitTarget.on('pointerover', () => { try { (this.scene.input as any).setDefaultCursor('pointer'); } catch {} });
+      hitTarget.on('pointerout', () => { try { (this.scene.input as any).setDefaultCursor('default'); } catch {} });
     });
     
     // Notify GameScene that a menu is now open
@@ -2591,396 +2737,229 @@ export class MenuManager {
 
   private clearCurrentDialog() {
     if (this.currentDialog) {
-      // Clean up background if it exists
-      if ((this.currentDialog as any).background) {
-        const background = (this.currentDialog as any).background;
-        // Check if this background has an overlay instance for proper cleanup
-        if ((background as any).overlayInstance) {
-          console.log('MenuManager: Cleaning up overlay instance properly');
-          (background as any).overlayInstance.destroy();
-        } else {
-          // Fallback to direct container destruction
-          // Note: With reactive overlay system, overlays auto-cleanup when containers are destroyed
-          background.destroy();
+      // Closing animation for collage window (match story window collapse)
+      try {
+        const cw = (this.currentDialog as any).collageWindow as Phaser.GameObjects.Graphics | undefined;
+        if (cw && cw.scene) {
+          cw.once('destroy', () => {
+            this.finishDialogCleanup();
+          });
+          this.scene.tweens.add({
+            targets: cw,
+            scaleX: 0.01,
+            scaleY: 0.01,
+            duration: 160,
+            ease: 'Back.easeIn',
+            onComplete: () => {
+              try { cw.destroy(); } catch {}
+            }
+          });
+          return; // Defer cleanup until after animation
         }
-      }
-      
-      // Clean up turn key slider if it exists
-      if ((this.currentDialog as any).turnKeyDial) {
-        const slider = (this.currentDialog as any).turnKeyDial;
-        if (slider.sliderTrack) slider.sliderTrack.destroy();
-        if (slider.handle) slider.handle.destroy();
-      }
-      if ((this.currentDialog as any).dialLabel) {
-        const labels = (this.currentDialog as any).dialLabel;
-        if (labels.startLabel) labels.startLabel.destroy();
-        if (labels.turnKeyLabel) labels.turnKeyLabel.destroy();
-      }
-      if ((this.currentDialog as any).startMeter) {
-        const meter = (this.currentDialog as any).startMeter;
-        if (meter.meterBackground) meter.meterBackground.destroy();
-        if (meter.meterFill) meter.meterFill.destroy();
-        if (meter.meterText) meter.meterText.destroy();
-      }
-      
-      // Clean up event listeners
-      if ((this.currentDialog as any).pointerDownHandler) {
-        this.scene.input.off('pointerdown', (this.currentDialog as any).pointerDownHandler);
-      }
-      if ((this.currentDialog as any).pointerMoveHandler) {
-        this.scene.input.off('pointermove', (this.currentDialog as any).pointerMoveHandler);
-      }
-      if ((this.currentDialog as any).pointerUpHandler) {
-        this.scene.input.off('pointerup', (this.currentDialog as any).pointerUpHandler);
-      }
-      
-      // Clean up momentum timer
-      if ((this.currentDialog as any).momentumTimer) {
-        (this.currentDialog as any).momentumTimer.destroy();
-      }
-      
-      // Clean up countdown text if it exists
-      if ((this.currentDialog as any).countdownText) {
-        (this.currentDialog as any).countdownText.destroy();
-        (this.currentDialog as any).countdownText = null;
-      }
-      
-      // Clean up text display callbacks
-      this.textDisplayCallbacks.forEach(callback => {
-        if (callback && callback.destroy) {
-          callback.destroy();
-        }
-      });
-      this.textDisplayCallbacks = [];
-      
-      this.currentDialog.destroy();
-      this.currentDialog = null;
-      
-      // Handle special menu types
-      if (this.currentDisplayedMenuType === 'TURN_KEY') {
-        console.log('MenuManager: Emitting ignitionMenuHidden event');
-        this.scene.events.emit('ignitionMenuHidden');
-        
-        // Also emit on GameScene
-        const gameScene = this.scene.scene.get('GameScene');
-        if (gameScene) {
-          console.log('MenuManager: Emitting ignitionMenuHidden event on GameScene');
-          gameScene.events.emit('ignitionMenuHidden');
-        }
-      } else if (this.currentDisplayedMenuType === 'CYOA') {
-        console.log('MenuManager: CYOA menu closed - resuming game');
-        // Resume AppScene step counting
-        const appScene = this.scene.scene.get('AppScene');
-        if (appScene) {
-          (appScene as any).isPaused = false;
-        }
-        
-        // Emit gameResumed event
-        const gameScene = this.scene.scene.get('GameScene');
-        if (gameScene) {
-          gameScene.events.emit('gameResumed');
-          console.log('MenuManager: Emitted gameResumed event for CYOA menu close');
-        }
-      } else if (this.currentDisplayedMenuType === 'NOVEL_STORY') {
-        console.log('MenuManager: NOVEL_STORY menu closed - resuming game');
-        // Resume AppScene step counting
-        const appScene = this.scene.scene.get('AppScene');
-        if (appScene) {
-          (appScene as any).isPaused = false;
-        }
-        
-        // Emit gameResumed event
-        const gameScene = this.scene.scene.get('GameScene');
-        if (gameScene) {
-          gameScene.events.emit('gameResumed');
-          console.log('MenuManager: Emitted gameResumed event for NOVEL_STORY menu close');
-        }
-      }
-      // Restore input if we disabled it for this dialog
-      if ((this.currentDialog as any)?.__restoreInput) {
-        try { (this.currentDialog as any).__restoreInput(); } catch {}
-      }
-      
-      // Resume game when certain menus are closed
-      if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP') {
-        console.log('MenuManager: Resuming game after show/destination menu closed');
-        this.resumeGameAfterDestinationMenu(true); // reset car and remove keys after shows only
-      } else if (this.currentDisplayedMenuType === 'EXIT') {
-        console.log('MenuManager: Resuming game after exit menu closed');
-        this.resumeGameAfterDestinationMenu(false); // do NOT reset car/keys after exits
-      } else if (this.currentDisplayedMenuType === 'SHOP') {
-        console.log('MenuManager: Shop menu closed - checking if we should resume driving');
-        // Only resume driving if we're not transitioning to another menu
-        // Check if there's a pending menu restoration
-        if (!this.shouldRestorePreviousMenu()) {
-          console.log('MenuManager: No menu restoration pending - resuming driving');
-          this.resumeGameAfterDestinationMenu(false);
-        } else {
-          console.log('MenuManager: Menu restoration pending - not resuming driving');
-        }
-        
-        // Exit CYOA triggering moved to Close button - no automatic triggering
-      }
-      
-      // Clear the displayed menu type
-      this.currentDisplayedMenuType = null;
-      
-      // Update game state to indicate no menu is open
-      const gameSceneInstance2 = this.scene.scene.get('GameScene');
-      if (gameSceneInstance2 && (gameSceneInstance2 as any).gameState) {
-        (gameSceneInstance2 as any).gameState.updateState({ hasOpenMenu: false });
-      }
-      
-      // Check if we should restore a previous menu
-      if (this.shouldRestorePreviousMenu()) {
-        // Add a small delay to ensure cleanup is complete
-        this.scene.time.delayedCall(100, () => {
-          this.restorePreviousMenu();
-          // Reset the user dismissed flag after restoration is complete
-          this.userDismissedMenuType = null;
-        });
-      } else {
-        // Reset the user dismissed flag if no restoration is needed
-        this.userDismissedMenuType = null;
-      }
-      
-      // Notify GameScene that menu state has changed
-      const gameSceneForRestore: any = this.scene.scene.get('GameScene');
-      if (gameSceneForRestore && gameSceneForRestore.updateAllTutorialOverlays) {
-        gameSceneForRestore.updateAllTutorialOverlays();
-      }
+      } catch {}
+      // No animated window; perform immediate cleanup
+      this.finishDialogCleanup();
     }
   }
 
-  /**
-   * Show region choice menu (OutRun-style left/right selection)
-   */
-  public showRegionChoiceMenu(config: { currentRegion: string; connectedRegions: string[] }) {
-    if (!this.canShowMenu('REGION_CHOICE')) return;
-    this.clearCurrentDialog();
-    this.pushMenu('REGION_CHOICE');
-    
-    // Set the current displayed menu type so it can be properly cleaned up
-    this.currentDisplayedMenuType = 'REGION_CHOICE';
-    
-    const { currentRegion, connectedRegions } = config;
-    
-    // Import REGION_CONFIG to get region display names
-    const REGION_CONFIG = (this.scene as any).scene?.get('GameScene')?.registry?.get('REGION_CONFIG') || {};
-    
-    // Create OutRun-style region choice UI
-    const centerX = this.scene.cameras.main.width / 2;
-    const centerY = this.scene.cameras.main.height * 0.6;
-    
-    // Create background overlay
-    const overlay = this.scene.add.rectangle(centerX, centerY, 400, 200, 0x000000, 0.8);
-    overlay.setScrollFactor(0);
-    overlay.setDepth(50000);
-    this.currentDialog = this.scene.add.container(0, 0);
-    this.currentDialog.add(overlay);
-    
-    // Add title
-    const title = this.scene.add.text(centerX, centerY - 60, 'Choose Your Next Region', {
-      fontSize: '24px',
-      color: '#ffffff',
-      fontStyle: 'bold'
-    }).setOrigin(0.5);
-    title.setScrollFactor(0);
-    this.currentDialog.add(title);
-    
-    // Add current region info
-    const currentRegionText = this.scene.add.text(centerX, centerY - 20, `Current: ${currentRegion}`, {
-      fontSize: '16px',
-      color: '#cccccc'
-    }).setOrigin(0.5);
-    currentRegionText.setScrollFactor(0);
-    this.currentDialog.add(currentRegionText);
-    
-    // Add instruction text
-    const instructionText = this.scene.add.text(centerX, centerY + 20, 'Steer left or right to choose', {
-      fontSize: '14px',
-      color: '#ffffff'
-    }).setOrigin(0.5);
-    instructionText.setScrollFactor(0);
-    this.currentDialog.add(instructionText);
-    
-    // Add region choice buttons (left and right)
-    const leftRegion = connectedRegions[0];
-    const rightRegion = connectedRegions[1];
-    
-    if (leftRegion) {
-      const leftButton = this.scene.add.rectangle(centerX - 120, centerY + 50, 100, 40, 0x333333, 0.9);
-      leftButton.setStrokeStyle(2, 0xffffff, 1);
-      leftButton.setScrollFactor(0);
-      leftButton.setInteractive();
-      this.currentDialog.add(leftButton);
-      
-      const leftText = this.scene.add.text(centerX - 120, centerY + 50, leftRegion, {
-        fontSize: '14px',
-        color: '#ffffff',
-        fontStyle: 'bold'
-      }).setOrigin(0.5);
-      leftText.setScrollFactor(0);
-      this.currentDialog.add(leftText);
-      
-      leftButton.on('pointerdown', () => {
-        this.selectRegion(leftRegion);
+  private finishDialogCleanup() {
+    if (!this.currentDialog) return;
+
+    // Clean up background if it exists
+    if ((this.currentDialog as any).background) {
+      const background = (this.currentDialog as any).background;
+      if ((background as any).overlayInstance) {
+        (background as any).overlayInstance.destroy();
+      } else {
+        background.destroy();
+      }
+    }
+
+    // Clean up ad-hoc UI parts if present
+    if ((this.currentDialog as any).turnKeyDial) {
+      const slider = (this.currentDialog as any).turnKeyDial;
+      if (slider.sliderTrack) slider.sliderTrack.destroy();
+      if (slider.handle) slider.handle.destroy();
+    }
+    if ((this.currentDialog as any).dialLabel) {
+      const labels = (this.currentDialog as any).dialLabel;
+      if (labels.startLabel) labels.startLabel.destroy();
+      if (labels.turnKeyLabel) labels.turnKeyLabel.destroy();
+    }
+    if ((this.currentDialog as any).startMeter) {
+      const meter = (this.currentDialog as any).startMeter;
+      if (meter.meterBackground) meter.meterBackground.destroy();
+      if (meter.meterFill) meter.meterFill.destroy();
+      if (meter.meterText) meter.meterText.destroy();
+    }
+
+    // Clean up event listeners
+    if ((this.currentDialog as any).pointerDownHandler) {
+      this.scene.input.off('pointerdown', (this.currentDialog as any).pointerDownHandler);
+    }
+    if ((this.currentDialog as any).pointerMoveHandler) {
+      this.scene.input.off('pointermove', (this.currentDialog as any).pointerMoveHandler);
+    }
+    if ((this.currentDialog as any).pointerUpHandler) {
+      this.scene.input.off('pointerup', (this.currentDialog as any).pointerUpHandler);
+    }
+
+    // Clean up momentum timer
+    if ((this.currentDialog as any).momentumTimer) {
+      (this.currentDialog as any).momentumTimer.destroy();
+    }
+
+    // Clean up countdown text
+    if ((this.currentDialog as any).countdownText) {
+      (this.currentDialog as any).countdownText.destroy();
+      (this.currentDialog as any).countdownText = null;
+    }
+
+    // Clean up text display callbacks
+    this.textDisplayCallbacks.forEach(callback => {
+      if (callback && callback.destroy) {
+        callback.destroy();
+      }
+    });
+    this.textDisplayCallbacks = [];
+
+    // Destroy the container
+    this.currentDialog.destroy();
+    this.currentDialog = null;
+
+    // Handle special menu types
+    if (this.currentDisplayedMenuType === 'TURN_KEY') {
+      this.scene.events.emit('ignitionMenuHidden');
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('ignitionMenuHidden');
+      }
+    } else if (this.currentDisplayedMenuType === 'CYOA') {
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = false;
+      }
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
+      }
+    } else if (this.currentDisplayedMenuType === 'NOVEL_STORY') {
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = false;
+      }
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
+      }
+    }
+
+    // Resume game when certain menus are closed
+    if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'DESTINATION_STEP') {
+      this.resumeGameAfterDestinationMenu(true);
+    } else if (this.currentDisplayedMenuType === 'EXIT') {
+      this.resumeGameAfterDestinationMenu(false);
+    } else if (this.currentDisplayedMenuType === 'SHOP') {
+      if (!this.shouldRestorePreviousMenu()) {
+        this.resumeGameAfterDestinationMenu(false);
+      }
+    }
+
+    // Clear the displayed menu type
+    this.currentDisplayedMenuType = null;
+
+    // Update game state to indicate no menu is open
+    const gameSceneInstance2 = this.scene.scene.get('GameScene');
+    if (gameSceneInstance2 && (gameSceneInstance2 as any).gameState) {
+      (gameSceneInstance2 as any).gameState.updateState({ hasOpenMenu: false });
+    }
+
+    // Check if we should restore a previous menu
+    if (this.shouldRestorePreviousMenu()) {
+      this.scene.time.delayedCall(100, () => {
+        this.restorePreviousMenu();
+        this.userDismissedMenuType = null;
       });
+    } else {
+      this.userDismissedMenuType = null;
     }
-    
-    if (rightRegion) {
-      const rightButton = this.scene.add.rectangle(centerX + 120, centerY + 50, 100, 40, 0x333333, 0.9);
-      rightButton.setStrokeStyle(2, 0xffffff, 1);
-      rightButton.setScrollFactor(0);
-      rightButton.setInteractive();
-      this.currentDialog.add(rightButton);
-      
-      const rightText = this.scene.add.text(centerX + 120, centerY + 50, rightRegion, {
-        fontSize: '14px',
-        color: '#ffffff',
-        fontStyle: 'bold'
-      }).setOrigin(0.5);
-      rightText.setScrollFactor(0);
-      this.currentDialog.add(rightText);
-      
-      rightButton.on('pointerdown', () => {
-        this.selectRegion(rightRegion);
-      });
+
+    // Notify GameScene that menu state has changed
+    const gameSceneForRestore: any = this.scene.scene.get('GameScene');
+    if (gameSceneForRestore && gameSceneForRestore.updateAllTutorialOverlays) {
+      gameSceneForRestore.updateAllTutorialOverlays();
     }
-    
-    // Set up keyboard controls for region selection
-    const leftKey = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT, true, false);
-    const rightKey = this.scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT, true, false);
-    
-    if (leftKey && leftRegion) {
-      leftKey.on('down', () => {
-        this.selectRegion(leftRegion);
-      });
-    }
-    
-    if (rightKey && rightRegion) {
-      rightKey.on('down', () => {
-        this.selectRegion(rightRegion);
-      });
-    }
-    
-    // Store keys for cleanup
-    (this.currentDialog as any).leftKey = leftKey;
-    (this.currentDialog as any).rightKey = rightKey;
-    
-    console.log(`Region choice menu shown: ${leftRegion} (left) or ${rightRegion} (right)`);
-  }
-  
-  /**
-   * Handle region selection
-   */
-  private selectRegion(regionId: string) {
-    console.log(`🌍 MenuManager: Region selected: ${regionId}`);
-    console.log(`🌍 MenuManager: Current menu stack before region selection:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
-    
-    // Notify GameScene of region selection
-    const gameScene = this.scene.scene.get('GameScene');
-    if (gameScene && (gameScene as any).selectRegion) {
-      (gameScene as any).selectRegion(regionId);
-    }
-    
-    // Close the menu
-    console.log(`🌍 MenuManager: Calling closeDialog() to clean up region choice menu`);
-    this.closeDialog();
-    console.log(`🌍 MenuManager: Menu stack after region selection cleanup:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
   }
 
   private closeDialog() {
     console.log(`🚪 MenuManager: closeDialog() called. Current menu type: ${this.currentDisplayedMenuType}`);
     console.log(`🚪 MenuManager: Menu stack before closeDialog:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
-    
+
     // Stop universal menu auto-completion
     this.stopMenuAutoComplete();
-    
+
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
-    
+
     // Simple cleanup - just pop the current menu and resume game
     if (this.currentDisplayedMenuType) {
       const menuType = this.currentDisplayedMenuType;
-      
+
       if (this.MENU_CATEGORIES.ONE_TIME.includes(menuType)) {
-        // One-time menus: Clean up all instances from stack
-        console.log(`🚪 MenuManager: Cleaning up ONE_TIME menu: ${menuType}`);
         this.clearMenusFromStack(menuType);
       } else {
-        // All other menus: Just pop this instance
-        console.log(`🚪 MenuManager: Popping menu: ${menuType}`);
         this.popSpecificMenu(menuType);
       }
-      
+
       // Only resume game for non-story menus
       const storyMenuTypes = ['STORY', 'NOVEL_STORY', 'STORY_OUTCOME', 'PET_STORY'];
       if (!storyMenuTypes.includes(menuType)) {
-        // Always resume game when closing any non-story menu
-        console.log(`🚪 MenuManager: Resuming game after closing ${menuType} menu`);
         this.resumeGame();
-      } else {
-        console.log(`MenuManager: Not resuming game for story menu type: ${menuType}`);
       }
     }
-    
+
     this.clearCurrentDialog();
     console.log(`🚪 MenuManager: Menu stack after closeDialog:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
   }
 
   public closeCurrentDialog() {
     console.log('MenuManager: closeCurrentDialog called');
-    // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
-    
-    // Pop the current displayed menu from the stack (not necessarily the top)
+
     if (this.currentDisplayedMenuType) {
       this.popSpecificMenu(this.currentDisplayedMenuType);
     }
-    
+
     this.clearCurrentDialog();
-    // Don't reset the flag immediately - let clearCurrentDialog handle it after restoration
   }
 
   /**
    * Resume game after destination menu is closed
    */
   private resumeGameAfterDestinationMenu(resetAfterShow: boolean) {
-    // Resume AppScene step counting
     const appScene = this.scene.scene.get('AppScene');
     if (appScene) {
       (appScene as any).isPaused = false;
-      console.log('MenuManager: Resumed AppScene step counting');
     }
-    
-    // Optionally reset car state after shows only
+
     const gameScene = this.scene.scene.get('GameScene');
     if (gameScene) {
       if (resetAfterShow) {
-        // Reset car started state
         (gameScene as any).carStarted = false;
         if ((gameScene as any).gameState) {
           (gameScene as any).gameState.updateState({ carStarted: false, speedCrankPercentage: 0 });
         }
-        // Stop driving mode
         if ((gameScene as any).carMechanics) {
           (gameScene as any).carMechanics.stopDriving();
-          console.log('MenuManager: Stopped CarMechanics driving - car reset (show)');
         }
-        // Remove keys from ignition constraint (same as manual removal)
         if ((gameScene as any).removeKeysFromIgnition) {
-          console.log('MenuManager: Removing keys from ignition constraint (show)');
           (gameScene as any).removeKeysFromIgnition();
         }
       } else {
-        // After exits/shops: just resume driving if it was active; do not reset keys/car
         if ((gameScene as any).carStarted && (gameScene as any).carMechanics) {
           (gameScene as any).carMechanics.resumeDriving();
-          console.log('MenuManager: Resumed CarMechanics driving (exit/shop)');
         }
       }
-      // Emit game resumed event
       gameScene.events.emit('gameResumed');
     }
   }

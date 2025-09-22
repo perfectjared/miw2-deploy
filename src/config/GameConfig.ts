@@ -157,7 +157,7 @@ export const UI_LAYOUT = {
   
   // Font sizes
   gameLayerFontSize: '14px',
-  moneyHealthFontSize: '16px',
+  moneyHealthFontSize: '18px', // Increased from 16px
   countdownFontSize: '36px',
   progressFontSize: '18px',
   managerValuesFontSize: '12px',
