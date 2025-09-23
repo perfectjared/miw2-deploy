@@ -4522,6 +4522,17 @@ export class MenuManager {
     }
 
     this.clearCurrentDialog();
+    
+    // Update currentDisplayedMenuType to reflect the new state after popping
+    if (this.menuStack.length > 0) {
+      const nextMenu = this.menuStack[this.menuStack.length - 1];
+      this.currentDisplayedMenuType = nextMenu.type;
+      console.log(`🔄 Updated currentDisplayedMenuType to: ${this.currentDisplayedMenuType}`);
+    } else {
+      this.currentDisplayedMenuType = null;
+      console.log(`🔄 Cleared currentDisplayedMenuType (no menus on stack)`);
+    }
+    
     // If we previously preempted an exit/shop, resume driving to avoid stuck state
     if ((this as any)._resumeOnNextClose) {
       try {
