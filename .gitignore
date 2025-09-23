@@ -28,3 +28,11 @@ assets/backgrounds/raw/
 
 # Index files (managed by build scripts)
 index.html
+
+# Build artifacts in assets directory
+assets/index-*.js
+assets/vite-*.svg
+
+# Deploy artifacts (created by deploy script)
+rexuiplugin.js
+vite.svg
