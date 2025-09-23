@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "cp index.dev.html index.html && vite",
+    "dev:clean": "cp index.dev.html index.html",
     "build": "tsc && vite build",
     "build:deploy": "tsc && vite build --mode production",
     "preview": "vite preview",

@@ -32,6 +32,9 @@ elif [ "$DEPLOY_TARGET" = "github" ]; then
     git commit -m "Deploy to GitHub Pages - $(date)"
     git push deploy main
     
+    echo "🔄 Restoring development index.html..."
+    cp index.dev.html index.html
+    
     echo "✅ Deployed to GitHub Pages!"
     echo "🌐 Your game is live at: https://perfectjared.github.io/miw2-deploy/"
     

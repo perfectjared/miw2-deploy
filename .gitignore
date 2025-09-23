@@ -25,4 +25,6 @@ assets/backgrounds/raw/
 .idea/
 *.swp
 *.swo
-assets/unused/
+
+# Index files (managed by build scripts)
+index.html
