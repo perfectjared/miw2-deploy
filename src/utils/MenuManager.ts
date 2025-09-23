@@ -2078,10 +2078,76 @@ export class MenuManager {
     console.log(`Purchased ${itemName} for $${cost}. Remaining money: $${newMoney}`);
     
     // Keep shop open; refresh shop UI to reflect new money
-    this.showShopMenu();
+    this.refreshCurrentShopMenu();
     
     // Emit purchase event for potential game effects
     try { this.scene.events.emit('shopPurchase', { item: itemName, cost: cost }); } catch {}
+  }
+
+  private refreshCurrentShopMenu() {
+    // Only refresh if we're currently showing a shop menu
+    if (this.currentDisplayedMenuType !== 'SHOP' || !this.currentDialog) {
+      return;
+    }
+    
+    // Get current money from GameScene
+    const gameScene = this.scene.scene.get('GameScene');
+    const currentMoney = gameScene ? (gameScene as any).gameState?.getState()?.money || 0 : 0;
+    
+    // Get the last price tier used for this shop
+    const priceTier = (this as any)._lastPriceTier || 1;
+    
+    // Get the shop type from the current menu stack
+    const shopMenu = this.menuStack.find(m => m.type === 'SHOP');
+    const shopType = shopMenu?.config?.shopType || '';
+    
+    // Resolve shop inventory based on config and price tier
+    const shopsData = (this.scene.cache.json.get('shops') || {}) as any;
+    const shopKey = shopType.toLowerCase();
+    const shopDef = shopsData[shopKey] || {};
+    let shopItems: Array<{ name: string; cost: number; effect?: any }> = [];
+    
+    if (shopDef.type === 'retail' && shopDef.items) {
+      const tierItems = (shopDef.items[String(priceTier)] || []) as any[];
+      const shuffled = tierItems.slice().sort(() => Math.random() - 0.5);
+      shopItems = shuffled.slice(0, 3).map(it => ({ name: String(it.name), cost: Number(it.cost), effect: it.effect }));
+    }
+    
+    // Service shops
+    if (shopDef.type === 'service') {
+      if (shopKey === 'car doctor') {
+        const baseCosts: number[] = (shopDef.pricing?.base || [30,60,100,150]);
+        const cost = baseCosts[Math.max(0, Math.min(baseCosts.length - 1, (priceTier as number) - 1))];
+        
+        // Update the current dialog content to reflect new money
+        this.updateCurrentDialogContent(`they fixed this and this and that, $${cost}`, `Money: $${currentMoney}`);
+        return;
+      }
+    }
+    
+    // For retail shops, update the content to show new money
+    if (shopItems.length > 0) {
+      const itemsText = shopItems.map(item => `${item.name}: $${item.cost}`).join('\n');
+      this.updateCurrentDialogContent(itemsText, `Money: $${currentMoney}`);
+    }
+  }
+  
+  private updateCurrentDialogContent(content: string, title?: string) {
+    if (!this.currentDialog) return;
+    
+    // Find and update the content text element
+    const contentText = this.currentDialog.getByName('contentText') as Phaser.GameObjects.Text;
+    if (contentText) {
+      contentText.setText(content);
+    }
+    
+    // Update title if provided
+    if (title) {
+      const titleText = this.currentDialog.getByName('titleText') as Phaser.GameObjects.Text;
+      if (titleText) {
+        titleText.setText(title);
+      }
+    }
   }
 
   private handleServiceCharge(serviceName: string, cost: number, sayRumor?: boolean) {
@@ -2101,7 +2167,7 @@ export class MenuManager {
       console.log("psychic rumor: here's a rumor i heard");
     }
     // Refresh same service menu to reflect updated money
-    this.showShopMenu({ shopType: serviceName as any, priceTier: (this as any)._lastPriceTier || 2 });
+    this.refreshCurrentShopMenu();
   }
 
   private destroyCurrentDialogOnly() {
