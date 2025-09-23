@@ -1175,12 +1175,12 @@ export class GameScene extends Phaser.Scene {
       
       // Apply large bump effect and screen shake for pothole collision
       this.applyLargeBumpEffectToAllMatterObjects();
-      this.applyScreenShake(15, 300); // Strong shake for pothole impact
+      this.applyScreenShake(0.02, 250); // Strong-but-brief shake (intensity 0-1)
     });
 
     // Listen for pothole menu shake events from MenuManager
     this.events.on('potholeMenuShake', () => {
-      this.applyScreenShake(8, 200); // Medium shake for pothole menu display
+      this.applyScreenShake(0.01, 180); // Lighter shake for menu pop
     });
 
     // Scene events
@@ -2047,8 +2047,8 @@ export class GameScene extends Phaser.Scene {
         return; // Skip UI/menu cameras
       }
       
-      // Apply screen shake to game cameras
-      camera.shake(intensity, duration);
+      // Apply screen shake to game cameras (duration first, then intensity)
+      camera.shake(duration, intensity);
       // Applied screen shake to camera
     });
   }
@@ -2825,9 +2825,9 @@ export class GameScene extends Phaser.Scene {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
     
-    // Story dialogs use 95% width and 80% height, centered
-    const width = Math.floor(gameWidth * 0.95);   // 95% of game width
-    const height = Math.floor(gameHeight * 0.80);  // 80% of game height
+    // Story dialogs: match START menu dimensions (85% width, 90% height)
+    const width = Math.floor(gameWidth * 0.85);   // 85% of game width
+    const height = Math.floor(gameHeight * 0.90);  // 90% of game height
     const x = Math.floor((gameWidth - width) / 2);   // Center horizontally
     const y = Math.floor((gameHeight - height) / 2); // Center vertically
     

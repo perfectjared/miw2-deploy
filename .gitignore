@@ -17,6 +17,9 @@ Thumbs.db
 # Unused assets directory (large collection of textures, backgrounds, etc.)
 assets/unused/
 
+# Large unused background directories (526MB total)
+assets/backgrounds/raw/
+
 # IDE files
 .vscode/
 .idea/

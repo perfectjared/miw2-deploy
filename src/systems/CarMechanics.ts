@@ -431,28 +431,15 @@ export class CarMechanics {
       let attempts = 0;
       
       do {
-        const pattern = Phaser.Math.Between(1, 3); // 1, 2, or 3
-        
-        switch (pattern) {
-          case 1:
-            // Simple: "EXIT #"
-            name = `EXIT ${Phaser.Math.Between(1, 9)}`;
-            break;
-          case 2:
-            // Range: "EXIT #-#"
-            const start = Phaser.Math.Between(1, 8);
-            const end = Phaser.Math.Between(start + 1, 9);
-            name = `EXIT ${start}-${end}`;
-            break;
-          case 3:
-            // With letter: "EXIT #-#(letter)"
-            const start2 = Phaser.Math.Between(1, 7);
-            const end2 = Phaser.Math.Between(start2 + 1, 8);
-            const letter = String.fromCharCode(65 + Phaser.Math.Between(0, 25)); // A-Z
-            name = `EXIT ${start2}-${end2}(${letter})`;
-            break;
-          default:
-            name = `EXIT ${i + 1}`;
+        // Randomize among: single (# or ##) or range (#-# or ##-#), no letters/parentheses
+        const pattern = Phaser.Math.Between(1, 2); // 1 = single, 2 = range
+        if (pattern === 1) {
+          const n = Phaser.Math.Between(1, 99);
+          name = `EXIT ${n}`;
+        } else {
+          const a = Phaser.Math.Between(1, 98);
+          const b = Phaser.Math.Between(a + 1, 99);
+          name = `EXIT ${a}-${b}`;
         }
         
         attempts++;
@@ -636,7 +623,7 @@ export class CarMechanics {
       });
     });
     
-    console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}: Preview ${e.previewThreshold}%, Exit ${e.exitThreshold}% (${e.shopCount} shops)`));
+    console.log('Planned exits:', this.plannedExits.map(e => `Exit ${e.number}`));
     console.log('Total planned exits:', this.plannedExits.length);
     
     // Create planned CYOA - SMART SCHEDULING: 1-2 CYOAs with smart positioning

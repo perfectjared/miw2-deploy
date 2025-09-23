@@ -1330,8 +1330,13 @@ export class WindowShapes {
     };
     
     // Create text element with jaunty rotation variation
+    // Use alignment-based origins so X represents the visual edge near the window edge
     const textElement = this.scene.add.text(x + xVariation, y, text, narrativeTextStyle);
-    textElement.setOrigin(0.5, 0.5); // Center both horizontally and vertically
+    if (alignment === 'right') {
+      textElement.setOrigin(1, 0.5);
+    } else {
+      textElement.setOrigin(0, 0.5);
+    }
     textElement.setWordWrapWidth(maxWidth);
     textElement.setAlign(alignment); // Use the passed alignment parameter
     textElement.setDepth(11); // High depth for visibility
@@ -2623,7 +2628,8 @@ export class WindowShapes {
     const bottomMargin = 120; // Leave space for buttons
     const availableHeight = containerHeight - topMargin - bottomMargin;
     let textY: number;
-    const textXLeft = 20;
+    // Tighter to the left edge: reduce left margin significantly
+    const textXLeft = 8;
     const textXRight = containerWidth - 20; // right alignment anchor
     const textWidth = containerWidth - 40; // Leave side margins
     

@@ -188,14 +188,23 @@ export class VirtualPet {
 		this.pet.setInteractive();
 		// Set a specific hit area for the pet
 		this.pet.setInteractive(new Phaser.Geom.Circle(0, 0, petRadius), Phaser.Geom.Circle.Contains);
+		
+		// Track if pointerdown occurred on this pet to prevent accidental menu opening
+		let pointerDownOnThisPet = false;
+		
 		this.pet.on('pointerdown', () => {
 			console.log('Virtual pet pointerdown detected!');
+			pointerDownOnThisPet = true;
 		});
 		this.pet.on('pointerup', () => {
 			console.log('Virtual pet pointerup detected!');
-			// Emit on MenuScene so the handler runs there
-			const menuScene = this.scene.scene.get('MenuScene');
-			menuScene?.events.emit('showVirtualPetMenu', this.pet);
+			// Only open menu if pointerdown also occurred on this pet
+			if (pointerDownOnThisPet) {
+				// Emit on MenuScene so the handler runs there
+				const menuScene = this.scene.scene.get('MenuScene');
+				menuScene?.events.emit('showVirtualPetMenu', this.pet);
+			}
+			pointerDownOnThisPet = false; // Reset for next interaction
 		});
 
 		// Add elements to container (only add baseRect if it exists)
@@ -210,14 +219,23 @@ export class VirtualPet {
 		clickArea.setInteractive();
 		clickArea.setScrollFactor(0);
 		clickArea.setDepth(40001); // Above rearview mirror but below steering dial
+		
+		// Track if pointerdown occurred on this click area to prevent accidental menu opening
+		let pointerDownOnThisClickArea = false;
+		
 		clickArea.on('pointerdown', () => {
 			console.log('Click area pointerdown detected!');
+			pointerDownOnThisClickArea = true;
 		});
 		clickArea.on('pointerup', () => {
 			console.log('Click area pointerup detected!');
-			// Emit on MenuScene so the handler runs there
-			const menuScene = this.scene.scene.get('MenuScene');
-			menuScene?.events.emit('showVirtualPetMenu', this.pet);
+			// Only open menu if pointerdown also occurred on this click area
+			if (pointerDownOnThisClickArea) {
+				// Emit on MenuScene so the handler runs there
+				const menuScene = this.scene.scene.get('MenuScene');
+				menuScene?.events.emit('showVirtualPetMenu', this.pet);
+			}
+			pointerDownOnThisClickArea = false; // Reset for next interaction
 		});
 		
 		// Also make container handle clicks as backup
