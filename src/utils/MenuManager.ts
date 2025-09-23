@@ -174,6 +174,17 @@ export class MenuManager {
     return this.menuStack.some(m => m.type === 'EXIT' || m.type === 'SHOP');
   }
 
+  // Public helper for external checks (e.g., AppScene pause button)
+  public canPauseNow(): boolean {
+    const currentMenu = this.menuStack[this.menuStack.length - 1];
+    const activeType = this.currentDisplayedMenuType || currentMenu?.type || null;
+    const pausingTypes = ['EXIT', 'SHOP', 'CYOA', 'DESTINATION', 'REGION_CHOICE', 'STORY', 'NOVEL_STORY', 'STORY_OUTCOME', 'VIRTUAL_PET', 'PAUSE'];
+    if (activeType && pausingTypes.includes(activeType)) {
+      return false;
+    }
+    return true;
+  }
+
   private enqueueMenu(menuType: string, payload?: any) {
     // Check if this menu type is already queued to prevent duplicates
     const alreadyQueued = this.queuedMenus.some(queued => queued.type === menuType);
@@ -188,6 +199,11 @@ export class MenuManager {
 
   private processQueuedMenus() {
     // Only process if no EXIT/SHOP is open and no dialog currently displayed
+    if ((this as any).__dialogTransitioning) {
+      // Defer processing while a dialog is opening/closing to avoid race conditions
+      this.scene.time.delayedCall(30, () => this.processQueuedMenus());
+      return;
+    }
     if (this.isExitOrShopOpen()) return;
     if (this.currentDialog) {
       // Try again shortly after the dialog finishes its close animation
@@ -500,6 +516,16 @@ export class MenuManager {
     
     // Check if there's a higher priority menu already showing
     const currentMenu = this.menuStack[this.menuStack.length - 1];
+
+    // Stability guard: Only allow PAUSE when no pausing menu is active; never queue PAUSE
+    if (menuType === 'PAUSE') {
+      // Absolute rule: only allow PAUSE when no menus are active or on stack
+      if (this.currentDialog || this.currentDisplayedMenuType || this.menuStack.length > 0) {
+        const activeType = this.currentDisplayedMenuType || currentMenu?.type || 'unknown';
+        console.log(`🚫 MenuManager: Ignoring PAUSE because a menu is active/on stack: '${activeType}'`);
+        return false;
+      }
+    }
     
     if (currentMenu && currentMenu.priority > newPriority) {
       // Special case: allow EXIT to preempt CYOA (but NOT STORY)
@@ -1286,7 +1312,21 @@ export class MenuManager {
   }
 
   public showPauseMenu() {
-    if (!this.canShowMenu('PAUSE')) return;
+    if (!this.canShowMenu('PAUSE')) {
+      // If pause was requested while a pausing menu is active, undo the pause flag to keep flow stable
+      try {
+        const appScene = this.scene.scene.get('AppScene');
+        const gameScene = this.scene.scene.get('GameScene');
+        if (appScene && (appScene as any).isPaused) {
+          (appScene as any).isPaused = false;
+          if (gameScene) {
+            gameScene.events.emit('gameResumed');
+          }
+          console.log('MenuManager: Ignored pause and reverted paused state due to active pausing menu');
+        }
+      } catch {}
+      return;
+    }
     
     this.clearCurrentDialog();
     this.pushMenu('PAUSE');
@@ -2705,6 +2745,13 @@ export class MenuManager {
     // Hard guard: if EXIT/SHOP open, queue with payload and bail
     if (this.isExitOrShopOpen()) { this.enqueueMenu('CYOA', cyoaData); return; }
     
+    // Stability: if DESTINATION or REGION_CHOICE is open, queue CYOA to avoid breaking planning flows
+    if (this.currentDisplayedMenuType === 'DESTINATION' || this.currentDisplayedMenuType === 'REGION_CHOICE') {
+      console.log('⏳ Queueing CYOA until DESTINATION/REGION_CHOICE closes');
+      this.enqueueMenu('CYOA', cyoaData);
+      return;
+    }
+
     // Also queue if VIRTUAL_PET is open - let user finish interacting with their pet
     if (this.currentDisplayedMenuType === 'VIRTUAL_PET') { 
       console.log('⏳ Queueing CYOA until VIRTUAL_PET closes');
@@ -3682,6 +3729,10 @@ export class MenuManager {
     
     // Track what menu type is being displayed
     this.currentDisplayedMenuType = menuType || null;
+    // Prevent queue processing during dialog open
+    (this as any).__dialogTransitioning = true;
+    // Notify scene that a menu opened (for global UI state like disabling buttons)
+    try { this.scene.events.emit('menuOpened', this.currentDisplayedMenuType); } catch {}
     
     // Update game state to indicate a menu is open
     const gameSceneInstance = this.scene.scene.get('GameScene');
@@ -4278,6 +4329,8 @@ export class MenuManager {
       hitTarget.on('pointerout', () => { try { (this.scene.input as any).setDefaultCursor('default'); } catch {} });
     });
     }
+    // Mark open transition complete now that dialog is fully constructed
+    (this as any).__dialogTransitioning = false;
     
     // Notify GameScene that a menu is now open
     const gameSceneForTutorial: any = this.scene.scene.get('GameScene');
@@ -4330,6 +4383,8 @@ export class MenuManager {
 
   private clearCurrentDialog() {
     if (this.currentDialog) {
+      // Mark that a dialog transition is in progress to serialize open/close
+      (this as any).__dialogTransitioning = true;
       // Closing animation for collage window (match story window collapse)
       try {
         const cw = (this.currentDialog as any).collageWindow as Phaser.GameObjects.Graphics | undefined;
@@ -4359,6 +4414,8 @@ export class MenuManager {
     if (!this.currentDialog) { 
       // Only process queued menus if we're not in the middle of creating a new dialog
       // This prevents race conditions when ignition menu is being created
+      // Also clear transition flag before processing the queue
+      (this as any).__dialogTransitioning = false;
       this.scene.time.delayedCall(10, () => this.processQueuedMenus()); 
       return; 
     }
@@ -4532,6 +4589,9 @@ export class MenuManager {
       (gameSceneInstance2 as any).gameState.updateState({ hasOpenMenu: false });
     }
 
+    // Notify scene that menu closed (for global UI enable)
+    try { this.scene.events.emit('menuClosed'); } catch {}
+
     // Check if we should restore a previous menu
     if (this.shouldRestorePreviousMenu()) {
       this.scene.time.delayedCall(100, () => {
@@ -4548,7 +4608,8 @@ export class MenuManager {
       gameSceneForRestore.updateAllTutorialOverlays();
     }
 
-    // Final: process any queued menus now that dialog is definitely gone
+    // Clear transition flag and then process any queued menus now that dialog is definitely gone
+    (this as any).__dialogTransitioning = false;
     this.processQueuedMenus();
   }
 

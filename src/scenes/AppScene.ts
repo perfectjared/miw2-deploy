@@ -179,6 +179,22 @@ export class AppScene extends Phaser.Scene {
           muteButton.setVisible(!visible);
         });
       }
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        // Disable pause/save while any menu is open
+        (menuScene as any).events.on('menuOpened', () => {
+          pauseButton.disableInteractive();
+          saveButton.disableInteractive();
+          pauseButton.setAlpha(0.5);
+          saveButton.setAlpha(0.5);
+        });
+        (menuScene as any).events.on('menuClosed', () => {
+          pauseButton.setInteractive({ useHandCursor: true });
+          saveButton.setInteractive({ useHandCursor: true });
+          pauseButton.setAlpha(1);
+          saveButton.setAlpha(1);
+        });
+      }
     } catch {}
 
     // Start the step timer (every 1000ms = 1 second) - but only when game is started
@@ -347,19 +363,24 @@ export class AppScene extends Phaser.Scene {
       }
     } else {
       // Pause game
+      // Before pausing, ask MenuManager if pausing is allowed in current context
+      const menuScene = this.scene.get('MenuScene');
+      const menuManager = menuScene ? (menuScene as any).menuManager : null;
+      const canPause = menuManager && typeof menuManager.canPauseNow === 'function' ? menuManager.canPauseNow() : false;
+      if (!canPause) {
+        console.log('AppScene: Pause ignored due to active pausing menu');
+        return;
+      }
       this.isPaused = true;
-      //console.log('Game paused');
-      
       // Show pause menu via MenuScene
-    const menuScene = this.scene.get('MenuScene');
-    if (menuScene) {
-      // Add a small delay to ensure MenuScene is fully ready
-      this.time.delayedCall(50, () => {
-        menuScene.events.emit('showPauseMenu');
-        // Bring MenuScene to top to ensure it's visible
-        this.scene.bringToTop('MenuScene');
-      });
-    }
+      if (menuScene) {
+        // Add a small delay to ensure MenuScene is fully ready
+        this.time.delayedCall(50, () => {
+          menuScene.events.emit('showPauseMenu');
+          // Bring MenuScene to top to ensure it's visible
+          this.scene.bringToTop('MenuScene');
+        });
+      }
       
       // Emit pause event to GameScene
       const gameScene = this.scene.get('GameScene');

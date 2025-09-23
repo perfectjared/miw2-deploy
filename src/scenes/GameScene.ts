@@ -199,49 +199,32 @@ export class GameScene extends Phaser.Scene {
     // Initialize input handlers
     this.inputHandlers.initialize();
 
-    // Add keyboard shortcut to open Destination menu (key 'M') or debug message (Shift+M)
+    // Rebind keys: 'd' opens Destination; 'm' opens Moral Decision
     try {
+      // 'm' -> Moral decision menu (test payload)
       const keyM = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M, true, false);
       keyM?.on('down', () => {
-        // Check if Shift is held for debug function
-        if (this.input.keyboard?.checkDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT))) {
-          // Debug: Trigger test message on random pet
-          if (this.virtualPets.length > 0) {
-            const randomPetIndex = Math.floor(Math.random() * this.virtualPets.length);
-            const randomPet = this.virtualPets[randomPetIndex];
-            console.log(`Debug: Triggering test message on pet ${randomPetIndex}`);
-            randomPet.triggerDebugMessage();
-          }
-        } else {
-          // Normal M key: open Destination menu
-          const menuScene = this.scene.get('MenuScene');
-          if (menuScene) {
-            menuScene.events.emit('showDestinationMenu', true);
-            this.scene.bringToTop('MenuScene');
-          }
-        }
+        const menuScene = this.scene.get('MenuScene');
+        if (!menuScene) return;
+        (menuScene as any).events.emit('showMoralDecision', {
+          petIndex: 0,
+          text: 'You witness a stranger drop their wallet. What do you do?',
+          optionA: 'Return it immediately',
+          optionB: 'Keep it for yourself',
+          followA: 'You feel good about doing the right thing.',
+          followB: 'You feel guilty about your choice.'
+        });
+        this.scene.bringToTop('MenuScene');
       });
-      // Add debug key 'D': plain D opens Destination; Shift+D opens Moral Decision
+
+      // 'd' -> Destination menu
       const keyD = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, true, false);
       keyD?.on('down', () => {
         const menuScene = this.scene.get('MenuScene');
-        if (!menuScene) return;
-        const shiftHeld = this.input.keyboard?.checkDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT));
-        if (shiftHeld) {
-          // Shift+D: moral decision
-          (menuScene as any).events.emit('showMoralDecision', {
-            petIndex: 0,
-            text: 'You witness a stranger drop their wallet. What do you do?',
-            optionA: 'Return it immediately',
-            optionB: 'Keep it for yourself',
-            followA: 'You feel good about doing the right thing.',
-            followB: 'You feel guilty about your choice.'
-          });
-        } else {
-          // D: open destination menu
+        if (menuScene) {
           (menuScene as any).events.emit('showDestinationMenu', true);
+          this.scene.bringToTop('MenuScene');
         }
-        this.scene.bringToTop('MenuScene');
       });
       // REMOVED: Debug keyboard shortcut for old showCYOA event (was causing double-triggering)
       // const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
