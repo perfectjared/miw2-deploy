@@ -289,6 +289,8 @@ export class MenuManager {
     // GameScene emits 'halfStep' even when paused for UI animation consistency
     this.scene.events.on('halfStep', (halfStep: number) => {
       try { (this.windowShapes as any)?.onHalfStep?.(halfStep); } catch {}
+      // Also advance pothole dialog timers on half-steps so they disappear even when game is paused
+      try { this.tickPotholeDialogsHalfStep(); } catch {}
     });
 
     // Also handle always-on UI half-steps for pre-game menus (Start)
@@ -666,6 +668,8 @@ export class MenuManager {
 
   // STORY OVERLAY -----------------------------------------------------------
   public showStoryOverlay(title: string, content: string) {
+    // Ensure transient pothole dialogs don't linger under story overlays
+    this.clearAllPotholeDialogs(true);
     // If EXIT/SHOP is open, queue with payload and bail
     if (this.isExitOrShopOpen()) { this.enqueueMenu('STORY_OVERLAY', { title, content }); return; }
     // Non-blocking: don't use menu stack or overlay background
@@ -816,6 +820,71 @@ export class MenuManager {
     if (this.currentDialog && (this.currentDialog as any).isPetMenu) {
       this.updatePetMenuValues();
     }
+  }
+
+  /**
+   * Advance pothole dialog timers on half-steps so they disappear even if the game is paused
+   */
+  private tickPotholeDialogsHalfStep() {
+    const dialogs: Phaser.GameObjects.Container[] = (this as any).independentPotholeDialogs || [];
+    if (!dialogs || dialogs.length === 0) return;
+    for (let i = dialogs.length - 1; i >= 0; i--) {
+      const d: any = dialogs[i];
+      if (!d || d.destroyed || !d.isPothole) { continue; }
+      // Reduce a smaller amount per half-step so roughly 4 steps total lifetime stays similar
+      if (typeof d.stepsRemaining !== 'number') { d.stepsRemaining = 4; }
+      d.stepsRemaining -= 0.5;
+      if (d.stepsRemaining <= 0) {
+        const collageWindow = d.collageWindow;
+        if (collageWindow && collageWindow.scene) {
+          this.scene.tweens.add({
+            targets: collageWindow,
+            scaleX: 0.01,
+            scaleY: 0.01,
+            duration: 140,
+            ease: 'Back.easeIn',
+            onComplete: () => { try { d.destroy(); } catch {} }
+          });
+        } else {
+          try { d.destroy(); } catch {}
+        }
+        dialogs.splice(i, 1);
+      }
+    }
+  }
+
+  /**
+   * Clear all active pothole dialogs and any pending creation countdown
+   * @param animate whether to animate out windows; default true
+   */
+  private clearAllPotholeDialogs(animate: boolean = true) {
+    // Stop any ongoing creation burst
+    (this as any).potholeCreationCountdown = null;
+    // Remove listener if we created one
+    const listener = (this as any).potholeCreationListener;
+    if (listener && typeof this.scene.events.off === 'function') {
+      try { this.scene.events.off('postupdate', listener); } catch {}
+      (this as any).potholeCreationListener = null;
+    }
+    const dialogs: Phaser.GameObjects.Container[] = (this as any).independentPotholeDialogs || [];
+    for (let i = dialogs.length - 1; i >= 0; i--) {
+      const d: any = dialogs[i];
+      if (!d || d.destroyed || !d.isPothole) { dialogs.splice(i, 1); continue; }
+      if (animate && d.collageWindow && d.collageWindow.scene) {
+        this.scene.tweens.add({
+          targets: d.collageWindow,
+          scaleX: 0.01,
+          scaleY: 0.01,
+          duration: 120,
+          ease: 'Back.easeIn',
+          onComplete: () => { try { d.destroy(); } catch {} }
+        });
+      } else {
+        try { d.destroy(); } catch {}
+      }
+      dialogs.splice(i, 1);
+    }
+    (this as any).independentPotholeDialogs = dialogs;
   }
   
   private updatePetMenuValues() {
@@ -2709,6 +2778,8 @@ export class MenuManager {
   }
 
   public showStoryMenu(storyData: { isExitRelated: boolean, exitNumber?: number }) {
+    // Ensure transient pothole dialogs don't linger under story menus
+    this.clearAllPotholeDialogs(true);
     // If EXIT/SHOP is open, queue with payload and bail
     if (this.isExitOrShopOpen()) { this.enqueueMenu('STORY', storyData); return; }
     
@@ -2783,6 +2854,8 @@ export class MenuManager {
     eventData: any; 
     storylineData: any 
   }) {
+    // Ensure transient pothole dialogs don't linger under story menus
+    this.clearAllPotholeDialogs(true);
     // If EXIT/SHOP is open, queue with payload and bail
     if (this.isExitOrShopOpen()) { this.enqueueMenu('NOVEL_STORY', storyData); return; }
     
