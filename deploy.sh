@@ -32,6 +32,9 @@ elif [ "$DEPLOY_TARGET" = "github" ]; then
     echo "📝 Committing and pushing to GitHub Pages..."
     git add assets/ vite.svg
     git add -f rexuiplugin.js
+    # Copy production index.html directly to staging without modifying working directory
+    cp dist/index.html index.html
+    git add index.html
     git commit -m "Deploy to GitHub Pages - $(date)"
     git push deploy main
     
