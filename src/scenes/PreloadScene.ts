@@ -105,6 +105,9 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('face-neutral', 'assets/image/face-neutral.svg');
     this.load.image('face-frown', 'assets/image/face-frown.svg');
     
+    // Load x.png for window backgrounds
+    this.load.image('x', 'assets/image/x.png');
+    
     // For now, we'll just add a small delay to simulate loading
     this.time.delayedCall(2000, () => {
       this.scene.start('AppScene');

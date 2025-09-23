@@ -119,7 +119,6 @@ export class GameScene extends Phaser.Scene {
   private hasClearedCrankTutorial: boolean = false;
   private hasShownSteeringTutorial: boolean = false;
   private hasClearedSteeringTutorial: boolean = false;
-  private potholeHitStep: number | null = null;
   private stopMenuOpen: boolean = false;
   private countdownStepCounter: number = 0; // Track steps for countdown timing
   private tutorialInterruptStep: number | null = null; // Track when tutorial interrupt should end
@@ -242,7 +241,7 @@ export class GameScene extends Phaser.Scene {
       keyP?.on('down', () => {
         const menuScene = this.scene.get('MenuScene');
         if (menuScene) {
-          menuScene.events.emit('showPetStoryUI', 'Pet says: "Hello there!"');
+          menuScene.events.emit('showPotholeMenu');
         }
       });
 
@@ -1159,14 +1158,29 @@ export class GameScene extends Phaser.Scene {
       }
     });
     
-    // Listen for pothole hits from CarMechanics and schedule a story overlay
+    // Listen for pothole hits from CarMechanics and show windows immediately
     this.events.on('potholeHit', () => {
-      const currentStep = this.gameState.getState().step || 0;
-      this.potholeHitStep = currentStep + 1; // Show on next step
+      // Show pothole windows immediately instead of waiting for next step
+      const menuScene = this.scene.get('MenuScene');
+      if (menuScene) {
+        menuScene.events.emit('showPotholeMenu');
+        // Fallback direct call if event not wired
+        const mm: any = (menuScene as any).menuManager;
+        if (mm?.showPotholeMenu) {
+          mm.showPotholeMenu();
+        }
+        // Ensure MenuScene is on top so the overlay is visible
+        this.scene.bringToTop('MenuScene');
+      }
       
       // Apply large bump effect and screen shake for pothole collision
       this.applyLargeBumpEffectToAllMatterObjects();
       this.applyScreenShake(15, 300); // Strong shake for pothole impact
+    });
+
+    // Listen for pothole menu shake events from MenuManager
+    this.events.on('potholeMenuShake', () => {
+      this.applyScreenShake(8, 200); // Medium shake for pothole menu display
     });
 
     // Scene events
@@ -2512,27 +2526,7 @@ export class GameScene extends Phaser.Scene {
       this.scheduleTutorialUpdate(0);
     }
 
-    // Show pothole overlay on next step after hit (cancel if any real menu is open)
-    if (this.potholeHitStep !== null && step >= this.potholeHitStep) {
-      const curState = this.gameState.getState();
-      if (curState.hasOpenMenu) {
-        // Prevent pending pothole overlays while a real menu is up
-        this.potholeHitStep = null;
-      } else {
-      const menuScene = this.scene.get('MenuScene');
-      if (menuScene) {
-        menuScene.events.emit('showStoryOverlay', 'Pothole!', 'Ouch. You hit a pothole.');
-        // Fallback direct call if event not wired
-        const mm: any = (menuScene as any).menuManager;
-        if (mm?.showStoryOverlay) {
-          mm.showStoryOverlay('Pothole!', 'Ouch. You hit a pothole.');
-        }
-        // Ensure MenuScene is on top so the overlay is visible
-        this.scene.bringToTop('MenuScene');
-      }
-      this.potholeHitStep = null;
-      }
-    }
+    // Pothole windows are now shown immediately on collision, no step-based scheduling needed
 
     // Exit overlay removed - we now have the exit menu that opens immediately
   }

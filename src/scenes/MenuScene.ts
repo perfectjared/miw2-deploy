@@ -51,6 +51,7 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showVirtualPetMenu', this.showVirtualPetMenu, this);
     this.events.on('showMoralDecision', this.showMoralDecision, this);
     this.events.on('showPetStoryUI', this.showPetStoryUI, this);
+    this.events.on('showPotholeMenu', this.showPotholeMenu, this);
     this.events.on('showStoryOverlay', (title: string, content: string) => {
       this.menuManager.showStoryOverlay(title, content);
     });
@@ -173,6 +174,11 @@ export class MenuScene extends Phaser.Scene {
     const petIndex = (arg && typeof arg.petIndex === 'number') ? arg.petIndex : 0;
     console.log('MenuScene: showPetStoryUI called with petIndex:', petIndex);
     this.menuManager.showPetStoryUIForPet(petIndex);
+  }
+
+  private showPotholeMenu() {
+    console.log('MenuScene: showPotholeMenu called');
+    this.menuManager.showPotholeMenu();
   }
 
   private closeCurrentMenu() {

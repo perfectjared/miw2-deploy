@@ -39,10 +39,12 @@ export interface MenuButton {
 
 export interface MenuConfig {
   title: string;
+  subtitle?: string; // Optional subtitle text
   content?: string;
   buttons: MenuButton[];
   width?: number;
   height?: number;
+  texts?: string[]; // For CYOA-style text advancement
 }
 
 /**
@@ -143,6 +145,7 @@ export class MenuManager {
     CYOA: 70,            // Choose-your-own-adventure
     DESTINATION: 65,     // Trip planning
     OBSTACLE: 60,        // Collision/obstacle
+    POTHOLE: 55,         // Pothole collision (lower than obstacle)
     SHOP: 73,            // Shop (paired with exit flow)
     VIRTUAL_PET: 45,     // Pet UI
     MORAL_DECISION: 45,  // Moral decision
@@ -473,6 +476,45 @@ export class MenuManager {
     }
   }
 
+  private createWindowBackground() {
+    const collageBackground = (this.currentDialog as any).collageBackground;
+    const dialogWidth = (this.currentDialog as any).dialogWidth;
+    const dialogHeight = (this.currentDialog as any).dialogHeight;
+    
+    if (!collageBackground || !dialogWidth || !dialogHeight) {
+      console.error('❌ Missing references for window background creation');
+      return;
+    }
+    
+    console.log('🎨 Creating window background with x texture');
+    
+    // Create the scrolling background
+    const backgroundSprite = this.scene.add.tileSprite(0, 0, dialogWidth, dialogHeight, 'x');
+    backgroundSprite.setOrigin(0, 0);
+    backgroundSprite.setDepth(-2);
+    
+    // Create a geometry mask using the polygon as the mask source
+    const geometryMask = collageBackground.createGeometryMask();
+    backgroundSprite.setMask(geometryMask);
+    
+    // Add to the dialog
+    this.currentDialog.add(backgroundSprite);
+    
+    // Set up scrolling animation
+    this.scene.events.on('postupdate', () => {
+      if (backgroundSprite && !backgroundSprite.destroyed) {
+        backgroundSprite.tilePositionX -= 0.5;
+        backgroundSprite.tilePositionY += 0.3;
+      }
+    });
+    
+    // Keep references for cleanup
+    (this.currentDialog as any).backgroundSprite = backgroundSprite;
+    (this.currentDialog as any).geometryMask = geometryMask;
+    
+    console.log('✅ Window background created successfully');
+  }
+
   private pauseGame() {
     const appScene = this.scene.scene.get('AppScene');
     const gameScene = this.scene.scene.get('GameScene');
@@ -557,15 +599,84 @@ export class MenuManager {
         this.clearCurrentDialog();
       }
     }
-    // Auto-dismiss pothole after 2 steps and resume driving
-    if (this.currentDialog && (this.currentDialog as any).isPothole) {
-      (this.currentDialog as any).stepsRemaining -= 1;
-      if ((this.currentDialog as any).stepsRemaining <= 0) {
-        this.clearCurrentDialog();
-        try {
-          const gameScene = this.scene.scene.get('GameScene');
-          if (gameScene) { (gameScene as any).resumeAfterCollision?.(); }
-        } catch {}
+    
+    // Process frame-by-frame pothole creation countdown
+    const countdown = (this as any).potholeCreationCountdown;
+    if (countdown && countdown.remaining > 0) {
+      const currentStep = this.getCurrentStep();
+      
+      // If step changed, stop creating potholes and clear countdown
+      if (currentStep !== countdown.lastStep) {
+        (this as any).potholeCreationCountdown = null;
+      } else {
+        // Create one pothole window this frame
+        const menuConfig: MenuConfig = {
+          title: '',
+          content: 'YOU HIT A POTHOLE!!!!1',
+          buttons: [],
+          width: 90,
+          height: 60
+        };
+        
+        const potholeDialog = this.createIndependentPotholeDialog(menuConfig);
+        if (potholeDialog) {
+          (potholeDialog as any).isPothole = true;
+          (potholeDialog as any).stepsRemaining = 4;
+          (potholeDialog as any).isIndependent = true;
+          
+          // Randomize position within inner 60% of screen
+          try {
+            const gw = this.scene.cameras.main.width;
+            const gh = this.scene.cameras.main.height;
+            const rx = Phaser.Math.FloatBetween(0.2, 0.8) * gw;
+            const ry = Phaser.Math.FloatBetween(0.2, 0.8) * gh;
+            (potholeDialog as Phaser.GameObjects.Container).setPosition(rx, ry);
+          } catch {}
+          
+          // Add to independent pothole dialogs list for tracking
+          if (!(this as any).independentPotholeDialogs) {
+            (this as any).independentPotholeDialogs = [];
+          }
+          (this as any).independentPotholeDialogs.push(potholeDialog);
+        }
+        
+        // Decrement countdown
+        countdown.remaining -= 1;
+        if (countdown.remaining <= 0) {
+          (this as any).potholeCreationCountdown = null;
+        }
+      }
+    }
+    
+    // Auto-dismiss independent pothole dialogs after 4 steps
+    const independentPotholeDialogs = (this as any).independentPotholeDialogs || [];
+    for (let i = independentPotholeDialogs.length - 1; i >= 0; i--) {
+      const dialog = independentPotholeDialogs[i];
+      if (dialog && !dialog.destroyed && (dialog as any).isPothole) {
+        (dialog as any).stepsRemaining -= 1;
+        if ((dialog as any).stepsRemaining <= 0) {
+          // Animate out and destroy
+          const collageWindow = (dialog as any).collageWindow;
+          if (collageWindow && collageWindow.scene) {
+            this.scene.tweens.add({
+              targets: collageWindow,
+              scaleX: 0.01,
+              scaleY: 0.01,
+              duration: 160,
+              ease: 'Back.easeIn',
+              onComplete: () => {
+                try { dialog.destroy(); } catch {}
+              }
+            });
+          } else {
+            try { dialog.destroy(); } catch {}
+          }
+          // Remove from tracking list
+          independentPotholeDialogs.splice(i, 1);
+        }
+      } else if (dialog && dialog.destroyed) {
+        // Clean up destroyed dialogs from tracking list
+        independentPotholeDialogs.splice(i, 1);
       }
     }
     
@@ -881,6 +992,7 @@ export class MenuManager {
       const saveDate = new Date(saveData.timestamp).toLocaleString();
       menuConfig = {
         title: 'INFINITY DRIVES',
+        subtitle: 'the official game that is an ad for Infinity Guise the new fake emo album by Summerbruise',
         content: `Welcome back! You have a saved game with ${saveData.steps} steps.\nSaved: ${saveDate}`,
         buttons: [
           {
@@ -917,7 +1029,9 @@ export class MenuManager {
       // Show new game menu for first time
       menuConfig = {
         title: 'INFINITY DRIVES',
-        content: 'click start to start',
+        subtitle: 'the official game that is an ad for Infinity Guise the new fake emo album by Summerbruise',
+        content: 'you awake in a 2007 honda odyssey\nyou remember: you took a job as a tour manager for fake emo band summerbruise\nits time to start',
+        texts: ['you awake in a 2007 honda odyssey', 'you remember: you took a job as a tour manager for fake emo band summerbruise', 'its time to start'], // For CYOA-style advancement
         buttons: [
           {
             text: 'start',
@@ -933,6 +1047,14 @@ export class MenuManager {
         ]
       };
     }
+
+    // Make START window 90% height and 85% width
+    try {
+      const gw = this.scene.cameras.main.width;
+      const gh = this.scene.cameras.main.height;
+      (menuConfig as any).width = Math.floor(gw * 0.85);
+      (menuConfig as any).height = Math.floor(gh * 0.90);
+    } catch {}
 
     this.createDialog(menuConfig, 'START');
   }
@@ -1046,31 +1168,200 @@ export class MenuManager {
   }
 
   public showPotholeMenu() {
-    this.clearCurrentDialog();
+    // Pothole menus are special - they can coexist with other menus and each other
+    // Don't use the normal menu stack system, create independent dialogs
     
-    // Smaller, slimmer dialog with no buttons
+    // Much smaller, faster dialog with no buttons (60% of original size, 3x wider)
     const menuConfig: MenuConfig = {
-      title: 'pothole',
-      content: 'you hit a pothole',
+      title: '',  // No title - just content
+      content: 'YOU HIT A POTHOLE!!!!1',
       buttons: [],
-      width: 220,
-      height: 140
+      width: 90,   // 3x wider than 30
+      height: 60   // Increased height to fit text properly
     };
 
-    this.createDialog(menuConfig);
-    // Mark as ephemeral with 2-step lifespan
-    if (this.currentDialog) {
-      (this.currentDialog as any).isPothole = true;
-      (this.currentDialog as any).stepsRemaining = 2;
-      // Randomize position within middle 80% of screen
-      try {
-        const gw = this.scene.cameras.main.width;
-        const gh = this.scene.cameras.main.height;
-        const rx = Phaser.Math.FloatBetween(0.1, 0.9) * gw;
-        const ry = Phaser.Math.FloatBetween(0.1, 0.9) * gh;
-        (this.currentDialog as Phaser.GameObjects.Container).setPosition(rx, ry);
-      } catch {}
+    // Create multiple pothole dialogs based on speed percentage
+    const speedPercentage = this.getCurrentSpeedPercentage();
+    const numWindows = Math.max(3, Math.min(20, Math.floor(speedPercentage * 0.2))); // 3-20 windows based on speed
+    
+    // Set up frame-by-frame pothole creation countdown
+    if (!(this as any).potholeCreationCountdown) {
+      (this as any).potholeCreationCountdown = {
+        remaining: numWindows,
+        lastStep: this.getCurrentStep()
+      };
+    } else {
+      // If there's already a countdown, add to it
+      (this as any).potholeCreationCountdown.remaining += numWindows;
     }
+    
+    // Set up postupdate listener for frame-by-frame creation if not already set
+    if (!(this as any).potholeCreationListener) {
+      (this as any).potholeCreationListener = this.scene.events.on('postupdate', () => {
+        this.processPotholeCreationCountdown();
+      });
+    }
+  }
+
+  /**
+   * Get current speed percentage from GameScene
+   */
+  private getCurrentSpeedPercentage(): number {
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene && (gameScene as any).gameState) {
+        return (gameScene as any).gameState.getState().speedPercentage || 0;
+      }
+    } catch {}
+    return 0; // Default to 0 if can't get speed
+  }
+
+  /**
+   * Get current step from GameScene
+   */
+  private getCurrentStep(): number {
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene && (gameScene as any).gameState) {
+        return (gameScene as any).gameState.getState().step || 0;
+      }
+    } catch {}
+    return 0; // Default to 0 if can't get step
+  }
+
+  /**
+   * Process frame-by-frame pothole creation countdown
+   */
+  private processPotholeCreationCountdown(): void {
+    const countdown = (this as any).potholeCreationCountdown;
+    if (countdown && countdown.remaining > 0) {
+      const currentStep = this.getCurrentStep();
+      
+      // If step changed, stop creating potholes and clear countdown
+      if (currentStep !== countdown.lastStep) {
+        (this as any).potholeCreationCountdown = null;
+        return;
+      }
+      
+      // Create one pothole window this frame
+      const menuConfig: MenuConfig = {
+        title: '',
+        content: 'YOU HIT A POTHOLE!!!!1',
+        buttons: [],
+        width: 90,
+        height: 60
+      };
+      
+      const potholeDialog = this.createIndependentPotholeDialog(menuConfig);
+      if (potholeDialog) {
+        (potholeDialog as any).isPothole = true;
+        (potholeDialog as any).stepsRemaining = 4;
+        (potholeDialog as any).isIndependent = true;
+        
+        // Randomize position within inner 60% of screen
+        try {
+          const gw = this.scene.cameras.main.width;
+          const gh = this.scene.cameras.main.height;
+          const rx = Phaser.Math.FloatBetween(0.2, 0.8) * gw;
+          const ry = Phaser.Math.FloatBetween(0.2, 0.8) * gh;
+          (potholeDialog as Phaser.GameObjects.Container).setPosition(rx, ry);
+        } catch {}
+        
+        // Add to independent pothole dialogs list for tracking
+        if (!(this as any).independentPotholeDialogs) {
+          (this as any).independentPotholeDialogs = [];
+        }
+        (this as any).independentPotholeDialogs.push(potholeDialog);
+      }
+      
+      // Decrement countdown
+      countdown.remaining -= 1;
+      if (countdown.remaining <= 0) {
+        (this as any).potholeCreationCountdown = null;
+      }
+    }
+  }
+
+  /**
+   * Create an independent pothole dialog that doesn't interfere with the main menu system
+   */
+  private createIndependentPotholeDialog(menuConfig: MenuConfig): Phaser.GameObjects.Container | null {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    const dialogWidth = menuConfig.width || 90;
+    const dialogHeight = menuConfig.height || 60;
+
+    // Create independent container
+    const potholeDialog = this.scene.add.container(gameWidth / 2, gameHeight / 2);
+    potholeDialog.setScrollFactor(0);
+    potholeDialog.setDepth(50000); // High depth to appear above other menus
+
+    // Create the white window background
+    const halfW = dialogWidth / 2;
+    const halfH = dialogHeight / 2;
+    
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
+      if (windowShapes && (windowShapes as any).createCollageRect) {
+        // Create the white window background
+        const collageBackground = (windowShapes as any).createCollageRect({
+          x: -halfW,
+          y: -halfH,
+          width: dialogWidth,
+          height: dialogHeight,
+          fillColor: 0xffffff,
+          fillAlpha: 1.0
+        }, false, 'window');
+
+        if (collageBackground) {
+          collageBackground.setDepth(-1);
+          collageBackground.setPosition(0, 0);
+          potholeDialog.add(collageBackground);
+
+          // Register for animation
+          const shapeId = `pothole_window_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          try {
+            (windowShapes as any).registerAnimatedShape(shapeId, collageBackground, 'window', -halfW, -halfH, dialogWidth, dialogHeight);
+          } catch (error) {
+            console.error('❌ Failed to register pothole window animation:', error);
+          }
+          (collageBackground as any).__shapeId = shapeId;
+
+          // Opening animation
+          collageBackground.setScale(0.01);
+          this.scene.tweens.add({
+            targets: collageBackground,
+            scaleX: 1,
+            scaleY: 1,
+            duration: 200,
+            ease: 'Back.easeOut'
+          });
+
+          // Store reference for cleanup
+          (potholeDialog as any).collageWindow = collageBackground;
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error creating pothole background:', error);
+    }
+
+    // Add plain black text content (no black rectangle background)
+    if (menuConfig.content) {
+      const padding = 6;
+      const textWidth = dialogWidth - padding * 2;
+      const text = String(menuConfig.content || '').trim();
+      const t = this.scene.add.text(0, 0, text, {
+        fontSize: '12px',
+        color: '#000000',
+        wordWrap: { width: textWidth, useAdvancedWrap: true },
+        align: 'center'
+      }).setOrigin(0.5);
+      t.setPosition(0, 0); // Center inside the small pothole window
+      potholeDialog.add(t);
+    }
+
+    return potholeDialog;
   }
 
   /**
@@ -1222,7 +1513,7 @@ export class MenuManager {
       const price = this.getWeightedPrice();
       const parts = this.formatPriceParts(price);
       const btn: MenuButton = {
-        text: shopName,
+      text: shopName,
         onClick: () => { this.handleExitShopChoiceWithPrice(shopName, price); }
       };
       (btn as any).__priceFilled = parts.filled;
@@ -1463,7 +1754,7 @@ export class MenuManager {
       if (shopKey === 'car doctor') {
         const baseCosts: number[] = (shopDef.pricing?.base || [30,60,100,150]);
         const cost = baseCosts[Math.max(0, Math.min(baseCosts.length - 1, (priceTier as number) - 1))];
-        const menuConfig: MenuConfig = {
+    const menuConfig: MenuConfig = {
           title: 'car doctor',
           content: `they fixed this and this and that, $${cost}`,
           buttons: [
@@ -1554,7 +1845,7 @@ export class MenuManager {
     
     // Keep shop open; refresh shop UI to reflect new money
     this.showShopMenu();
-
+    
     // Emit purchase event for potential game effects
     try { this.scene.events.emit('shopPurchase', { item: itemName, cost: cost }); } catch {}
   }
@@ -1971,6 +2262,13 @@ export class MenuManager {
 
   public showCyoaMenu(cyoaData: { cyoaId: number, isExitRelated: boolean, exitNumber?: number, exitTiming?: 'before' | 'after' }) {
     console.log(`🎭 CYOA (H-style): Creating CYOA ${cyoaData.cyoaId}`);
+    
+    // Prevent duplicate CYOA creation
+    if (this.currentDisplayedMenuType === 'CYOA') {
+      console.log('🎭 CYOA already displayed, ignoring duplicate request');
+      return;
+    }
+    
     // Clear any existing simple dialog
     this.clearCurrentDialog();
     // Push to stack for priority management
@@ -1997,7 +2295,7 @@ export class MenuManager {
     let container: Phaser.GameObjects.Container | null = null;
     const closeAndResume = () => {
       try { container && container.destroy(); } catch {}
-      this.resumeGame();
+            this.resumeGame();
       // Pop CYOA from stack
       this.popSpecificMenu('CYOA');
     };
@@ -2713,10 +3011,17 @@ export class MenuManager {
     const gameWidth = this.scene.cameras.main.width;
     const gameHeight = this.scene.cameras.main.height;
     
+    // Calculate dialog dimensions based on config or defaults
+    const dialogWidth = menuConfig.width || 300;
+    const dialogHeight = menuConfig.height || 350;
+    
     // Create a simple container-based dialog instead of RexUI dialog
     this.currentDialog = this.scene.add.container(gameWidth / 2, gameHeight / 2);
     this.currentDialog.setScrollFactor(0);
     this.currentDialog.setDepth(50000);
+    
+    // Set explicit size for the container
+    (this.currentDialog as any).setSize(dialogWidth, dialogHeight);
     
     // Track what menu type is being displayed
     this.currentDisplayedMenuType = menuType || null;
@@ -2731,10 +3036,23 @@ export class MenuManager {
     try {
       const gameScene = this.scene.scene.get('GameScene');
       const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
-      // Ensure our reference points to the instance that owns these shapes
       if (windowShapes) this.windowShapes = windowShapes;
-      if (windowShapes && windowShapes.createDitheredOverlay) {
-        windowShapes.createDitheredOverlay(this.currentDialog);
+      if (windowShapes && (windowShapes as any).createDitheredOverlay) {
+        // Allow forcing a specific pattern per menu type
+        const patternMap: Record<string, string> = {
+          'START': 'hypercard_diamonds',
+          'IGNITION': 'hypercard_diamonds', 
+          'CYOA': 'hypercard_waves',
+          'EXIT': 'hypercard_waves',
+          'SHOP': 'hypercard_waves',
+          'STORY': 'hypercard_wood',
+          'DESTINATION': 'hypercard_wood'
+        };
+        const requestedPattern = patternMap[menuType || ''];
+        if (requestedPattern) {
+          (this.currentDialog as any).__overlayPattern = requestedPattern;
+        }
+        (windowShapes as any).createDitheredOverlay(this.currentDialog);
         // Track for cleanup parity with old system
         (this.currentDialog as any).background = (this.currentDialog as any).ditheredOverlay || null;
         // Ensure overlay renders below dialog and does not capture input
@@ -2749,40 +3067,117 @@ export class MenuManager {
     } catch {}
     
     // Collage-style dialog background (white window like story "S" windows)
-    const dialogWidth = menuConfig.width || 300;
-    const dialogHeight = menuConfig.height || 350;
     const halfW = dialogWidth / 2;
     const halfH = dialogHeight / 2;
+    // Create tiled scrolling background as default for all menus
     let collageBackground: Phaser.GameObjects.Graphics | null = null;
+    let tiledBackground: Phaser.GameObjects.TileSprite | null = null;
     try {
       const gameScene = this.scene.scene.get('GameScene');
       const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
       if (windowShapes) this.windowShapes = windowShapes;
-      if (windowShapes && windowShapes.createCollageRect) {
-        // Create WITHOUT internal animation; register manually like story windows
-        collageBackground = windowShapes.createCollageRect({
+          
+          console.log('🔍 WindowShapes check:', {
+            windowShapes: !!windowShapes,
+            createCollageRect: !!(windowShapes && (windowShapes as any).createCollageRect),
+            gameScene: !!gameScene
+          });
+          
+          if (windowShapes && (windowShapes as any).createCollageRect) {
+            console.log('🏗️ Creating collage background...');
+            // Create the white window background
+            collageBackground = (windowShapes as any).createCollageRect({
           x: -halfW,
           y: -halfH,
           width: dialogWidth,
           height: dialogHeight,
-          fillColor: 0xffffff
+              fillColor: 0xffffff,
+              fillAlpha: 1.0
         }, false, 'window');
+            console.log('🏗️ Collage background created:', !!collageBackground);
+        
         if (collageBackground) {
           collageBackground.setDepth(-1);
-          // Position at container origin; drawing coords center the shape
           collageBackground.setPosition(0, 0);
+          
+          // Create the background immediately - try x texture, fallback to solid color
+          const xTexture = this.scene.textures.get('x');
+          let textureKey = 'x';
+          
+          if (!xTexture || !xTexture.isComplete) {
+            // Create a simple colored texture as fallback (only if not already created)
+            if (!this.scene.textures.exists('fallback')) {
+              this.scene.textures.generate('fallback', {
+                data: ['#00ff00'], // Green pixel for testing
+                pixelWidth: 1,
+                pixelHeight: 1
+              });
+            }
+            textureKey = 'fallback';
+            console.log('⚠️ Using green fallback texture instead of x.png');
+          } else {
+            console.log('✅ X texture is ready');
+          }
+          
+          // Create the scrolling background
+          const backgroundSprite = this.scene.add.tileSprite(0, 0, dialogWidth, dialogHeight, textureKey);
+          backgroundSprite.setOrigin(0, 0);
+          backgroundSprite.setDepth(-2);
+          
+          // Position the background sprite correctly relative to the dialog
+          backgroundSprite.setPosition(-halfW, -halfH);
+          
+          console.log('🎨 Background sprite positioned at:', backgroundSprite.x, backgroundSprite.y);
+          
+          // Temporarily disable mask to test if TileSprite is visible
+          // const geometryMask = collageBackground.createGeometryMask();
+          // backgroundSprite.setMask(geometryMask);
+          
+          console.log('🎭 Mask temporarily disabled - should see green TileSprite');
+          
+          // Add to the dialog
+          this.currentDialog.add(backgroundSprite);
+          
+          // Set up scrolling animation
+          this.scene.events.on('postupdate', () => {
+            if (backgroundSprite && !backgroundSprite.destroyed) {
+              backgroundSprite.tilePositionX -= 0.5;
+              backgroundSprite.tilePositionY += 0.3;
+            }
+          });
+          
+          // Keep references for cleanup
+          (this.currentDialog as any).backgroundSprite = backgroundSprite;
+          // (this.currentDialog as any).geometryMask = geometryMask; // Commented out since mask is disabled
+          
+          console.log('🎨 Window background created with texture:', textureKey);
+          console.log('🔍 Dialog container info:', {
+            x: this.currentDialog.x,
+            y: this.currentDialog.y,
+            width: this.currentDialog.width,
+            height: this.currentDialog.height,
+            childrenCount: this.currentDialog.list.length,
+            dialogWidth: dialogWidth,
+            dialogHeight: dialogHeight
+          });
+          
+          // Add the polygon to the dialog
           this.currentDialog.add(collageBackground);
-          // Prevent background from catching input; buttons handle interaction
-          try { (collageBackground as any).disableInteractive?.(); } catch {}
-          // Keep reference for animated open/close
+          
+          // Keep reference for cleanup
           (this.currentDialog as any).collageWindow = collageBackground;
-          // Manually register animated shape using drawing coordinates (offsets)
+          
+          // Register for animation
           const shapeId = `menu_window_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-          // Register using drawing coordinates relative to graphics position (0,0) == container center
-          try { (windowShapes as any).registerAnimatedShape(shapeId, collageBackground, 'window', -halfW, -halfH, dialogWidth, dialogHeight); } catch {}
+          try { 
+            (windowShapes as any).registerAnimatedShape(shapeId, collageBackground, 'window', -halfW, -halfH, dialogWidth, dialogHeight); 
+            console.log('🎬 Registered window animation:', shapeId);
+          } catch (error) {
+            console.error('❌ Failed to register window animation:', error);
+          }
           (collageBackground as any).__shapeId = shapeId;
 
-          // Opening animation (match story window choppy expansion)
+          // Opening animation
           try {
             collageBackground.setScale(0.01);
             this.scene.tweens.add({
@@ -2795,7 +3190,9 @@ export class MenuManager {
           } catch {}
         }
       }
-    } catch {}
+    } catch (error) {
+      console.error('❌ Error creating collage background:', error);
+    }
     
     // Fallback simple background if collage couldn't be created
     if (!collageBackground) {
@@ -2810,66 +3207,286 @@ export class MenuManager {
     
     // Title rendered using WindowShapes narrative text (black animating background)
     const titleText = `<< ${String(menuConfig.title || '')} >>`;
-    try {
+    if (menuConfig.title && menuConfig.title.trim()) { // Only create title if it's not empty
+      try {
       const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
       if (ws && (ws as any).createNarrativeText) {
-        // Place at top-left, slightly overlapping the window edge
-        const nx = -halfW - 4;
-        const ny = -halfH - 4;
-        const nwidth = dialogWidth - 4;
-        (ws as any).createNarrativeText(nx, ny, titleText, nwidth, this.currentDialog);
+        // Place at top-left, much more to the left
+        let nx = -halfW - 20; // Move much further left
+        // Adjust title position for small dialogs to prevent clipping
+        const ny = dialogHeight < 120 ? -halfH + 5 : -halfH - 12;
+        let nwidth = dialogWidth - 80; // Reasonable width
+        
+        // Create title manually with same organic styling as other text tags
+        const titleElement = this.scene.add.text(nx, ny, titleText, {
+          fontSize: '20px',
+          color: '#ffffff',
+          align: 'left',
+          fontFamily: 'Arial',
+          padding: { x: 8, y: 6 },
+          wordWrap: { width: nwidth, useAdvancedWrap: true }
+        });
+        titleElement.setOrigin(0, 0.5); // Left-anchored
+        titleElement.setWordWrapWidth(nwidth);
+        titleElement.setAlign('left');
+        titleElement.setDepth(11);
+        
+        // Get text bounds for background sizing
+        const textBounds = titleElement.getBounds();
+        
+        // Create organic background using createNarrativeBackground (same as other text tags)
+        const titleBackground = (ws as any).createNarrativeBackground({
+          x: textBounds.x - 8,
+          y: textBounds.y - 8,
+          width: textBounds.width + 16,
+          height: textBounds.height + 16,
+          fillColor: 0x000000,
+          shapeType: 'narrativeBackground'
+        }, true);
+        titleBackground.setDepth(10);
+        
+        this.currentDialog.add(titleBackground);
+        this.currentDialog.add(titleElement);
+        
+        // Add subtitle if provided
+        if (menuConfig.subtitle) {
+          // Position subtitle relative to right side (like title is to left side)
+          let subtitleX = halfW - 2 - 80; // Scooch 80px to the left (moved further left)
+          const subtitleY = ny + 40 + 20; // Scooch 20px down (moved lower)
+          let subtitleWidth = nwidth - 20; // Slightly narrower than title
+          
+          // Create subtitle as single clickable element
+          const subtitleText = menuConfig.subtitle;
+          
+          // Create subtitle text element
+          const subtitleElement = this.scene.add.text(subtitleX, subtitleY, subtitleText, {
+            fontSize: '12px',
+            color: '#ffffff',
+            align: 'right',
+            fontFamily: 'Arial',
+            fontStyle: 'italic',
+            padding: { x: 8, y: 6 },
+            wordWrap: { width: subtitleWidth, useAdvancedWrap: true }
+          });
+          subtitleElement.setOrigin(0.5, 0.5); // Center anchor for pulsing
+          subtitleElement.setWordWrapWidth(subtitleWidth);
+          subtitleElement.setAlign('right');
+          subtitleElement.setDepth(10); // Lower than title (which is depth 11)
+          
+          // Apply same rotation as other narrative text
+          const rotationVariation = (ws as any).generateUniqueRotation ? (ws as any).generateUniqueRotation() : 0;
+          subtitleElement.setRotation(rotationVariation);
+          
+          // Create two-layer background system: stable clickable + organic visual
+          const textBounds = subtitleElement.getBounds();
+          const bgPadding = 8;
+          const bgWidth = textBounds.width + (bgPadding * 2);
+          const bgHeight = textBounds.height + (bgPadding * 2);
+          
+          // Layer 1: Stable clickable rectangle (invisible but interactive)
+          const subtitleClickArea = this.scene.add.rectangle(
+            subtitleX, subtitleY, bgWidth, bgHeight, 0x000000, 0
+          );
+          subtitleClickArea.setDepth(12); // Above menu text (depth 11) so it can be clicked without advancing text
+          subtitleClickArea.setRotation(rotationVariation);
+          subtitleClickArea.setInteractive({ useHandCursor: true });
+          
+          // Layer 2: Create organic background manually with correct size
+          console.log('🎵 Creating subtitle background manually with size:', bgWidth, 'x', bgHeight);
+          const subtitleBackground = this.scene.add.graphics();
+          
+          // Create organic black rectangle with the exact size we need
+          subtitleBackground.fillStyle(0x000000, 1.0);
+          
+          // Create organic corners with slight randomization
+          const cornerVariation = 3;
+          const topLeft = { 
+            x: -bgWidth/2 + Phaser.Math.Between(0, cornerVariation), 
+            y: -bgHeight/2 + Phaser.Math.Between(0, cornerVariation) 
+          };
+          const topRight = { 
+            x: bgWidth/2 + Phaser.Math.Between(-cornerVariation, 0), 
+            y: -bgHeight/2 + Phaser.Math.Between(0, cornerVariation) 
+          };
+          const bottomRight = { 
+            x: bgWidth/2 + Phaser.Math.Between(-cornerVariation, 0), 
+            y: bgHeight/2 + Phaser.Math.Between(-cornerVariation, 0) 
+          };
+          const bottomLeft = { 
+            x: -bgWidth/2 + Phaser.Math.Between(0, cornerVariation), 
+            y: bgHeight/2 + Phaser.Math.Between(-cornerVariation, 0) 
+          };
+          
+          // Draw organic rectangle
+          subtitleBackground.beginPath();
+          subtitleBackground.moveTo(topLeft.x, topLeft.y);
+          subtitleBackground.lineTo(topRight.x, topRight.y);
+          subtitleBackground.lineTo(bottomRight.x, bottomRight.y);
+          subtitleBackground.lineTo(bottomLeft.x, bottomLeft.y);
+          subtitleBackground.closePath();
+          subtitleBackground.fillPath();
+          
+          // Position the background
+          subtitleBackground.setPosition(subtitleX, subtitleY);
+          
+          if (subtitleBackground && subtitleBackground.setRotation) {
+            subtitleBackground.setRotation(rotationVariation);
+          }
+          subtitleBackground.setDepth(8); // Behind the click area, lowest of all subtitle elements
+          
+          // Add stepped pulsing animation using existing step system
+          const steps = [1.0, 1.15]; // Flip between regular size and 1.15x size (less extreme)
+          let stepDirection = 1; // 1 for forward, -1 for backward
+          let currentStep = 0;
+          
+          // Store animation state on the elements for the existing animation system to use
+          (subtitleElement as any).__subtitleAnimation = {
+            steps,
+            currentStep,
+            stepDirection,
+            elements: [subtitleElement, subtitleBackground, subtitleClickArea],
+            position: { x: subtitleX, y: subtitleY }
+          };
+          
+          // Register with the existing animation system
+          if (ws.registerAnimatedShape) {
+            const shapeId = `subtitle_pulse_${Date.now()}`;
+            ws.registerAnimatedShape(shapeId, subtitleElement as any, 'subtitle_pulse', 0, 0, 0, 0);
+            
+            // Store for cleanup
+            (subtitleElement as any).subtitleAnimationId = shapeId;
+          }
+          
+          // Add click handlers to the stable click area
+          subtitleClickArea.on('pointerdown', (pointer: any) => {
+            pointer.event.stopPropagation();
+            console.log('🎵 Subtitle pointerdown');
+          });
+          
+          subtitleClickArea.on('pointerup', (pointer: any) => {
+            pointer.event.stopPropagation();
+            console.log('🎵 Subtitle clicked - opening Bandcamp');
+            window.open('https://summerbruise.bandcamp.com/album/infinity-guise', '_blank');
+          });
+          
+          // Add hover effects
+          subtitleClickArea.on('pointerover', () => {
+            console.log('🎵 Subtitle hover');
+          });
+          
+          subtitleClickArea.on('pointerout', () => {
+            console.log('🎵 Subtitle hover out');
+          });
+          
+          this.currentDialog.add(subtitleBackground);
+          this.currentDialog.add(subtitleClickArea);
+          this.currentDialog.add(subtitleElement);
+          
+          // Store subtitle references for cleanup
+          (this.currentDialog as any).subtitleElement = subtitleElement;
+          (this.currentDialog as any).subtitleBackground = subtitleBackground;
+          (this.currentDialog as any).subtitleClickArea = subtitleClickArea;
+        }
       } else {
-        const title = this.scene.add.text(-halfW + 6, -halfH + 6, titleText, {
+        const title = this.scene.add.text(-halfW - 3, -halfH - 3, titleText, {
           fontSize: '20px', color: '#000000', fontStyle: 'bold'
         }).setOrigin(0, 0);
-        this.currentDialog.add(title);
+    this.currentDialog.add(title);
+    
+        // Add subtitle fallback if provided
+        if (menuConfig.subtitle) {
+          const subtitle = this.scene.add.text(halfW - 2, -halfH + 28, menuConfig.subtitle, {
+            fontSize: '12px', color: '#000000', fontStyle: 'italic' // 60% of 20px title size, italic
+          }).setOrigin(1, 0); // Right anchoring
+          this.currentDialog.add(subtitle);
+        }
       }
     } catch {
-      const title = this.scene.add.text(-halfW + 6, -halfH + 6, titleText, {
+      const title = this.scene.add.text(-halfW - 3, -halfH - 3, titleText, {
         fontSize: '20px', color: '#000000', fontStyle: 'bold'
       }).setOrigin(0, 0);
       this.currentDialog.add(title);
+      
+      // Add subtitle fallback if provided
+      if (menuConfig.subtitle) {
+        const subtitle = this.scene.add.text(halfW - 2, -halfH + 28, menuConfig.subtitle, {
+          fontSize: '12px', color: '#000000', fontStyle: 'italic' // 60% of 20px title size, italic
+        }).setOrigin(1, 0); // Right anchoring
+        this.currentDialog.add(subtitle);
+      }
     }
+    } // Close the if statement for non-empty title
     
     // Content - render with narrative text blocks (black animated backs), supporting multiple lines
     if (menuConfig.content) {
       const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
-      const lines = String(menuConfig.content || '').split('\n').map(s => s.trim()).filter(Boolean);
-      const totalTexts = Math.max(1, lines.length);
-      const topMargin = 40;
-      const bottomMargin = 110; // space for buttons
-      const availableHeight = dialogHeight - topMargin - bottomMargin;
-      const leftX = -halfW + 20;
-      const rightX = halfW - 20;
-      const blockWidth = dialogWidth - 40;
+      
+      // For START menu, use CYOA-style text advancement
+      if (menuType === 'START' && (menuConfig as any).texts && Array.isArray((menuConfig as any).texts)) {
+        // Set up CYOA-style text advancement for START menu
+        (this.currentDialog as any).storyTexts = (menuConfig as any).texts;
+        (this.currentDialog as any).currentTextIndex = 0;
+        (this.currentDialog as any).containerWidth = dialogWidth;
+        (this.currentDialog as any).containerHeight = dialogHeight;
+        
+        // Start the text sequence
+        this.startTextSequence(this.currentDialog);
+      } else {
+        // Regular content rendering for other menus
+        // Special-case: Pothole menu should render plain black text within the white window (no black rectangle)
+        if (menuType === 'POTHOLE') {
+          const padding = 6;
+          const textWidth = dialogWidth - padding * 2;
+          const text = String(menuConfig.content || '').trim();
+          const t = this.scene.add.text(0, 0, text, {
+            fontSize: '12px',
+            color: '#000000',
+            wordWrap: { width: textWidth, useAdvancedWrap: true },
+            align: 'center'
+          }).setOrigin(0.5);
+          t.setPosition(0, 0); // Center inside the small pothole window
+          this.currentDialog.add(t);
+        } else {
+          const lines = String(menuConfig.content || '').split('\n').map(s => s.trim()).filter(Boolean);
+          const totalTexts = Math.max(1, lines.length);
+          const topMargin = 40;
+          const bottomMargin = 110; // space for buttons
+          const availableHeight = dialogHeight - topMargin - bottomMargin;
+          // Push further to extremes per request
+          const leftX = -halfW + 10;
+          const rightX = halfW - 10;
+          const blockWidth = dialogWidth - 20;
 
-      const getYForIndex = (idx: number): number => {
-        if (totalTexts === 1) return -halfH + topMargin + availableHeight / 2;
-        const spacing = availableHeight / (totalTexts - 1);
-        return -halfH + topMargin + idx * spacing;
-      };
+          const getYForIndex = (idx: number): number => {
+            if (totalTexts === 1) return -halfH + topMargin + availableHeight / 2;
+            const spacing = availableHeight / (totalTexts - 1);
+            return -halfH + topMargin + idx * spacing;
+          };
 
-      for (let i = 0; i < totalTexts; i++) {
-        const text = lines[i] || lines[0];
-        const y = getYForIndex(i);
-        // Two-line special: first left, second right; otherwise left
-        const useRight = (totalTexts === 2 && i === 1);
-        const x = useRight ? (rightX - blockWidth) : leftX;
-        try {
-          if (ws && (ws as any).createNarrativeText) {
-            (ws as any).createNarrativeText(x, y, text, blockWidth, this.currentDialog);
-          } else {
-            const t = this.scene.add.text(0, 0, text, {
-              fontSize: '16px', color: '#000000', wordWrap: { width: blockWidth }, align: useRight ? 'right' : 'left'
-            }).setOrigin(useRight ? 1 : 0, 0.5);
-            t.setPosition(useRight ? rightX : leftX, y);
-            this.currentDialog.add(t);
+          for (let i = 0; i < totalTexts; i++) {
+            const text = lines[i] || lines[0];
+            const y = getYForIndex(i);
+            // Two-line special: first left, second right; otherwise left
+            const useRight = (totalTexts === 2 && i === 1);
+            const x = useRight ? (rightX - blockWidth) : leftX;
+            try {
+              if (ws && (ws as any).createNarrativeText) {
+                (ws as any).createNarrativeText(x, y, text, blockWidth, this.currentDialog);
+              } else {
+                const t = this.scene.add.text(0, 0, text, {
+                  fontSize: '16px', color: '#000000', wordWrap: { width: blockWidth }, align: useRight ? 'right' : 'left'
+                }).setOrigin(useRight ? 1 : 0, 0.5);
+                t.setPosition(useRight ? rightX : leftX, y);
+                this.currentDialog.add(t);
+              }
+            } catch {}
           }
-        } catch {}
+        }
       }
     }
     
-    // Buttons
+    // Buttons (skip for START menu as it handles its own buttons)
+    if (menuType !== 'START') {
     const buttonBaseY = (menuConfig.content ? (halfH - 70) : (halfH - 90));
     const buttonSpacing = 50;
     
@@ -2886,7 +3503,7 @@ export class MenuManager {
       const btnHeight = isCloseButton ? 30 : 34;
       const halfBtnW = btnWidth / 2;
       const halfBtnH = btnHeight / 2;
-
+      
       let btnGraphic: Phaser.GameObjects.Graphics | null = null;
       try {
         const gameScene = this.scene.scene.get('GameScene');
@@ -3003,6 +3620,7 @@ export class MenuManager {
       hitTarget.on('pointerover', () => { try { (this.scene.input as any).setDefaultCursor('pointer'); } catch {} });
       hitTarget.on('pointerout', () => { try { (this.scene.input as any).setDefaultCursor('default'); } catch {} });
     });
+    }
     
     // Notify GameScene that a menu is now open
     const gameSceneForTutorial: any = this.scene.scene.get('GameScene');
@@ -3083,6 +3701,63 @@ export class MenuManager {
   private finishDialogCleanup() {
     if (!this.currentDialog) return;
 
+    // Unregister any animated shapes from WindowShapes to prevent leak
+    try {
+      const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+      if (ws && (ws as any).unregisterAnimatedShape) {
+        // Try common animation IDs that may be attached to the dialog
+        const commonIds = ['hMenuAnimationId', 'cyoaAnimationId', 'animationId'];
+        commonIds.forEach(id => {
+          const shapeId = (this.currentDialog as any)[id];
+          if (shapeId) {
+            (ws as any).unregisterAnimatedShape(shapeId);
+          }
+        });
+        
+        // Also check for __shapeId on the collage window
+        const collageWindow = (this.currentDialog as any).collageWindow;
+        if (collageWindow && (collageWindow as any).__shapeId) {
+          (ws as any).unregisterAnimatedShape((collageWindow as any).__shapeId);
+        }
+
+        // Clean up background sprite and bitmap mask
+        const backgroundSprite = (this.currentDialog as any).backgroundSprite;
+        if (backgroundSprite && backgroundSprite.destroy) {
+          backgroundSprite.destroy();
+        }
+        
+        const geometryMask = (this.currentDialog as any).geometryMask;
+        if (geometryMask && geometryMask.destroy) {
+          geometryMask.destroy();
+        }
+        
+
+        // Recursively unregister any child Graphics with animationId or cyoaAnimationId
+        const unregisterFromChildren = (container: any) => {
+          try {
+            const children: any[] = (container && container.list) ? container.list : [];
+            children.forEach((child: any) => {
+              if (child && child.type === 'Graphics') {
+                // Check for both animationId and cyoaAnimationId
+                const animId = (child as any).animationId;
+                const cyoaId = (child as any).cyoaAnimationId;
+                if (animId) {
+                  (ws as any).unregisterAnimatedShape(animId);
+                }
+                if (cyoaId) {
+                  (ws as any).unregisterAnimatedShape(cyoaId);
+                }
+              }
+              if (child && child.list && Array.isArray(child.list)) {
+                unregisterFromChildren(child);
+              }
+            });
+          } catch {}
+        };
+        unregisterFromChildren(this.currentDialog);
+      }
+    } catch {}
+
     // Clean up background if it exists
     if ((this.currentDialog as any).background) {
       const background = (this.currentDialog as any).background;
@@ -3091,6 +3766,13 @@ export class MenuManager {
       } else {
         background.destroy();
       }
+    }
+        
+        // Clean up subtitle animation if it exists
+        const subtitleElement = (this.currentDialog as any).subtitleElement;
+        if (subtitleElement && (subtitleElement as any).pulseTween) {
+          (subtitleElement as any).pulseTween.stop();
+          (subtitleElement as any).pulseTween.destroy();
     }
 
     // Clean up ad-hoc UI parts if present
@@ -3291,5 +3973,381 @@ export class MenuManager {
       }
       gameScene.events.emit('gameResumed');
     }
+  }
+
+  /**
+   * Create a masked window that shows images/camera views through the white background
+   * @param x - X position of the window
+   * @param y - Y position of the window  
+   * @param width - Width of the window
+   * @param height - Height of the window
+   * @param contentType - Type of content to show ('image', 'camera', 'none')
+   * @param contentKey - For images: the image key, for camera: camera reference
+   * @returns Object containing window, mask, and content container
+   */
+  createMaskedMenuWindow(x: number, y: number, width: number, height: number, contentType: 'image' | 'camera' | 'none' = 'none', contentKey?: any): { window: Phaser.GameObjects.Graphics, mask: Phaser.Display.Masks.GeometryMask, contentContainer: Phaser.GameObjects.Container } {
+    const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+    if (!ws) {
+      throw new Error('WindowShapes not available');
+    }
+
+    const config = {
+      x: x - width/2, // Convert center coordinates to top-left
+      y: y - height/2,
+      width,
+      height,
+      fillColor: 0xffffff,
+      fillAlpha: 1.0
+    };
+
+    const result = ws.createMaskedWindow(config, undefined, true);
+
+    // Add content based on type
+    if (contentType === 'image' && contentKey) {
+      ws.addImageToMaskedWindow(result.contentContainer, contentKey, 0, 0, 1);
+    } else if (contentType === 'camera' && contentKey) {
+      ws.addCameraViewToMaskedWindow(result.contentContainer, contentKey, 0, 0, 1);
+    }
+
+    return result;
+  }
+
+  /**
+   * Create a masked window with tiled scrolling background
+   * @param x - X position of the window
+   * @param y - Y position of the window  
+   * @param width - Width of the window
+   * @param height - Height of the window
+   * @param textureKey - The texture key for the tiled background
+   * @param scrollSpeedX - Horizontal scroll speed (pixels per frame)
+   * @param scrollSpeedY - Vertical scroll speed (pixels per frame)
+   * @returns Object containing window, mask, content container, and tile sprite
+   */
+  createMaskedMenuWithTiledBackground(x: number, y: number, width: number, height: number, textureKey: string, scrollSpeedX: number = 0, scrollSpeedY: number = 0): { window: Phaser.GameObjects.Graphics, mask: Phaser.Display.Masks.GeometryMask, contentContainer: Phaser.GameObjects.Container, tileSprite: Phaser.GameObjects.TileSprite } {
+    const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+    if (!ws) {
+      throw new Error('WindowShapes not available');
+    }
+
+    const config = {
+      x: x - width/2, // Convert center coordinates to top-left
+      y: y - height/2,
+      width,
+      height,
+      fillColor: 0xffffff,
+      fillAlpha: 1.0
+    };
+
+    const result = ws.createMaskedWindow(config, undefined, true);
+
+    // Add tiled scrolling background
+    const tileSprite = ws.addTiledScrollingBackground(result.contentContainer, textureKey, 0, 0, scrollSpeedX, scrollSpeedY);
+    
+    // Resize the tile sprite to fill the window
+    tileSprite.setDisplaySize(width, height);
+
+    return { ...result, tileSprite };
+  }
+
+  /**
+   * Example: Create a START menu with camera view showing through the white background
+   * This demonstrates how to use the masking system
+   */
+  showMaskedStartMenu(): void {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Create masked window (same size as regular start menu)
+    const maskedResult = this.createMaskedMenuWindow(
+      gameWidth/2, gameHeight/2, 
+      Math.floor(gameWidth * 0.85), Math.floor(gameHeight * 0.90),
+      'camera', // Show camera view through the mask
+      this.scene.cameras.main // Pass the main camera
+    );
+    
+    // Add the window to the scene
+    this.scene.add.existing(maskedResult.window);
+    this.scene.add.existing(maskedResult.contentContainer);
+    
+    // You can now add text, buttons, etc. on top of the masked window
+    // The white background will act as a mask, showing the camera view behind it
+  }
+
+  /**
+   * Show START menu with x.png tiled scrolling background
+   * Scrolls up and to the right as requested
+   */
+  showStartMenuWithTiledBackground(): void {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Create masked window with tiled scrolling background
+    const maskedResult = this.createMaskedMenuWithTiledBackground(
+      gameWidth/2, gameHeight/2, 
+      Math.floor(gameWidth * 0.85), Math.floor(gameHeight * 0.90),
+      'x', // Your x.png asset
+      0.5, // Scroll right (positive X)
+      -0.3 // Scroll up (negative Y)
+    );
+    
+    // Add the window to the scene
+    this.scene.add.existing(maskedResult.window);
+    this.scene.add.existing(maskedResult.contentContainer);
+    
+    // Store reference for cleanup
+    (this as any).currentMaskedWindow = maskedResult;
+    
+    console.log('🎭 Created START menu with x.png tiled scrolling background');
+  }
+
+  /**
+   * Test method to show tiled scrolling background
+   * Call this from console: menuManager.showTiledBackgroundTest()
+   */
+  showTiledBackgroundTest(): void {
+    const gameWidth = this.scene.cameras.main.width;
+    const gameHeight = this.scene.cameras.main.height;
+    
+    // Create a smaller test window
+    const maskedResult = this.createMaskedMenuWithTiledBackground(
+      gameWidth/2, gameHeight/2, 
+      300, 200, // Smaller test window
+      'x', // Your x.png asset
+      0.5, // Scroll right
+      -0.3 // Scroll up
+    );
+    
+    // Add the window to the scene
+    this.scene.add.existing(maskedResult.window);
+    this.scene.add.existing(maskedResult.contentContainer);
+    
+    console.log('🎭 Test window created with x.png tiled scrolling background');
+    console.log('📝 Call menuManager.hideTiledBackgroundTest() to remove it');
+    
+    // Store reference for cleanup
+    (this as any).testMaskedWindow = maskedResult;
+  }
+
+  /**
+   * Hide the test tiled background window
+   */
+  hideTiledBackgroundTest(): void {
+    const testWindow = (this as any).testMaskedWindow;
+    if (testWindow) {
+      testWindow.window.destroy();
+      testWindow.contentContainer.destroy();
+      (this as any).testMaskedWindow = null;
+      console.log('🎭 Test window removed');
+    }
+  }
+
+  /**
+   * Start text sequence for START menu (CYOA-style advancement)
+   */
+  private startTextSequence(container: any): void {
+    if (!container || !container.scene) return;
+    
+    // Add click-to-advance functionality
+    const clickArea = this.scene.add.rectangle(0, 0, container.containerWidth, container.containerHeight, 0x000000, 0);
+    clickArea.setInteractive();
+    clickArea.on('pointerup', () => {
+      this.revealNextText(container);
+    });
+    container.add(clickArea);
+    
+    // Store reference to click area for cleanup
+    (container as any).clickArea = clickArea;
+    
+    // Start with first text
+    this.revealNextText(container);
+  }
+
+  /**
+   * Reveal next text in sequence (for START menu)
+   */
+  private revealNextText(container: any): void {
+    if (!container || !container.scene) return;
+    
+    if (container.currentTextIndex >= container.storyTexts.length) {
+      // All text revealed, show buttons
+      this.showStartButtons(container);
+      return;
+    }
+    
+    const currentText = container.storyTexts[container.currentTextIndex];
+    const totalTexts = container.storyTexts.length;
+    
+    // Simple, consistent even distribution within sensible window bounds
+    const topMargin = 130; // Space from title (moved down 20px more)
+    const bottomMargin = 120; // Space for button (moved up to avoid iPhone gesture area)
+    const startY = -container.containerHeight/2 + topMargin;
+    const endY = container.containerHeight/2 - bottomMargin;
+    const availableHeight = endY - startY;
+    
+    let textY;
+    if (totalTexts === 1) {
+      // Single text: center it
+      textY = startY + availableHeight / 2;
+    } else {
+      // Multiple texts: simple even distribution
+      const spacing = availableHeight / (totalTexts - 1);
+      textY = startY + (container.currentTextIndex * spacing);
+    }
+    
+    console.log(`📏 Positioning text ${container.currentTextIndex}: totalTexts=${totalTexts}, availableHeight=${availableHeight}, spacing=${totalTexts > 1 ? availableHeight / (totalTexts - 1) : 'N/A'}, textY=${textY}`);
+    
+    // Alternate between left and right sides, all center-anchored
+    const isLeftSide = container.currentTextIndex % 2 === 0;
+    
+    // Use 90% of menu width for text positioning (more spread)
+    const availableWidth = container.containerWidth * 0.9;
+    const leftBound = -container.containerWidth/2 + (container.containerWidth - availableWidth)/2; // Left edge of 90% area
+    const rightBound = container.containerWidth/2 - (container.containerWidth - availableWidth)/2; // Right edge of 90% area
+    
+    // Set text width to reasonable size
+    const textWidth = Math.min(availableWidth * 0.6, 200); // Max 60% of available width or 200px
+    
+    // Calculate X position based on side preference - push to absolute extremes
+    let textX;
+    if (isLeftSide) {
+      // Left side: position in leftmost 20% of available area (extreme left)
+      const leftArea = availableWidth * 0.2; // Even smaller area, extreme left-biased
+      textX = leftBound + Math.random() * leftArea;
+    } else {
+      // Right side: position in rightmost 20% of available area (extreme right)
+      const rightArea = availableWidth * 0.2; // Even smaller area, extreme right-biased
+      textX = rightBound - rightArea + Math.random() * rightArea;
+    }
+    
+    // Add offset for TUTORIAL and IGNITION menus to prevent text from hanging off the left
+    if (this.currentDisplayedMenuType === 'TUTORIAL_INTERRUPT' || this.currentDisplayedMenuType === 'IGNITION') {
+      textX += 50; // Move text 50px to the right
+    }
+    
+    // Add offset for pothole menus to move text to the right
+    if (container.isPothole) {
+      textX += 50; // Move text 50px to the right
+    }
+    
+    // Ensure text doesn't go offscreen (center-anchored, so check half-width on each side)
+    const halfTextWidth = textWidth / 2;
+    const leftScreenBound = -container.containerWidth/2 + halfTextWidth;
+    const rightScreenBound = container.containerWidth/2 - halfTextWidth;
+    
+    // Clamp X position to stay on screen
+    const adjustedTextX = Math.max(leftScreenBound, Math.min(rightScreenBound, textX));
+    
+    // Create narrative text
+    try {
+      const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+      if (ws && (ws as any).createNarrativeText) {
+        console.log(`📝 Creating text ${container.currentTextIndex}: "${currentText}" at (${adjustedTextX}, ${textY}), width: ${textWidth}, side: ${isLeftSide ? 'left' : 'right'}, ${isLeftSide ? 'left' : 'right'}-justified`);
+        const result = (ws as any).createNarrativeText(adjustedTextX, textY, currentText, textWidth, container, isLeftSide ? 'left' : 'right');
+        
+        // Log text bounds for debugging
+        if (result && result.textElement && result.textElement.getBounds) {
+          const bounds = result.textElement.getBounds();
+          console.log(`📏 Text ${container.currentTextIndex} bounds: top=${bounds.top}, bottom=${bounds.bottom}, height=${bounds.height}`);
+        }
+      }
+    } catch {}
+    
+    container.currentTextIndex++;
+  }
+
+  /**
+   * Show buttons after text sequence completes
+   */
+  private showStartButtons(container: any): void {
+    if (!container || !container.scene) return;
+    
+    // Prevent multiple button creation
+    if ((container as any).buttonsCreated) {
+      console.log('🔘 Buttons already created, skipping');
+      return;
+    }
+    (container as any).buttonsCreated = true;
+    
+    // Remove click area using stored reference
+    const clickArea = (container as any).clickArea;
+    if (clickArea && clickArea.scene) {
+      clickArea.destroy();
+      (container as any).clickArea = null;
+    }
+    
+    // Create properly styled button using the same system as other menus
+    const buttonY = container.containerHeight/2 - 60; // Higher up to avoid iPhone gesture area
+    const buttonX = container.containerWidth/2 - 53; // Moved 3px further left (was -50)
+    
+    // Create button container
+    const btnContainer = this.scene.add.container(buttonX, buttonY);
+    btnContainer.setDepth((container.depth || 0) + 2);
+    btnContainer.setScrollFactor(0);
+    container.add(btnContainer);
+    
+    // Create the collage button graphic
+    const btnWidth = 120; // Narrower (was 160)
+    const btnHeight = 34;
+    const halfBtnW = btnWidth / 2;
+    const halfBtnH = btnHeight / 2;
+    
+    let btnGraphic: Phaser.GameObjects.Graphics | null = null;
+    try {
+      const gameScene = this.scene.scene.get('GameScene');
+      const windowShapes = (gameScene && (gameScene as any).windowShapes) || this.windowShapes;
+      if (windowShapes) this.windowShapes = windowShapes;
+      if (windowShapes && windowShapes.createCollageButton) {
+        // Create the button graphic at drawing offsets; container centers it
+        btnGraphic = windowShapes.createCollageButton(-halfBtnW, -halfBtnH, btnWidth, btnHeight);
+        if (btnGraphic) {
+          btnContainer.add(btnGraphic);
+          // Manually register button shape using drawing coordinates
+          const btnId = `start_btn_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+          try { (windowShapes as any).registerAnimatedShape(btnId, btnGraphic, 'button', -halfBtnW, -halfBtnH, btnWidth, btnHeight); } catch {}
+          (btnGraphic as any).__shapeId = btnId;
+        }
+      }
+    } catch {}
+    
+    // Create button label
+    const label = this.scene.add.text(0, 0, 'start game', {
+      fontSize: '18px',
+      color: '#000000',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+    btnContainer.add(label);
+    
+    // Create invisible hit target
+    const hitTarget = this.scene.add.rectangle(0, 0, btnWidth, btnHeight, 0x000000, 0);
+    hitTarget.setOrigin(0.5);
+    hitTarget.setScrollFactor(0);
+    hitTarget.setDepth((btnContainer.depth || 1) + 1);
+    btnContainer.add(hitTarget);
+    hitTarget.setInteractive({ useHandCursor: true })
+      .on('pointerup', () => {
+        console.log('🟢 Start button clicked');
+        this.closeDialog();
+        const appScene = this.scene.scene.get('AppScene');
+        if (appScene) {
+          (appScene as any).startGame();
+        }
+      });
+    
+    // Fallback styling if no graphic
+    if (!btnGraphic) {
+      const fallback = this.scene.add.graphics();
+      fallback.fillStyle(0x34495e, 1);
+      fallback.fillRoundedRect(-halfBtnW, -halfBtnH, btnWidth, btnHeight, 6);
+      fallback.lineStyle(2, 0xffffff, 1);
+      fallback.strokeRoundedRect(-halfBtnW, -halfBtnH, btnWidth, btnHeight, 6);
+      btnContainer.addAt(fallback, 0);
+      label.setColor('#ffffff');
+    }
+    
+    // Cursor hints
+    hitTarget.on('pointerover', () => { try { (this.scene.input as any).setDefaultCursor('pointer'); } catch {} });
+    hitTarget.on('pointerout', () => { try { (this.scene.input as any).setDefaultCursor('default'); } catch {} });
+    
+    console.log(`🔘 Start button created with collage styling at (${buttonX}, ${buttonY})`);
   }
 }

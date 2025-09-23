@@ -503,6 +503,13 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       console.log('🧹 Cleaning up standalone CYOA buttons before callback');
       (this.container as any).storyButtons.forEach((button: any) => {
         if (button && button.destroy && button.scene) {
+          // Unregister from animation system before destroying
+          if (button.type === 'Graphics') {
+            const animId = (button as any).animationId;
+            if (animId && this.windowShapes && (this.windowShapes as any).unregisterAnimatedShape) {
+              (this.windowShapes as any).unregisterAnimatedShape(animId);
+            }
+          }
           button.destroy();
         }
       });
@@ -511,7 +518,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
   }
 
   private hideTextElementsExceptOverlay(): void {
-    // Hide all text elements and their backgrounds (but keep dithered overlay)
+    // Hide all text elements and their backgrounds (but keep overlay)
     console.log('👻 Hiding text elements before closing animation (keeping overlay)');
     
     // Hide all text elements
@@ -576,6 +583,17 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
     const overlayId = `cyoa_dither_${targetContainer.name || 'default'}`;
     const overlay = this.windowShapes.overlayManager.createDitherOverlay(overlayId, 1, 0.3);
     
+    // Apply pattern override if requested
+    try {
+      const requested = (targetContainer as any).__overlayPattern as string | undefined;
+      if (requested && overlay && (overlay as any).container) {
+        const ts = (overlay as any).container.list?.find((o: any) => o instanceof Phaser.GameObjects.TileSprite) as Phaser.GameObjects.TileSprite | undefined;
+        if (ts && this.scene.textures.exists(requested)) {
+          ts.setTexture(requested);
+        }
+      }
+    } catch {}
+    
     // Store reference for cleanup
     (targetContainer as any).ditheredOverlay = overlay;
     
@@ -596,6 +614,7 @@ export class WindowShapes {
   private activeSpeechBubbles = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, height: number }>();
   private activeAnimatedShapes = new Map<string, { graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number }>();
   private activeSteeringWheels = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, currentRotation: number }>();
+  private activeSubtitleAnimations = new Map<string, { element: Phaser.GameObjects.Text, animationData: any }>();
   
   // Narrative window management
   private activeNarrativeWindow: Phaser.GameObjects.Container | null = null;
@@ -1295,7 +1314,7 @@ export class WindowShapes {
   /**
    * Create narrative text with tight black background - reusable component
    */
-  createNarrativeText(x: number, y: number, text: string, maxWidth: number, container: Phaser.GameObjects.Container): { textElement: Phaser.GameObjects.Text, background: Phaser.GameObjects.Graphics } {
+  createNarrativeText(x: number, y: number, text: string, maxWidth: number, container: Phaser.GameObjects.Container, alignment: 'left' | 'right' = 'left'): { textElement: Phaser.GameObjects.Text, background: Phaser.GameObjects.Graphics } {
     // Generate unique rotation to avoid similar rotations on same window
     const rotationVariation = this.generateUniqueRotation();
     const xVariation = (Math.random() - 0.5) * 10; // ±5 pixels
@@ -1304,16 +1323,17 @@ export class WindowShapes {
     const narrativeTextStyle = {
       fontSize: '20px', // Bigger font for narrative text
       color: '#ffffff',
-      align: 'left', // Explicitly left-aligned
+      align: alignment, // Use the passed alignment parameter
       fontFamily: 'Arial', // Ensure consistent font
-      padding: { x: 8, y: 6 } // Add some internal padding
+      padding: { x: 8, y: 6 }, // Add some internal padding
+      wordWrap: { width: maxWidth, useAdvancedWrap: true } // Enable word wrapping
     };
     
     // Create text element with jaunty rotation variation
     const textElement = this.scene.add.text(x + xVariation, y, text, narrativeTextStyle);
-    textElement.setOrigin(0, 0); // Ensure left-top origin for proper left justification
+    textElement.setOrigin(0.5, 0.5); // Center both horizontally and vertically
     textElement.setWordWrapWidth(maxWidth);
-    textElement.setAlign('left'); // Extra assurance of left alignment
+    textElement.setAlign(alignment); // Use the passed alignment parameter
     textElement.setDepth(11); // High depth for visibility
     textElement.setRotation(rotationVariation); // Apply jaunty rotation!
     
@@ -1346,6 +1366,8 @@ export class WindowShapes {
     
     // Use the specialized NARRATIVE BACKGROUND method (no shadows, pure black)
     const background = this.createNarrativeBackground(backgroundConfig, true);
+    // Apply the same rotation as the text element
+    background.setRotation(rotationVariation);
     // Depth is set inside createNarrativeBackground method (depth 12 - above transparent windows)
     
     // Add to container if provided
@@ -1355,6 +1377,78 @@ export class WindowShapes {
     }
     
     return { textElement, background };
+  }
+
+  /**
+   * Create a masked window that can show images/camera views through the white background
+   * The white background acts as a mask, revealing content behind it
+   */
+  createMaskedWindow(config: WindowShapeConfig, maskContent?: Phaser.GameObjects.GameObject, enableAnimation: boolean = false): { window: Phaser.GameObjects.Graphics, mask: Phaser.Display.Masks.GeometryMask, contentContainer: Phaser.GameObjects.Container } {
+    // Create the white window background (same as regular collage rect)
+    const window = this.createCollageRect({
+      ...config,
+      fillColor: 0xffffff, // White background
+      fillAlpha: 1.0
+    }, enableAnimation, 'maskedWindow');
+    
+    // Create a container for the masked content
+    const contentContainer = this.scene.add.container(config.x + config.width/2, config.y + config.height/2);
+    contentContainer.setDepth(window.depth - 1); // Behind the window
+    
+    // Create a geometry mask from the window shape
+    const mask = window.createGeometryMask();
+    contentContainer.setMask(mask);
+    
+    // Add the provided content to the container
+    if (maskContent) {
+      contentContainer.add(maskContent);
+    }
+    
+    return { window, mask, contentContainer };
+  }
+
+  /**
+   * Add image content to a masked window
+   */
+  addImageToMaskedWindow(contentContainer: Phaser.GameObjects.Container, imageKey: string, x: number = 0, y: number = 0, scale: number = 1): Phaser.GameObjects.Image {
+    const image = this.scene.add.image(x, y, imageKey);
+    image.setScale(scale);
+    contentContainer.add(image);
+    return image;
+  }
+
+  /**
+   * Add tiled scrolling background to a masked window
+   */
+  addTiledScrollingBackground(contentContainer: Phaser.GameObjects.Container, textureKey: string, x: number = 0, y: number = 0, scrollSpeedX: number = 0, scrollSpeedY: number = 0): Phaser.GameObjects.TileSprite {
+    // Create a tile sprite that fills the container
+    const tileSprite = this.scene.add.tileSprite(x, y, 400, 300, textureKey); // Default size, will be adjusted
+    tileSprite.setOrigin(0.5, 0.5);
+    contentContainer.add(tileSprite);
+    
+    // Set up scrolling animation
+    this.scene.events.on('postupdate', () => {
+      tileSprite.tilePositionX += scrollSpeedX;
+      tileSprite.tilePositionY += scrollSpeedY;
+    });
+    
+    return tileSprite;
+  }
+
+  /**
+   * Add camera view to a masked window (shows the game scene through the mask)
+   */
+  addCameraViewToMaskedWindow(contentContainer: Phaser.GameObjects.Container, camera: Phaser.Cameras.Scene2D.Camera, x: number = 0, y: number = 0, scale: number = 1): Phaser.GameObjects.RenderTexture {
+    const renderTexture = this.scene.add.renderTexture(x, y, camera.width, camera.height);
+    renderTexture.setScale(scale);
+    contentContainer.add(renderTexture);
+    
+    // Update the render texture with camera view each frame
+    this.scene.events.on('postupdate', () => {
+      renderTexture.draw(camera);
+    });
+    
+    return renderTexture;
   }
 
   /**
@@ -1545,6 +1639,28 @@ export class WindowShapes {
    * Call this from your game's half-step handler to update all registered shapes
    */
   onHalfStep(halfStep: number): void {
+    // Prune stale entries first so destroyed shapes don't accumulate
+    try {
+      this.activeAnimatedShapes.forEach((entry, id) => {
+        const g: any = entry.graphics;
+        if (!g || !g.scene) {
+          this.activeAnimatedShapes.delete(id);
+        }
+      });
+      this.activeSpeechBubbles.forEach((entry, id) => {
+        const g: any = entry.graphics;
+        if (!g || !g.scene) {
+          this.activeSpeechBubbles.delete(id);
+        }
+      });
+      this.activeSteeringWheels.forEach((entry, id) => {
+        const g: any = entry.graphics;
+        if (!g || !g.scene) {
+          this.activeSteeringWheels.delete(id);
+        }
+      });
+    } catch {}
+
     // Update speech bubbles on half-steps (more frequent for lively animation)
     this.activeSpeechBubbles.forEach(({ graphics, x, y, width, height }) => {
       this.regenerateSpeechBubbleShape(graphics, x, y, width, height);
@@ -1564,6 +1680,13 @@ export class WindowShapes {
       }
     });
     
+    // Update subtitle animations on every half-step (same frequency as other animations)
+    this.activeSubtitleAnimations.forEach(({ element, animationData }) => {
+      if (element && element.scene && animationData) {
+        this.updateSubtitleAnimation(element, animationData);
+      }
+    });
+    
     // Debug: Log active animated shapes count
     if (this.activeAnimatedShapes.size > 0) {
       console.log(`🎬 Animating ${this.activeAnimatedShapes.size} shapes on half-step ${halfStep}`);
@@ -1579,7 +1702,18 @@ export class WindowShapes {
    * Register an animated shape for ongoing updates
    */
   public registerAnimatedShape(shapeId: string, graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number): void {
-    this.activeAnimatedShapes.set(shapeId, { graphics, shapeType, x, y, width, height });
+    if (shapeType === 'subtitle_pulse') {
+      // Handle subtitle animation registration
+      const element = graphics as any; // The element passed is actually the text element
+      const animationData = element.__subtitleAnimation;
+      if (animationData) {
+        this.activeSubtitleAnimations.set(shapeId, { element, animationData });
+        console.log(`🎵 Registered subtitle animation: ${shapeId}`);
+      }
+    } else {
+      // Handle regular shape animations
+      this.activeAnimatedShapes.set(shapeId, { graphics, shapeType, x, y, width, height });
+    }
   }
 
   /**
@@ -1587,6 +1721,36 @@ export class WindowShapes {
    */
   public unregisterAnimatedShape(shapeId: string): void {
     this.activeAnimatedShapes.delete(shapeId);
+    this.activeSubtitleAnimations.delete(shapeId);
+  }
+  
+  /**
+   * Update subtitle animation with stepped scaling
+   */
+  private updateSubtitleAnimation(element: Phaser.GameObjects.Text, animationData: any): void {
+    const { steps, elements, position } = animationData;
+    let { currentStep, stepDirection } = animationData;
+    
+    // Update scale for all elements
+    const scale = steps[currentStep];
+    elements.forEach((el: any) => {
+      if (el && el.scene) {
+        el.setScale(scale);
+      }
+    });
+    
+    // Keep backgrounds positioned correctly
+    elements.forEach((el: any) => {
+      if (el && el.scene && el !== element) { // Skip the text element itself
+        el.setPosition(position.x, position.y);
+      }
+    });
+    
+    // Move to next step (simple toggle between 0 and 1)
+    currentStep = currentStep === 0 ? 1 : 0;
+    
+    // Update the animation data
+    animationData.currentStep = currentStep;
   }
 
   /**
@@ -2384,6 +2548,9 @@ export class WindowShapes {
     
     const container = cyoaWindow.getContainer();
     
+    // Set pattern override for CYOA
+    (container as any).__overlayPattern = 'hypercard_waves';
+    
     // Track as active narrative window (same queue system as H menu)
     this.activeNarrativeWindow = container;
     
@@ -2407,6 +2574,13 @@ export class WindowShapes {
         console.log('🧹 Cleaning up standalone CYOA buttons');
         (container as any).storyButtons.forEach((button: any) => {
           if (button && button.destroy && button.scene) {
+            // Unregister from animation system before destroying
+            if (button.type === 'Graphics') {
+              const animId = (button as any).animationId;
+              if (animId && this.unregisterAnimatedShape) {
+                this.unregisterAnimatedShape(animId);
+              }
+            }
             button.destroy();
           }
         });
@@ -2465,9 +2639,11 @@ export class WindowShapes {
       const textSpacing = availableHeight / totalTexts;
       textY = topMargin + (container.currentTextIndex * textSpacing);
     }
-    const textHeight = Math.min(textSpacing - 10, 60); // Max height per text, with spacing
+    const perTextSpacing = totalTexts > 0 ? (availableHeight / totalTexts) : availableHeight;
+    const textHeight = Math.min(perTextSpacing - 10, 60); // Max height per text, with spacing
     
-    console.log(`Creating text ${container.currentTextIndex}: x=${textX}, y=${textY}, w=${textWidth}, h=${textHeight}`);
+    // Debug log (reduced): show computed positions
+    // console.log(`Creating text ${container.currentTextIndex}: y=${textY}, w=${textWidth}, h=${textHeight}`);
     
     try {
       // Use the new narrative text creation method
@@ -2854,6 +3030,16 @@ export class WindowShapes {
   createDitheredOverlay(container: Phaser.GameObjects.Container): void {
     const overlayId = `dither_${container.name || 'default'}`;
     const overlay = this.overlayManager.createDitherOverlay(overlayId, 1, 0.3);
+    // If a specific pattern is requested on the container, swap it now
+    try {
+      const requested = (container as any).__overlayPattern as string | undefined;
+      if (requested && overlay && (overlay as any).container) {
+        const ts = (overlay as any).container.list?.find((o: any) => o instanceof Phaser.GameObjects.TileSprite) as Phaser.GameObjects.TileSprite | undefined;
+        if (ts && this.scene.textures.exists(requested)) {
+          ts.setTexture(requested);
+        }
+      }
+    } catch {}
     
     // Store reference for cleanup
     (container as any).ditheredOverlay = overlay;
