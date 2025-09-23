@@ -4516,6 +4516,19 @@ export class MenuManager {
     // Mark the current menu as user dismissed to prevent its restoration
     this.userDismissedMenuType = this.currentDisplayedMenuType;
 
+    // Special handling for SHOP menus: also close the parent EXIT menu
+    if (closingType === 'SHOP') {
+      console.log('🛒 Closing SHOP menu - also closing parent EXIT menu');
+      // Find and close the parent EXIT menu
+      const exitMenuIndex = this.menuStack.findIndex(m => m.type === 'EXIT');
+      if (exitMenuIndex !== -1) {
+        console.log('🚪 Found parent EXIT menu, closing it as well');
+        this.popSpecificMenu('EXIT');
+        // Mark EXIT as user dismissed to prevent restoration
+        this.userDismissedMenuType = 'EXIT';
+      }
+    }
+
     // Simple cleanup - just pop the current menu and resume game
     if (this.currentDisplayedMenuType) {
       const menuType = this.currentDisplayedMenuType;
