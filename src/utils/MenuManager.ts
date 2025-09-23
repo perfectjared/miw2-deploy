@@ -4426,32 +4426,7 @@ export class MenuManager {
     this.currentDialog.destroy();
     this.currentDialog = null;
 
-    // Handle special menu types
-    if (this.currentDisplayedMenuType === 'TURN_KEY') {
-      this.scene.events.emit('ignitionMenuHidden');
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene) {
-        gameScene.events.emit('ignitionMenuHidden');
-      }
-    } else if (this.currentDisplayedMenuType === 'CYOA') {
-      const appScene = this.scene.scene.get('AppScene');
-      if (appScene) {
-        (appScene as any).isPaused = false;
-      }
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene) {
-        gameScene.events.emit('gameResumed');
-      }
-    } else if (this.currentDisplayedMenuType === 'NOVEL_STORY') {
-      const appScene = this.scene.scene.get('AppScene');
-      if (appScene) {
-        (appScene as any).isPaused = false;
-      }
-      const gameScene = this.scene.scene.get('GameScene');
-      if (gameScene) {
-        gameScene.events.emit('gameResumed');
-      }
-    }
+    // Special menu handling moved to closeDialog() method
 
     // If we flagged that gameplay should resume after a preemption (e.g., exit cancelled by CYOA), do it now
     if ((this as any)._resumeOnNextClose) {
@@ -4549,6 +4524,33 @@ export class MenuManager {
       const storyMenuTypes = ['STORY', 'NOVEL_STORY', 'STORY_OUTCOME', 'PET_STORY'];
       if (!storyMenuTypes.includes(menuType)) {
         this.resumeGame();
+      }
+    }
+
+    // Handle special menu types BEFORE clearing the dialog
+    if (closingType === 'TURN_KEY') {
+      this.scene.events.emit('ignitionMenuHidden');
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('ignitionMenuHidden');
+      }
+    } else if (closingType === 'CYOA') {
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = false;
+      }
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
+      }
+    } else if (closingType === 'NOVEL_STORY') {
+      const appScene = this.scene.scene.get('AppScene');
+      if (appScene) {
+        (appScene as any).isPaused = false;
+      }
+      const gameScene = this.scene.scene.get('GameScene');
+      if (gameScene) {
+        gameScene.events.emit('gameResumed');
       }
     }
 
