@@ -1044,6 +1044,12 @@ export class MenuManager {
       return false;
     }
     
+    // NEVER restore PAUSE menus - they should not persist
+    if (menuToRestore.type === 'PAUSE') {
+      console.log(`MenuManager: PAUSE menu should not be restored`);
+      return false;
+    }
+    
     // Only restore PERSISTENT menus (START, PAUSE, GAME_OVER, TURN_KEY)
     const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
     
