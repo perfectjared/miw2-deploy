@@ -1047,7 +1047,10 @@ export class MenuManager {
     // Only restore PERSISTENT menus (START, PAUSE, GAME_OVER, TURN_KEY)
     const isPersistent = this.MENU_CATEGORIES.PERSISTENT.includes(menuToRestore.type);
     
-    if (!isPersistent) {
+    // Also restore EXIT menus when SHOP closes (parent-child relationship)
+    const isExitAfterShop = menuToRestore.type === 'EXIT' && this.userDismissedMenuType === 'SHOP';
+    
+    if (!isPersistent && !isExitAfterShop) {
       console.log(`MenuManager: ${menuToRestore.type} is not persistent, not restoring`);
       return false;
     }
@@ -1058,7 +1061,11 @@ export class MenuManager {
       return false;
     }
     
-    console.log(`MenuManager: Restoring ${menuToRestore.type} (persistent menu)`);
+    if (isExitAfterShop) {
+      console.log(`MenuManager: Restoring ${menuToRestore.type} (parent menu after SHOP close)`);
+    } else {
+      console.log(`MenuManager: Restoring ${menuToRestore.type} (persistent menu)`);
+    }
     return true;
   }
   
