@@ -1106,6 +1106,18 @@ export class MenuManager {
       case 'GAME_OVER':
         this.showGameOverMenu();
         break;
+      case 'EXIT':
+        // Restore EXIT menu with the same parameters it had before
+        if (previousMenu.config) {
+          if (previousMenu.config.shopCount !== undefined) {
+            this.showExitMenu(previousMenu.config.shopCount, previousMenu.config.exitNumber);
+          } else {
+            this.showExitStoresCatalog(previousMenu.config.exitNumber);
+          }
+        } else {
+          this.showExitMenu();
+        }
+        break;
       default:
         console.log(`MenuManager: No restoration logic for ${previousMenu.type}`);
         break;
@@ -1673,7 +1685,7 @@ export class MenuManager {
       } catch {}
     }
     // Push menu with whichever exit number we resolved (may still be undefined in worst case)
-    this.pushMenu('EXIT', { exitNumber: exitNumForMenu }); // Store exit number for CYOA triggering
+    this.pushMenu('EXIT', { exitNumber: exitNumForMenu, shopCount: shopCount }); // Store exit number and shop count for restoration
     
     // Generate shop names based on count
     const shopNames = this.generateShopNames(shopCount);
