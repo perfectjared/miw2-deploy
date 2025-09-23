@@ -71,7 +71,7 @@ export class VirtualPet {
 	private petBaseColor: number = PET_CONFIG.petColor;
 
 	// Messaging system
-	private messageSprite?: Phaser.GameObjects.Sprite;
+	private messageSprite?: Phaser.GameObjects.Arc;
 	private messageText?: Phaser.GameObjects.Text;
 	private hasActiveMessage: boolean = false;
 	private messageThresholds: number[] = [3.0, 2.0, 1.5, 1.0, 0.5, 0.3, 0.2]; // 30%, 20%, 15%, 10%, 5%, 3%, 2%
