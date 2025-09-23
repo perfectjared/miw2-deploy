@@ -22,13 +22,16 @@ if [ "$DEPLOY_TARGET" = "original" ]; then
     
 elif [ "$DEPLOY_TARGET" = "github" ]; then
     echo "📦 Building for GitHub Pages..."
+    # Ensure we start with development index.html
+    cp index.dev.html index.html
     npm run build:deploy
     
     echo "📋 Copying files for GitHub Pages..."
     npm run copy:deploy
     
     echo "📝 Committing and pushing to GitHub Pages..."
-    git add .
+    git add assets/ vite.svg
+    git add -f rexuiplugin.js
     git commit -m "Deploy to GitHub Pages - $(date)"
     git push deploy main
     
