@@ -241,6 +241,18 @@ export class MenuManager {
           case 'DESTINATION':
             this.showDestinationMenu(next.payload?.includeFinalShowStep);
             break;
+          case 'REGION_CHOICE':
+            this.showRegionChoiceMenu(next.payload);
+            break;
+          case 'OBSTACLE':
+            this.showObstacleMenu(next.payload.obstacleType, next.payload.damage, next.payload.exitNumber);
+            break;
+          case 'VIRTUAL_PET':
+            this.showVirtualPetMenu(next.payload?.petSprite);
+            break;
+          case 'MORAL_DECISION':
+            this.showMoralDecisionMenu(next.payload);
+            break;
           default:
             console.log('⚠️ Unknown queued menu type:', next.type);
         }
@@ -2432,6 +2444,47 @@ export class MenuManager {
   }
 
   public showObstacleMenu(obstacleType: string, damage: number, exitNumber?: number) {
+    // If EXIT/SHOP is open, queue with payload and bail
+    if (this.isExitOrShopOpen()) { 
+      this.enqueueMenu('OBSTACLE', { obstacleType, damage, exitNumber }); 
+      return; 
+    }
+    
+    // Queue if CYOA is open - let user finish their choice
+    if (this.currentDisplayedMenuType === 'CYOA') {
+      console.log('⏳ Queueing OBSTACLE until CYOA closes');
+      this.enqueueMenu('OBSTACLE', { obstacleType, damage, exitNumber });
+      return;
+    }
+    
+    // Queue if VIRTUAL_PET is open - let user finish interacting with their pet
+    if (this.currentDisplayedMenuType === 'VIRTUAL_PET') {
+      console.log('⏳ Queueing OBSTACLE until VIRTUAL_PET closes');
+      this.enqueueMenu('OBSTACLE', { obstacleType, damage, exitNumber });
+      return;
+    }
+    
+    // Queue if STORY is open - let user finish reading
+    if (this.currentDisplayedMenuType === 'STORY' || this.currentDisplayedMenuType === 'NOVEL_STORY' || this.currentDisplayedMenuType === 'STORY_OUTCOME') {
+      console.log('⏳ Queueing OBSTACLE until STORY closes');
+      this.enqueueMenu('OBSTACLE', { obstacleType, damage, exitNumber });
+      return;
+    }
+    
+    // Queue if DESTINATION is open - let user finish planning
+    if (this.currentDisplayedMenuType === 'DESTINATION') {
+      console.log('⏳ Queueing OBSTACLE until DESTINATION closes');
+      this.enqueueMenu('OBSTACLE', { obstacleType, damage, exitNumber });
+      return;
+    }
+    
+    // Queue if REGION_CHOICE is open - let user finish choosing
+    if (this.currentDisplayedMenuType === 'REGION_CHOICE') {
+      console.log('⏳ Queueing OBSTACLE until REGION_CHOICE closes');
+      this.enqueueMenu('OBSTACLE', { obstacleType, damage, exitNumber });
+      return;
+    }
+    
     if (!this.canShowMenu('OBSTACLE')) return;
     
     // Special-case: obstacle type 'exit' should show the dedicated Exit menu
@@ -2791,6 +2844,14 @@ export class MenuManager {
               // First destroy the WindowShapes container properly
               if (container && container.scene) {
                 console.log('🗑️ Destroying story outcome WindowShapes container');
+                
+                // Clear the activeNarrativeWindow reference before destroying
+                const gameScene = this.scene.scene.get('GameScene') as any;
+                if (gameScene && gameScene.windowShapes && gameScene.windowShapes.activeNarrativeWindow === container) {
+                  console.log('🔄 Clearing activeNarrativeWindow reference for story outcome');
+                  gameScene.windowShapes.activeNarrativeWindow = null;
+                }
+                
                 container.destroy();
               }
               
@@ -2948,6 +3009,47 @@ export class MenuManager {
   }
 
   public showMoralDecisionMenu(config?: { petIndex?: number; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {
+    // If EXIT/SHOP is open, queue with payload and bail
+    if (this.isExitOrShopOpen()) { 
+      this.enqueueMenu('MORAL_DECISION', config); 
+      return; 
+    }
+    
+    // Queue if CYOA is open - let user finish their choice
+    if (this.currentDisplayedMenuType === 'CYOA') {
+      console.log('⏳ Queueing MORAL_DECISION until CYOA closes');
+      this.enqueueMenu('MORAL_DECISION', config);
+      return;
+    }
+    
+    // Queue if VIRTUAL_PET is open - let user finish interacting with their pet
+    if (this.currentDisplayedMenuType === 'VIRTUAL_PET') {
+      console.log('⏳ Queueing MORAL_DECISION until VIRTUAL_PET closes');
+      this.enqueueMenu('MORAL_DECISION', config);
+      return;
+    }
+    
+    // Queue if STORY is open - let user finish reading
+    if (this.currentDisplayedMenuType === 'STORY' || this.currentDisplayedMenuType === 'NOVEL_STORY' || this.currentDisplayedMenuType === 'STORY_OUTCOME') {
+      console.log('⏳ Queueing MORAL_DECISION until STORY closes');
+      this.enqueueMenu('MORAL_DECISION', config);
+      return;
+    }
+    
+    // Queue if DESTINATION is open - let user finish planning
+    if (this.currentDisplayedMenuType === 'DESTINATION') {
+      console.log('⏳ Queueing MORAL_DECISION until DESTINATION closes');
+      this.enqueueMenu('MORAL_DECISION', config);
+      return;
+    }
+    
+    // Queue if REGION_CHOICE is open - let user finish choosing
+    if (this.currentDisplayedMenuType === 'REGION_CHOICE') {
+      console.log('⏳ Queueing MORAL_DECISION until REGION_CHOICE closes');
+      this.enqueueMenu('MORAL_DECISION', config);
+      return;
+    }
+    
     if (!this.canShowMenu('MORAL_DECISION')) return;
     this.clearCurrentDialog();
     this.pushMenu('MORAL_DECISION');
@@ -3021,6 +3123,40 @@ export class MenuManager {
     console.log('MenuManager: showVirtualPetMenu called with petSprite:', petSprite);
     console.log('MenuManager: Current menu stack before VIRTUAL_PET:', this.menuStack.map(m => `${m.type}(${m.priority})`));
     console.log('MenuManager: Current displayed menu type:', this.currentDisplayedMenuType);
+    
+    // If EXIT/SHOP is open, queue with payload and bail
+    if (this.isExitOrShopOpen()) { 
+      this.enqueueMenu('VIRTUAL_PET', { petSprite }); 
+      return; 
+    }
+    
+    // Queue if CYOA is open - let user finish their choice
+    if (this.currentDisplayedMenuType === 'CYOA') {
+      console.log('⏳ Queueing VIRTUAL_PET until CYOA closes');
+      this.enqueueMenu('VIRTUAL_PET', { petSprite });
+      return;
+    }
+    
+    // Queue if STORY is open - let user finish reading
+    if (this.currentDisplayedMenuType === 'STORY' || this.currentDisplayedMenuType === 'NOVEL_STORY' || this.currentDisplayedMenuType === 'STORY_OUTCOME') {
+      console.log('⏳ Queueing VIRTUAL_PET until STORY closes');
+      this.enqueueMenu('VIRTUAL_PET', { petSprite });
+      return;
+    }
+    
+    // Queue if DESTINATION is open - let user finish planning
+    if (this.currentDisplayedMenuType === 'DESTINATION') {
+      console.log('⏳ Queueing VIRTUAL_PET until DESTINATION closes');
+      this.enqueueMenu('VIRTUAL_PET', { petSprite });
+      return;
+    }
+    
+    // Queue if REGION_CHOICE is open - let user finish choosing
+    if (this.currentDisplayedMenuType === 'REGION_CHOICE') {
+      console.log('⏳ Queueing VIRTUAL_PET until REGION_CHOICE closes');
+      this.enqueueMenu('VIRTUAL_PET', { petSprite });
+      return;
+    }
     
     if (!this.canShowMenu('VIRTUAL_PET')) {
       console.log('MenuManager: Cannot show VIRTUAL_PET menu - blocked by higher priority');
