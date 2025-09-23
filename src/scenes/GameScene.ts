@@ -221,6 +221,28 @@ export class GameScene extends Phaser.Scene {
           }
         }
       });
+      // Add debug key 'D': plain D opens Destination; Shift+D opens Moral Decision
+      const keyD = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, true, false);
+      keyD?.on('down', () => {
+        const menuScene = this.scene.get('MenuScene');
+        if (!menuScene) return;
+        const shiftHeld = this.input.keyboard?.checkDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT));
+        if (shiftHeld) {
+          // Shift+D: moral decision
+          (menuScene as any).events.emit('showMoralDecision', {
+            petIndex: 0,
+            text: 'You witness a stranger drop their wallet. What do you do?',
+            optionA: 'Return it immediately',
+            optionB: 'Keep it for yourself',
+            followA: 'You feel good about doing the right thing.',
+            followB: 'You feel guilty about your choice.'
+          });
+        } else {
+          // D: open destination menu
+          (menuScene as any).events.emit('showDestinationMenu', true);
+        }
+        this.scene.bringToTop('MenuScene');
+      });
       // REMOVED: Debug keyboard shortcut for old showCYOA event (was causing double-triggering)
       // const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
       // keyC?.on('down', () => {
@@ -355,22 +377,7 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.on('keydown-FOUR', () => openPetStoryByIndex(3));
       this.input.keyboard?.on('keydown-FIVE', () => openPetStoryByIndex(4));
 
-      // Add keyboard shortcut for moral decision menu (key 'D')
-      const keyD = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, true, false);
-      keyD?.on('down', () => {
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showMoralDecision', {
-            petIndex: 0, // Use first pet for now
-            text: 'You witness a stranger drop their wallet. What do you do?',
-            optionA: 'Return it immediately',
-            optionB: 'Keep it for yourself',
-            followA: 'You feel good about doing the right thing.',
-            followB: 'You feel guilty about your choice.'
-          });
-          this.scene.bringToTop('MenuScene');
-        }
-      });
+      // (Moral decision now handled via Shift+D above)
 
       // Debug: Add 'C' key to trigger a CYOA menu for testing
       const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
