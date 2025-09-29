@@ -68,10 +68,6 @@ export class StoryManager {
    */
   private setupDebugControls(): void {
     // Listen for debug key presses
-    this.scene.input.keyboard?.on('keydown-S', () => {
-      this.toggleDebugStory();
-    });
-    
     this.scene.input.keyboard?.on('keydown-UP', () => {
       if (this.debugStoryActive) {
         this.changeDebugStoryline(-1);
@@ -126,7 +122,7 @@ export class StoryManager {
   /**
    * Toggle debug story window
    */
-  private toggleDebugStory(): void {
+  public toggleDebugStory(): void {
     if (this.debugStoryActive) {
       this.closeDebugStory();
     } else {

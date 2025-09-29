@@ -109,5 +109,20 @@ if (import.meta && (import.meta as any).hot) {
 
 // Keep console available; use targeted debug flags per system when needed
 if (typeof window !== 'undefined') {
-  (window as any).__ENABLE_TUTORIAL_DEBUG = false;
+  (window as any).__ENABLE_TUTORIAL_DEBUG = true;
+  
+  // Add global keyboard shortcut for audio debug menu (F12)
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'F12') {
+      event.preventDefault();
+      // Find the MenuManager instance and toggle audio debug menu
+      const game = window.__phaserGame;
+      if (game) {
+        const menuScene = game.scene.getScene('MenuScene');
+        if (menuScene && (menuScene as any).menuManager) {
+          (menuScene as any).menuManager.toggleAudioDebugMenu();
+        }
+      }
+    }
+  });
 }

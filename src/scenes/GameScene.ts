@@ -19,6 +19,7 @@
 
 import Phaser from 'phaser';
 import { Trash, Item, Keys } from '../systems/PhysicsObjects';
+import { Phone } from '../systems/Phone';
 import { CarMechanics, CarMechanicsConfig } from '../systems/CarMechanics';
 import { VirtualPet } from '../systems/VirtualPet';
 import { TutorialSystem, TutorialConfig } from '../systems/TutorialSystem';
@@ -61,11 +62,25 @@ export class GameScene extends Phaser.Scene {
   private storyManager!: StoryManager;
   private virtualPets: VirtualPet[] = [];
   private petLabels: Phaser.GameObjects.Text[] = [];
+  private rearviewRect?: Phaser.GameObjects.Rectangle;
   private dragOverlay?: Phaser.GameObjects.Container;
   private controlsCamera?: Phaser.Cameras.Scene2D.Camera;
   private itemsCamera?: Phaser.Cameras.Scene2D.Camera;
   private dragOverlayCamera?: Phaser.Cameras.Scene2D.Camera;
   private feedingDebug?: Phaser.GameObjects.Graphics;
+  // Additional hot-dog overlays tied to spawned food physics bodies
+  private hotdogOverlays: Array<{ body: Phaser.GameObjects.Arc, sprite: Phaser.GameObjects.Sprite }> = [];
+  // Debug item spawn menu
+  private debugItemMenu?: Phaser.GameObjects.Container;
+  private debugMenuVisible: boolean = false;
+  // Item typing
+  private static readonly ITEM_TYPES = {
+    Food:       { color: 0xff5555, effect: { hunger: +3 } },
+    Phone:      { color: 0x00aaff, effect: { focus: -1 } },
+    Weed:       { color: 0x33cc66, effect: { chill: +2 } },
+    Drink:      { color: 0xaa55ff, effect: { energy: +2 } },
+    Decoration: { color: 0xff69b4, effect: { spectacle: +5 } }
+  } as const;
   // Cache to avoid redrawing magnetic target every frame
   private magneticVisualState: 'default' | 'near' | 'snap' = 'default';
   // Only allow ignition magnet to attract keys for a brief window after release
@@ -85,6 +100,7 @@ export class GameScene extends Phaser.Scene {
   private frontseatTrash!: Trash;
   private backseatItem!: Item;
   private frontseatKeys!: Keys;
+  private frontseatPhone!: Phone;
   
   // ============================================================================
   // GAME STATE PROPERTIES
@@ -94,15 +110,19 @@ export class GameScene extends Phaser.Scene {
   private magneticTarget!: Phaser.GameObjects.Graphics;
   private keySVG!: Phaser.GameObjects.Sprite; // SVG overlay for keys
   private hotdogSVG!: Phaser.GameObjects.Sprite; // SVG overlay for food item
+  private phoneSVG!: Phaser.GameObjects.Sprite; // SVG overlay for phone
+  private itemSVG!: Phaser.GameObjects.Sprite; // SVG overlay for green item
   private nightTimeOverlay?: Phaser.GameObjects.Rectangle; // Night time visual overlay
   private nightModeEnabled: boolean = false;
   private keysConstraint: any = null;
+  private readonly encumbranceCapacity: number = 10;
   
   // Game state flags
   private keysInIgnition: boolean = false;
   private carStarted: boolean = false;
   private steeringUsed: boolean = false;
   private firstCarStart: boolean = true; // Track if this is the first time car starts
+  private rearviewAnimationCompleted: boolean = false; // Track if rearview mirror animation has completed
   
   // Driving state
   private drivingMode: boolean = false;
@@ -122,6 +142,7 @@ export class GameScene extends Phaser.Scene {
   private stopMenuOpen: boolean = false;
   private countdownStepCounter: number = 0; // Track steps for countdown timing
   private tutorialInterruptStep: number | null = null; // Track when tutorial interrupt should end
+  private tutorialInterruptCompleted: boolean = false; // Track if tutorial interrupt has been completed
   // Matter tilt-gravity based on steering
   private gravityBaseY: number = SCENE_TUNABLES.gravity.baseY;
   private gravityXCurrent: number = 0;
@@ -170,8 +191,10 @@ export class GameScene extends Phaser.Scene {
     // Initialize physics safety system
     this.initializePhysicsSafetySystem();
     
-    // Add dev button for testing
-    this.addDevSequenceButton();
+    // Dev button removed
+    // Add debug drop button for spawning a hot-dog item from the ceiling
+    this.addDebugDropButton();
+    this.createDebugItemMenu();
     
     // Create game content container
     this.createGameContentContainer();
@@ -199,23 +222,32 @@ export class GameScene extends Phaser.Scene {
     // Initialize input handlers
     this.inputHandlers.initialize();
 
+    // Listen for shop purchases to spawn a new falling hot-dog item
+    try {
+      const menuScene = this.scene.get('MenuScene');
+      menuScene?.events.on('shopPurchase', (payload: any) => {
+        try { console.log('GameScene: shopPurchase received -> spawning hot-dog', payload); } catch {}
+        const itemName = String(payload?.item || '').toLowerCase();
+        // Map common item names to our item types
+        let type: keyof typeof GameScene.ITEM_TYPES = 'Food';
+        if (itemName.includes('phone')) {
+          console.log('Cannot purchase phone - you already have one');
+          return; // Don't spawn phones
+        }
+        else if (itemName.includes('weed') || itemName.includes('pre-roll') || itemName.includes('edibles')) type = 'Weed';
+        else if (itemName.includes('drink') || itemName.includes('soda') || itemName.includes('coffee') || itemName.includes('energy')) type = 'Drink';
+        else if (itemName.includes('decoration') || itemName.includes('banner') || itemName.includes('lights') || itemName.includes('pyro')) type = 'Decoration';
+        else if (itemName.includes('meal') || itemName.includes('food') || itemName.includes('sandwich') || itemName.includes('feast') || itemName.includes('snack')) type = 'Food';
+        this.spawnHotDogFromTop(type);
+      });
+    } catch {}
+
+    // Initialize encumbrance UI from current items
+    try { this.updateEncumbranceUI(); } catch {}
+
     // Rebind keys: 'd' opens Destination; 'm' opens Moral Decision
     try {
-      // 'm' -> Moral decision menu (test payload)
-      const keyM = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.M, true, false);
-      keyM?.on('down', () => {
-        const menuScene = this.scene.get('MenuScene');
-        if (!menuScene) return;
-        (menuScene as any).events.emit('showMoralDecision', {
-          petIndex: 0,
-          text: 'You witness a stranger drop their wallet. What do you do?',
-          optionA: 'Return it immediately',
-          optionB: 'Keep it for yourself',
-          followA: 'You feel good about doing the right thing.',
-          followB: 'You feel guilty about your choice.'
-        });
-        this.scene.bringToTop('MenuScene');
-      });
+      // 'm' -> Moral decision menu (test payload) - REMOVED due to conflict
 
       // 'd' -> Destination menu
       const keyD = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, true, false);
@@ -242,21 +274,11 @@ export class GameScene extends Phaser.Scene {
       //     this.scene.bringToTop('MenuScene');
       //   }
       // });
+      // P -> Set progress to 99% (was Shift+P)
       const keyP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
       keyP?.on('down', () => {
-        const menuScene = this.scene.get('MenuScene');
-        if (menuScene) {
-          menuScene.events.emit('showPotholeMenu');
-        }
-      });
-
-      // Debug: Add Shift+P to set progress to 99%
-      const keyShiftP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
-      keyShiftP?.on('down', () => {
-        if (this.input.keyboard?.checkDown(this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT))) {
-          console.log('Debug: Setting progress to 99%');
-          this.gameState.updateState({ progress: 99 });
-        }
+        console.log('Debug: Setting progress to 99%');
+        this.gameState.updateState({ progress: 99 });
       });
 
       // Debug: Add 'R' key to generate random window shapes for testing
@@ -265,10 +287,13 @@ export class GameScene extends Phaser.Scene {
         this.createDebugWindow();
       });
 
-      // Debug: Add 'S' key to generate speech bubble specifically
+      // S -> Toggle debug story system
       const keyS = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S, true, false);
       keyS?.on('down', () => {
-        this.createDebugSpeechBubble();
+        console.log('🎭 Toggling debug story system');
+        if (this.storyManager) {
+          this.storyManager.toggleDebugStory();
+        }
       });
 
       // Debug: Add 'U' key to force show tutorial overlay
@@ -290,25 +315,10 @@ export class GameScene extends Phaser.Scene {
         }
       });
 
-      // Debug: Add 'T' key to create story dialog (with queue support)
+      // T -> Generate speech bubble (talk)
       const keyT = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.T, true, false);
       keyT?.on('down', () => {
-        console.log('🎭 Creating story dialog with queue support');
-        this.createStoryDialogWithQueue();
-      });
-
-      // Debug: Add 'H' key to generate story dialog specifically (with queue support)
-      const keyH = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.H, true, false);
-      keyH?.on('down', () => {
-        console.log('🎭 Creating story dialog with queue support (H key)');
-        this.createStoryDialogWithQueue();
-      });
-      
-      // Debug: Add 'J' key to test CYOA dialog with H menu styling
-      const keyJ = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.J, true, false);
-      keyJ?.on('down', () => {
-        console.log('🎮 Creating CYOA dialog with H menu styling (J key)');
-        this.createCYOADialog();
+        this.createDebugSpeechBubble();
       });
       
       // Debug: Add 'X' key to reset narrative system (force clear)
@@ -373,18 +383,8 @@ export class GameScene extends Phaser.Scene {
       });
     } catch {}
 
-    // Initialize five virtual pets within a single rectangle container (rearview)
-    const rearviewContainer = this.add.container(0, 0);
-    rearviewContainer.setName('rearviewContainer');
-    rearviewContainer.setScrollFactor(0);
-    rearviewContainer.setDepth(40000); // Below steering dial
-    
-    // Start rearview mirror off-screen (above the visible area)
+    // Create rearview mirror background (simple sprite like dash, but with slide animation)
     const cam = this.cameras.main;
-    const offScreenY = -cam.height; // Position above the screen
-    rearviewContainer.setPosition(0, offScreenY);
-    
-    // Create the shared rectangle background (rearview) using GameElements config
     const rearviewConfig = gameElements.getRearviewMirror();
     const rectWidth = Math.floor(cam.width * rearviewConfig.size.width);
     const rectHeight = Math.floor(cam.height * rearviewConfig.size.height);
@@ -394,7 +394,16 @@ export class GameScene extends Phaser.Scene {
     const rearviewRect = this.add.rectangle(rectX, rectY, rectWidth, rectHeight, UI_LAYOUT.rearviewBackgroundColor, UI_LAYOUT.rearviewBackgroundAlpha);
     rearviewRect.setStrokeStyle(2, UI_LAYOUT.rearviewStrokeColor, 1);
     rearviewRect.setScrollFactor(0);
-    rearviewContainer.add(rearviewRect);
+    rearviewRect.setDepth(15000); // Same depth as dash background
+    
+    // Start rearview mirror off-screen (above the visible area)
+    const offScreenY = -cam.height; // Position above the screen
+    rearviewRect.setPosition(rectX, offScreenY);
+    
+    // Store reference for animation
+    this.rearviewRect = rearviewRect;
+    
+    console.log('🔍 Rearview rectangle created at:', rectX, offScreenY, 'size:', rectWidth, 'x', rectHeight);
     
     // Get virtual pet positions from GameElements config
     const petPositions = gameElements.getVirtualPetPositions();
@@ -427,24 +436,79 @@ export class GameScene extends Phaser.Scene {
       const petContainer = pet.getRoot?.();
       if (petContainer) {
         petContainer.setAlpha(0); // Start transparent instead of invisible
+        petContainer.setVisible(true); // Ensure container is visible
+        console.log('🔍 Pet', i, 'initial container state:', {
+          visible: petContainer.visible,
+          alpha: petContainer.alpha,
+          x: petContainer.x,
+          y: petContainer.y,
+          depth: petContainer.depth
+        });
+        // Position pets at their final screen coordinates (not off-screen)
+        // They'll fade in when the rearview animation completes
       }
       
       this.virtualPets.push(pet);
       
-      // Add visible numeric label above each pet's circle
+      // Add pet container directly to scene with its own depth (not to rearview container)
+      // This ensures pets render above the rearview background
+      if (petContainer) {
+        console.log('🔍 Pet container created for pet', i, 'at position:', petContainer.x, petContainer.y);
+        // Add directly to scene with proper depth
+        petContainer.setDepth(70001 + i); // Above rearview mirror
+        console.log('🔍 Pet container added to scene with depth:', petContainer.depth);
+      }
+      
+      // Add name label above each pet's circle (initially hidden)
       const petSprite = pet.getPetSprite?.();
       const anchor = pet.getFeedAnchor?.();
-      if (petSprite && anchor) {
-        const label = this.add.text(petSprite.x, petSprite.y - (anchor.r + 20), `${i + 1}`, {
-          fontSize: '16px',
+      if (petSprite && anchor && petContainer) {
+        // Get band member name for this pet
+        const bandMember = pet.getBandMember?.();
+        const petName = bandMember?.name?.toLowerCase() || `pet ${i + 1}`;
+        const nameText = `<<${petName}>>`;
+        
+        // Position labels relative to the pet container (not absolute screen coordinates)
+        const labelX = 0; // Relative to container center
+        const labelY = anchor.r + 20; // Below the pet
+        
+        // Create animated collage-style background
+        const textMetrics = this.add.text(0, 0, nameText, {
+          fontSize: '12px',
+          fontStyle: 'bold'
+        });
+        const textWidth = textMetrics.width + 16; // Add more padding for collage style
+        const textHeight = textMetrics.height + 8; // Add more padding for collage style
+        textMetrics.destroy(); // Remove temporary text
+        
+        const background = this.windowShapes.createCollageRect({
+          x: -textWidth / 2, // Center horizontally relative to container
+          y: -textHeight / 2, // Center vertically relative to container
+          width: textWidth,
+          height: textHeight
+        }, true, 'narrativeBackground'); // Use narrativeBackground for pure black, no shadows
+        background.setScrollFactor(0);
+        background.setDepth(70049 + i); // Behind text
+        
+        // Create name label
+        const label = this.add.text(labelX, labelY, nameText, {
+          fontSize: '12px',
           color: '#ffffff',
-          fontStyle: 'bold',
-          stroke: '#000000',
-          strokeThickness: 2
+          fontStyle: 'bold'
         }).setOrigin(0.5);
         label.setScrollFactor(0);
-        label.setDepth(70050 + i); // ensure above pet circle in depth
+        label.setDepth(70050 + i); // Above background
+        
+        // Initially hide both background and text
+        background.setAlpha(0);
+        label.setAlpha(0);
+        
+        // Add labels to the pet container so they move with the pet
+        petContainer.add(background);
+        petContainer.add(label);
+        
         this.petLabels[i] = label;
+        (this.petLabels as any)[`bg_${i}`] = background; // Store background reference
       }
     }
 
@@ -459,10 +523,16 @@ export class GameScene extends Phaser.Scene {
       this.controlsCamera.setScroll(0, 0);
       this.controlsCamera.setName('controlsCamera');
       const allObjects = (this.children.list || []) as Phaser.GameObjects.GameObject[];
-      // Allow both control objects and tutorial overlay objects to render on controls camera
+      
+      // Include dash background in controls camera
+      const dashBackground = (this.gameUI as any).dashBackground;
+      
+      // Allow both control objects, tutorial overlay objects, and dash background to render on controls camera
+      // Virtual pets will be rendered on the main camera instead
       const allowed = new Set<Phaser.GameObjects.GameObject>([
         ...controlObjs,
-        ...(tutObjsInit || [])
+        ...(tutObjsInit || []),
+        ...(dashBackground ? [dashBackground] : [])
       ]);
       const toIgnoreForControls = allObjects.filter(obj => !allowed.has(obj));
       if (toIgnoreForControls.length > 0) this.controlsCamera.ignore(toIgnoreForControls);
@@ -485,6 +555,8 @@ export class GameScene extends Phaser.Scene {
     this.itemsCamera = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
     this.itemsCamera.setScroll(0, 0);
     this.itemsCamera.setName('itemsCamera');
+    // Ensure items camera depth ordering is correct relative to others
+    try { this.itemsCamera?.setName('itemsCamera'); } catch {}
     
     // Items camera should render everything EXCEPT steering wheel/virtual pets
     // This ensures items render above those elements while maintaining input handling
@@ -492,11 +564,12 @@ export class GameScene extends Phaser.Scene {
     
     // Get control objects (steering wheel, etc.) to ignore on items camera
     const controlObjsForItems = (this.gameUI as any).getControlObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
-    const virtualPetObjects = this.virtualPets.map(pet => (pet as any).container).filter(Boolean);
+    // Virtual pets should be rendered on the main camera, not ignored by items camera
+    const dashBackground = (this.gameUI as any).dashBackground;
     
     const objectsToIgnoreOnItemsCamera = [
       ...(controlObjsForItems || []),
-      ...virtualPetObjects
+      ...(dashBackground ? [dashBackground] : [])
     ];
     
     if (objectsToIgnoreOnItemsCamera.length > 0) {
@@ -715,6 +788,7 @@ export class GameScene extends Phaser.Scene {
     this.frontseatTrash = new Trash(this);
     this.backseatItem = new Item(this);
     this.frontseatKeys = new Keys(this);
+    this.frontseatPhone = new Phone(this);
     
     // Create key SVG overlay that will follow the key's position
     const gameWidth = this.cameras.main.width;
@@ -730,15 +804,32 @@ export class GameScene extends Phaser.Scene {
     this.keySVG.setTint(0xffffff); // White fill
     
     // Create hot-dog SVG overlay that will follow the food item's position (red Trash object)
-    this.hotdogSVG = this.add.sprite(100, 200, 'hot-dog'); // Start at red food item's initial position
-    // Scale SVG to match the physics object size (radius 60, so scale accordingly)
-    this.hotdogSVG.setScale(0.1); // Scaled to match smaller physics object (radius 40)
+    this.hotdogSVG = this.add.sprite(100, 200, 'hot-dog');
+    this.hotdogSVG.setScale(0.1);
     this.hotdogSVG.setOrigin(0.5, 0.5);
-    this.hotdogSVG.setAlpha(0.8); // Semi-transparent overlay
-    this.hotdogSVG.setDepth(60001); // Above steering wheel (60000)
+    this.hotdogSVG.setAlpha(0.8);
+    this.hotdogSVG.setDepth(60001);
+    this.hotdogSVG.setTint(0xffffff);
+    // Track the initial overlay
+    // Initialize with keys and phone (phone doesn't count toward encumbrance)
+    this.hotdogOverlays.push({ body: this.frontseatTrash.gameObject, sprite: this.hotdogSVG });
     
-    // Apply white fill and black stroke styling
-    this.hotdogSVG.setTint(0xffffff); // White fill
+    // Create phone SVG overlay that will follow the phone's position
+    const phoneX = gameWidth * 0.2; // Match the phone position (20% from left edge)
+    this.phoneSVG = this.add.sprite(phoneX, 250, 'x'); // Use x.png as default sprite
+    this.phoneSVG.setScale(0.1); // Scaled to match phone physics object (same as hot dog)
+    this.phoneSVG.setOrigin(0.5, 0.5);
+    this.phoneSVG.setAlpha(0.8);
+    this.phoneSVG.setDepth(60001);
+    this.phoneSVG.setTint(0x00aaff); // Blue tint to match phone color
+    
+    // Create green item SVG overlay that will follow the green item's position
+    this.itemSVG = this.add.sprite(150, 320, 'x'); // Use x.png as default sprite
+    this.itemSVG.setScale(0.1); // Scaled to match item physics object (same as hot dog)
+    this.itemSVG.setOrigin(0.5, 0.5);
+    this.itemSVG.setAlpha(0.8);
+    this.itemSVG.setDepth(60001);
+    this.itemSVG.setTint(0x00ff00); // Green tint to match item color
     
     // Set references for tutorial system
     this.tutorialSystem.setPhysicsObjects(this.frontseatKeys);
@@ -758,6 +849,174 @@ export class GameScene extends Phaser.Scene {
     });
     
     console.log('🛡️ Physics safety system initialized - checking every 1 second');
+  }
+
+  /** Debug: Add keyboard shortcuts for debugging */
+  private addDebugDropButton() {
+    // N key removed - was spawning hot-dog items
+    
+    // Keyboard shortcut: press 'I' to toggle debug item menu
+    try {
+      this.input.keyboard?.on('keydown-I', () => {
+        try { console.log('Debug: I key pressed -> toggle debug menu'); } catch {}
+        this.toggleDebugMenu();
+      });
+    } catch {}
+    
+    // RIGHT key removed - was advancing sequence
+    // S key for animated SVG removed - conflicts with story dialog
+  }
+
+  private createDebugItemMenu() {
+    try {
+      // Create container for debug menu
+      this.debugItemMenu = this.add.container(0, 0);
+      this.debugItemMenu.setScrollFactor(0);
+      this.debugItemMenu.setDepth(10010);
+      this.debugItemMenu.setVisible(false);
+
+      // Background
+      const bg = this.add.rectangle(0, 0, 200, 300, 0x000000, 0.8);
+      bg.setOrigin(0, 0);
+      bg.setScrollFactor(0);
+      this.debugItemMenu.add(bg);
+
+      // Title
+      const title = this.add.text(10, 10, 'DEBUG ITEMS', {
+        fontSize: '16px',
+        color: '#ffffff',
+        fontStyle: 'bold'
+      });
+      title.setScrollFactor(0);
+      this.debugItemMenu.add(title);
+
+      // Create buttons for each item type
+      const types = Object.keys(GameScene.ITEM_TYPES) as Array<keyof typeof GameScene.ITEM_TYPES>;
+      types.forEach((type, index) => {
+        const color = (GameScene.ITEM_TYPES as any)[type].color;
+        const btn = this.add.text(10, 40 + (index * 30), `${type}`, {
+          fontSize: '14px',
+          color: '#ffffff',
+          backgroundColor: `#${color.toString(16).padStart(6, '0')}`,
+          padding: { x: 8, y: 4 }
+        });
+        btn.setScrollFactor(0);
+        btn.setInteractive({ useHandCursor: true } as any);
+        btn.on('pointerdown', () => {
+          try { console.log(`Debug: Spawning ${type}`); } catch {}
+          this.spawnHotDogFromTop(type);
+        });
+        this.debugItemMenu?.add(btn);
+      });
+
+      // Close button
+      const closeBtn = this.add.text(10, 40 + (types.length * 30) + 10, 'CLOSE', {
+        fontSize: '14px',
+        color: '#ffffff',
+        backgroundColor: '#666666',
+        padding: { x: 8, y: 4 }
+      });
+      closeBtn.setScrollFactor(0);
+      closeBtn.setInteractive({ useHandCursor: true } as any);
+      closeBtn.on('pointerdown', () => {
+        this.toggleDebugMenu();
+      });
+      this.debugItemMenu.add(closeBtn);
+
+      // Position menu
+      this.debugItemMenu.setPosition(10, 10);
+
+    } catch {}
+  }
+
+  private toggleDebugMenu() {
+    if (!this.debugItemMenu) return;
+    
+    this.debugMenuVisible = !this.debugMenuVisible;
+    this.debugItemMenu.setVisible(this.debugMenuVisible);
+    
+    try { console.log(`Debug menu ${this.debugMenuVisible ? 'opened' : 'closed'}`); } catch {}
+  }
+
+  /** Spawn a new hot-dog item at the top that falls under Matter gravity */
+  private spawnHotDogFromTop(itemType: keyof typeof GameScene.ITEM_TYPES = 'Food') {
+    try { console.log('GameScene: spawnHotDogFromTop called'); } catch {}
+    // Create a new physics circle matching the existing frontseatTrash size
+    const itemSize = gameElements.getItemSize('medium');
+    const radius = Math.floor(itemSize.width / 2);
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const extendedTop = -Math.floor(gameHeight * 0.2);
+    const spawnX = Phaser.Math.Between(radius + 10, gameWidth - radius - 10);
+    const spawnY = extendedTop - radius - 10; // Spawn within extended world above top
+
+    // Create a new circle graphics like Trash uses, color by type
+    const color = (GameScene.ITEM_TYPES as any)[itemType]?.color ?? 0xff0000;
+    const circle = this.add.circle(spawnX, spawnY, radius, color);
+    circle.setDepth(60000);
+    // Ensure it is part of the same container/items camera as other items
+    try { this.gameContentContainer.add(circle); } catch {}
+    // Enable matter physics
+    this.matter.add.gameObject(circle, {
+      shape: { type: 'circle', radius },
+      label: 'food',
+      isSensor: false
+    } as any);
+    // Make it fall faster: reduce air drag and increase density (mass)
+    (circle.body as MatterJS.BodyType).frictionAir = 0 as any;
+    this.matter.body.setDensity(circle.body as any, 0.03);
+    (circle.body as MatterJS.BodyType).restitution = 0.4 as any; // a bit bouncy
+    // Give a tiny downward nudge so it immediately starts moving
+    this.matter.body.applyForce(circle.body as any, { x: circle.x, y: circle.y }, { x: 0, y: 0.0008 });
+
+    // Add drag interaction similar to existing items (minimal)
+    circle.setInteractive({ useHandCursor: true } as any);
+    this.input.setDraggable(circle);
+    circle.on('dragstart', () => { (circle as any).isDragging = true; });
+    circle.on('drag', (_p: any, x: number, y: number) => { circle.setPosition(x, y); });
+    circle.on('dragend', () => { (circle as any).isDragging = false; });
+
+    // Attach an SVG overlay for the hot-dog that follows this body
+    const sprite = this.add.sprite(circle.x, circle.y, 'hot-dog');
+    sprite.setScale(0.1);
+    sprite.setOrigin(0.5, 0.5);
+    sprite.setAlpha(0.8);
+    sprite.setDepth(60001);
+    sprite.setTint(0xffffff);
+    // Do NOT add sprite to gameContentContainer. Overlays live at root and are positioned in world space.
+    // Make sure it's not ignored by the items camera (controls camera ignores only controls)
+    try {
+      const controlObjsForItems = (this.gameUI as any).getControlObjects?.() as Phaser.GameObjects.GameObject[] | undefined;
+      // Virtual pets should be rendered on the main camera, not ignored by items camera
+      const objectsToIgnoreOnItemsCamera = [ ...(controlObjsForItems || []) ];
+      if (objectsToIgnoreOnItemsCamera && this.itemsCamera) {
+        // Ensure new objects are NOT in ignore list
+        this.itemsCamera.ignore(objectsToIgnoreOnItemsCamera);
+      }
+    } catch {}
+
+    // Ensure high render order
+    try { this.children.bringToTop(sprite); } catch {}
+    this.hotdogOverlays.push({ body: circle, sprite });
+    try { console.log('GameScene: spawned hot-dog item at', { x: circle.x, y: circle.y }, 'total overlays:', this.hotdogOverlays.length); } catch {}
+    // Update encumbrance display after spawning
+    this.updateEncumbranceUI();
+  }
+
+  /** Compute current encumbrance count (keys + hotdogs, phone doesn't count) */
+  public getEncumbranceCount(): number {
+    const keysCount = this.frontseatKeys ? 1 : 0;
+    const hotdogs = this.hotdogOverlays ? this.hotdogOverlays.length : 0;
+    // Phone doesn't count toward encumbrance
+    return keysCount + hotdogs;
+  }
+
+  /** Encumbrance capacity */
+  public getEncumbranceCapacity(): number { return this.encumbranceCapacity; }
+
+  /** Push current encumbrance to UI */
+  private updateEncumbranceUI() {
+    try { (this.gameUI as any)?.setEncumbrance?.(this.getEncumbranceCount(), this.getEncumbranceCapacity()); } catch {}
   }
 
   /**
@@ -928,6 +1187,18 @@ export class GameScene extends Phaser.Scene {
    * Disable night time mode
    */
   private disableNightTimeMode() {
+    if (!this.nightModeEnabled) return; // Already disabled, skip
+    
+    this.nightModeEnabled = false;
+    
+    // Check if any menu is currently open - suppress logs during menus
+    const menuScene = this.scene.get('MenuScene');
+    const hasOpenMenu = menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog;
+    
+    if (!hasOpenMenu) {
+      console.log('☀️ Disabling night time mode');
+    }
+    
     // Remove night time visual effects
     if (this.nightTimeOverlay) {
       this.nightTimeOverlay.setVisible(false);
@@ -940,26 +1211,44 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Dev button to change driving sequence to last one for testing
+   * Advance to next sequence (same as dev button functionality)
    */
-  private addDevSequenceButton() {
-    // Add dev button for testing sequence changes
-    const devButton = this.add.text(10, 10, 'DEV: Last Sequence', {
-      fontSize: '14px',
-      color: '#ff0000',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    });
-    devButton.setScrollFactor(0);
-    devButton.setDepth(50000);
-    devButton.setInteractive();
+  private advanceToNextSequence() {
+    const totalSequences = this.gameState.getSequencesForCurrentRegion();
+    const currentSequence = this.gameState.getState().showsInCurrentRegion;
+    const nextSequence = Math.min(currentSequence + 1, totalSequences - 1);
     
-    devButton.on('pointerdown', () => {
-      const totalSequences = this.gameState.getSequencesForCurrentRegion();
-      const lastSequence = totalSequences - 1; // 0-based index
-      this.gameState.updateState({ showsInCurrentRegion: lastSequence });
-      console.log(`🔧 DEV: Set sequence to ${lastSequence + 1}/${totalSequences}`);
-    });
+    this.gameState.updateState({ showsInCurrentRegion: nextSequence });
+    console.log(`🔧 RIGHT: Advanced sequence to ${nextSequence + 1}/${totalSequences}`);
+  }
+
+  /**
+   * Spawn an animated SVG for testing
+   */
+  private spawnAnimatedSVG() {
+    if (!this.windowShapes) {
+      console.warn('WindowShapes not available for SVG animation');
+      return;
+    }
+
+    // Random position on screen
+    const x = Phaser.Math.Between(50, 310);
+    const y = Phaser.Math.Between(100, 500);
+    
+    // Random colors
+    const colors = [0xff6b35, 0x4ecdc4, 0x45b7d1, 0x96ceb4, 0xfeca57, 0xff9ff3];
+    const fillColor = colors[Phaser.Math.Between(0, colors.length - 1)];
+    
+    // Create animated SVG
+    const animatedSVG = this.windowShapes.createTestAnimatedSVG(x, y);
+    animatedSVG.setDepth(1000); // Above other objects
+    
+    // Add to game content container
+    if (this.gameContentContainer) {
+      this.gameContentContainer.add(animatedSVG);
+    }
+    
+    console.log(`🎨 Spawned animated SVG at (${x}, ${y}) with color 0x${fillColor.toString(16)}`);
   }
 
   /**
@@ -1008,6 +1297,7 @@ export class GameScene extends Phaser.Scene {
     this.gameContentContainer.add(this.frontseatTrash.gameObject);
     this.gameContentContainer.add(this.backseatItem.gameObject);
     this.gameContentContainer.add(this.frontseatKeys.gameObject);
+    this.gameContentContainer.add(this.frontseatPhone.gameObject);
   }
 
   /**
@@ -1057,7 +1347,11 @@ export class GameScene extends Phaser.Scene {
    */
      private setupPhysicsWorlds() {
     // Set up Matter.js physics with gravity using centralized config
-    this.matter.world.setBounds(0, 0, this.cameras.main.width, this.cameras.main.height);
+    // Extend world 20% above the top so items can spawn offscreen and fall in
+    const gameWidth = this.cameras.main.width;
+    const gameHeight = this.cameras.main.height;
+    const extendedTop = -Math.floor(gameHeight * 0.2);
+    this.matter.world.setBounds(0, extendedTop, gameWidth, gameHeight - extendedTop + 10);
     
     // Add an extra wall at the bottom to avoid iOS Safari bottom URL bar
     this.createRaisedFloor();
@@ -1072,7 +1366,7 @@ export class GameScene extends Phaser.Scene {
   private createRaisedFloor() {
     const gameWidth = this.cameras.main.width;
     const gameHeight = this.cameras.main.height;
-    const raisedFloorHeight = gameHeight * 0.90; // 90% of screen height (even lower floor)
+    const raisedFloorHeight = gameHeight * 0.90 + 10; // 90% of screen height + 10px lower
     const wallThickness = 20;
     
     // Create a horizontal wall at the raised floor position
@@ -1330,14 +1624,21 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < this.virtualPets.length; i++) {
       const pet = this.virtualPets[i];
       const label = this.petLabels[i];
+      const background = (this.petLabels as any)[`bg_${i}`];
       if (!pet || !label) continue;
       const anchor = pet.getFeedAnchor?.();
       const sprite = pet.getPetSprite?.();
       if (anchor && sprite) {
-        label.setPosition(sprite.x, sprite.y - (anchor.r + 20));
+        const labelY = sprite.y + (anchor.r + 20);
+        label.setPosition(sprite.x, labelY);
+        if (background) {
+          // Background needs to be positioned at the same coordinates as the text
+          background.setPosition(sprite.x, labelY);
+        }
         label.setDepth(70050 + i);
-        label.setText(String(i + 1));
-        label.setVisible(true);
+        if (background) {
+          background.setDepth(70049 + i);
+        }
       }
     }
     
@@ -1361,24 +1662,56 @@ export class GameScene extends Phaser.Scene {
       }
     }
     
-    // Keyhole SVG is now positioned independently and doesn't need updates
-    
-    // Update hot-dog SVG position and rotation to follow the food item's physics body (red Trash object)
-    if (this.hotdogSVG && this.frontseatTrash && this.frontseatTrash.gameObject) {
-      // Convert physics object position to world coordinates (same as key SVG)
+    // Update phone SVG position to follow the phone's physics body
+    if (this.phoneSVG && this.frontseatPhone && this.frontseatPhone.gameObject) {
+      // Convert physics object position to world coordinates
       const worldPos = this.gameContentContainer.getWorldTransformMatrix().transformPoint(
-        this.frontseatTrash.gameObject.x, 
-        this.frontseatTrash.gameObject.y
+        this.frontseatPhone.gameObject.x, 
+        this.frontseatPhone.gameObject.y
       );
-      this.hotdogSVG.setPosition(worldPos.x, worldPos.y);
-      this.hotdogSVG.setRotation(this.frontseatTrash.gameObject.rotation);
+      this.phoneSVG.setPosition(worldPos.x, worldPos.y);
       
       // Update SVG depth to match physics object depth during drag
-      const isDragging = (this.frontseatTrash.gameObject as any).isDragging;
+      const isDragging = (this.frontseatPhone.gameObject as any).isDragging;
       if (isDragging) {
-        this.hotdogSVG.setDepth(110001); // Above the physics object (110000)
+        this.phoneSVG.setDepth(110001); // Above the physics object (110000)
       } else {
-        this.hotdogSVG.setDepth(60001); // Above steering wheel (60000)
+        this.phoneSVG.setDepth(60001); // Above steering wheel (60000)
+      }
+    }
+    
+    // Update green item SVG position to follow the green item's physics body
+    if (this.itemSVG && this.backseatItem && this.backseatItem.gameObject) {
+      // Convert physics object position to world coordinates
+      const worldPos = this.gameContentContainer.getWorldTransformMatrix().transformPoint(
+        this.backseatItem.gameObject.x, 
+        this.backseatItem.gameObject.y
+      );
+      this.itemSVG.setPosition(worldPos.x, worldPos.y);
+      
+      // Update SVG depth to match physics object depth during drag
+      const isDragging = (this.backseatItem.gameObject as any).isDragging;
+      if (isDragging) {
+        this.itemSVG.setDepth(110001); // Above the physics object (110000)
+      } else {
+        this.itemSVG.setDepth(60001); // Above steering wheel (60000)
+      }
+    }
+    
+    // Keyhole SVG is now positioned independently and doesn't need updates
+    
+    // Update all hot-dog overlays to follow their respective physics bodies
+    if (this.hotdogOverlays && this.hotdogOverlays.length > 0) {
+      for (const overlay of this.hotdogOverlays) {
+        if (!overlay.body || !overlay.sprite) continue;
+        const worldPos = this.gameContentContainer.getWorldTransformMatrix().transformPoint(
+          overlay.body.x,
+          overlay.body.y
+        );
+        overlay.sprite.setPosition(worldPos.x, worldPos.y);
+        overlay.sprite.setRotation(overlay.body.rotation);
+        const isDragging = (overlay.body as any).isDragging;
+        overlay.sprite.setDepth(isDragging ? 110001 : 60001);
       }
     }
 
@@ -1702,6 +2035,18 @@ export class GameScene extends Phaser.Scene {
                   ease: 'Cubic.easeOut',
                   delay: index * 100, // Stagger each pet by 100ms for elegant appearance
                   onComplete: () => {
+                    // Fade in pet name label after pet appears
+                    const label = this.petLabels[index];
+                    const background = (this.petLabels as any)[`bg_${index}`];
+                    if (label) {
+                      this.tweens.add({
+                        targets: [label, background],
+                        alpha: 1,
+                        duration: 400,
+                        ease: 'Cubic.easeOut'
+                      });
+                    }
+                    
                     // Fade in regional UI after the last pet finishes fading in
                     if (index === this.virtualPets.length - 1) {
                       this.gameUI.fadeInRegionalUI();
@@ -1750,6 +2095,20 @@ export class GameScene extends Phaser.Scene {
       const physicsRotation = (this.keySVG as any).physicsRotation || 0;
       const combinedAngle = physicsRotation + angle;
       this.keySVG.setAngle(combinedAngle);
+    }
+    
+    // Rotate phone SVG (combine physics rotation with camera angle)
+    if (this.phoneSVG && this.frontseatPhone && this.frontseatPhone.gameObject) {
+      const physicsRotation = this.frontseatPhone.gameObject.rotation || 0;
+      const combinedAngle = physicsRotation + angle;
+      this.phoneSVG.setAngle(combinedAngle);
+    }
+    
+    // Rotate green item SVG (combine physics rotation with camera angle)
+    if (this.itemSVG && this.backseatItem && this.backseatItem.gameObject) {
+      const physicsRotation = this.backseatItem.gameObject.rotation || 0;
+      const combinedAngle = physicsRotation + angle;
+      this.itemSVG.setAngle(combinedAngle);
     }
     
     // Keep magnetic target and rearview rectangle upright (no rotation)
@@ -2256,7 +2615,11 @@ export class GameScene extends Phaser.Scene {
    * Handle tutorial interrupt closed event
    */
   private onTutorialInterruptClosed() {
+    console.log('🔍 onTutorialInterruptClosed called');
     // Tutorial interrupt closed - revealing rearview mirror
+    
+    // Mark tutorial interrupt as completed
+    this.tutorialInterruptCompleted = true;
     
     // Advance tutorial phase to normal
     this.gameState.advanceTutorial();
@@ -2272,6 +2635,7 @@ export class GameScene extends Phaser.Scene {
     
     // Wait a moment for menu to fully close, then reveal rearview mirror
     this.time.delayedCall(200, () => {
+      console.log('🔍 Delayed call executing - calling revealRearviewMirror');
       this.revealRearviewMirror();
       // Also ensure triangles fade in after rearview mirror is revealed
       this.gameUI.ensureTrianglesFadeIn();
@@ -2286,25 +2650,41 @@ export class GameScene extends Phaser.Scene {
    */
   private revealRearviewMirror() {
     // Reveal rearview mirror by moving it down
-    const rearviewContainer = this.children.getByName('rearviewContainer') as Phaser.GameObjects.Container;
-    
-    if (rearviewContainer) {
+    console.log('🔍 revealRearviewMirror called - rearviewRect found:', !!this.rearviewRect);
+    if (this.rearviewRect) {
+      console.log('🔍 rearviewRect position before animation:', this.rearviewRect.x, this.rearviewRect.y);
       const cam = this.cameras.main;
       const targetY = Math.floor(cam.height * gameElements.getRearviewMirror().position.y);
       
+      console.log('🔍 Starting rearview animation - targetY:', targetY, 'currentY:', this.rearviewRect.y);
+      console.log('🔍 Camera height:', cam.height, 'Rearview config y:', gameElements.getRearviewMirror().position.y);
+      
       // Animate rearview mirror sliding down
       this.tweens.add({
-        targets: rearviewContainer,
+        targets: this.rearviewRect,
         y: targetY,
         duration: 1000,
         ease: 'Power2',
         onComplete: () => {
+          console.log('🔍 Rearview animation completed - final position:', this.rearviewRect?.x, this.rearviewRect?.y);
           // Rearview mirror revealed
+          this.rearviewAnimationCompleted = true;
           
-          // Fade in the virtual pets smoothly when rearview container reaches final position
+          // Fade in the virtual pets smoothly when rearview reaches final position
           this.virtualPets.forEach((pet, index) => {
             const petContainer = pet.getRoot?.();
             if (petContainer) {
+              console.log('🔍 Fading in pet', index, 'at position:', petContainer.x, petContainer.y);
+              
+              console.log('🔍 Pet', index, 'alpha before fade-in:', petContainer.alpha);
+              console.log('🔍 Pet', index, 'container properties:', {
+                visible: petContainer.visible,
+                alpha: petContainer.alpha,
+                x: petContainer.x,
+                y: petContainer.y,
+                depth: petContainer.depth,
+                childrenCount: petContainer.list.length
+              });
               this.tweens.add({
                 targets: petContainer,
                 alpha: 1,
@@ -2312,8 +2692,25 @@ export class GameScene extends Phaser.Scene {
                 ease: 'Cubic.easeOut',
                 delay: index * 100, // Stagger each pet by 100ms for elegant appearance
                 onComplete: () => {
+                  console.log('🔍 Pet', index, 'fade-in completed, alpha:', petContainer.alpha);
+                  
+                  // Fade in pet name label after pet appears
+                  const label = this.petLabels[index];
+                  const background = (this.petLabels as any)[`bg_${index}`];
+                  if (label && background) {
+                    console.log('🔍 Fading in label for pet', index);
+                    
+                    this.tweens.add({
+                      targets: [label, background],
+                      alpha: 1,
+                      duration: 400,
+                      ease: 'Cubic.easeOut'
+                    });
+                  }
+                  
                   // Fade in regional UI after the last pet finishes fading in
                   if (index === this.virtualPets.length - 1) {
+                    console.log('🔍 All pets faded in, fading in regional UI');
                     this.gameUI.fadeInRegionalUI();
                   }
                 }
@@ -2323,7 +2720,7 @@ export class GameScene extends Phaser.Scene {
         }
       });
     } else {
-      console.error('ERROR: Rearview container not found!');
+      console.error('ERROR: Rearview rectangle not found!');
     }
   }
 
@@ -2334,6 +2731,122 @@ export class GameScene extends Phaser.Scene {
     console.log('🎓 Ending tutorial sequence - tutorial mode will be disabled when interrupt closes');
     // Don't disable tutorial mode here - it will be disabled when interrupt menu closes
     // TODO: Hide tutorial UI elements
+  }
+
+  /**
+   * Fade out UI elements when menus are open
+   */
+  private fadeOutUIElements() {
+    console.log('🔍 Fading out UI elements due to open menu');
+    
+    // Fade out virtual pets
+    this.virtualPets.forEach((pet, index) => {
+      const petContainer = pet.getRoot?.();
+      if (petContainer && petContainer.alpha > 0) {
+        this.tweens.add({
+          targets: petContainer,
+          alpha: 0.3,
+          duration: 300,
+          ease: 'Cubic.easeIn',
+          delay: index * 20
+        });
+      }
+    });
+    
+    // Fade out pet labels and backgrounds
+    this.petLabels.forEach((label, index) => {
+      const background = (this.petLabels as any)[`bg_${index}`];
+      if (label && label.alpha > 0) {
+        this.tweens.add({
+          targets: [label, background],
+          alpha: 0.3,
+          duration: 300,
+          ease: 'Cubic.easeIn',
+          delay: index * 20
+        });
+      }
+    });
+    
+    // Fade out regional UI
+    this.gameUI.fadeOutRegionalUI();
+  }
+
+  /**
+   * Fade in UI elements when menus are closed
+   */
+  private fadeInUIElements() {
+    console.log('🔍 Fading in UI elements due to closed menu');
+    
+    // Only fade in pets if car has started AND tutorial interrupt has been completed AND rearview animation has completed
+    if (this.carStarted && this.tutorialInterruptCompleted && this.rearviewAnimationCompleted) {
+      // Fade in virtual pets
+      this.virtualPets.forEach((pet, index) => {
+        const petContainer = pet.getRoot?.();
+        if (petContainer && petContainer.alpha < 1) {
+          this.tweens.add({
+            targets: petContainer,
+            alpha: 1,
+            duration: 400,
+            ease: 'Cubic.easeOut',
+            delay: index * 30
+          });
+        }
+      });
+      
+      // Fade in pet labels and backgrounds
+      this.petLabels.forEach((label, index) => {
+        const background = (this.petLabels as any)[`bg_${index}`];
+        if (label && label.alpha < 1) {
+          this.tweens.add({
+            targets: [label, background],
+            alpha: 1,
+            duration: 400,
+            ease: 'Cubic.easeOut',
+            delay: index * 30
+          });
+        }
+      });
+    }
+    
+    // Fade in regional UI
+    this.gameUI.fadeInRegionalUIOnMenuClose();
+  }
+
+  /**
+   * Update tutorial overlays based on menu state
+   */
+  public updateAllTutorialOverlays() {
+    const menuScene = this.scene.get('MenuScene');
+    const hasOpenMenu = !!(menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog);
+    
+    console.log(`🎓 updateAllTutorialOverlays: hasOpenMenu=${hasOpenMenu}`);
+    
+    if (hasOpenMenu) {
+      // Hide tutorial overlay when any menu is open
+      console.log(`🎓 Hiding tutorial overlay due to open menu`);
+      this.tutorialSystem.hideTutorial();
+      
+      // Fade out UI elements when menus are open
+      this.fadeOutUIElements();
+    } else {
+      // Show tutorial overlay when no menus are open (if tutorial is active)
+      const tutorialState = this.tutorialSystem.getCurrentTutorialState();
+      console.log(`🎓 No menu open, tutorial state: ${tutorialState}`);
+      if (tutorialState && tutorialState !== 'none') {
+        console.log(`🎓 Showing tutorial overlay`);
+        this.tutorialSystem.updateTutorialOverlay({
+          keysInIgnition: this.keysInIgnition,
+          carStarted: this.carStarted,
+          hasOpenMenu: false,
+          currentMenuType: null,
+          steeringUsed: this.steeringUsed,
+          inExitCollisionPath: false
+        });
+      }
+      
+      // Fade in UI elements when menus are closed
+      this.fadeInUIElements();
+    }
   }
 
   /**
@@ -2537,14 +3050,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onGamePaused() {
-    console.log('Game paused - calling pauseDriving()');
+    console.log('🔄 GameScene: Game paused - calling pauseDriving()');
     this.carMechanics.pauseDriving();
-    console.log('Driving paused:', this.carMechanics.isDrivingPaused());
+    console.log('🔄 GameScene: Driving paused:', this.carMechanics.isDrivingPaused());
   }
 
   private onGameResumed() {
+    console.log('🔄 GameScene: Game resumed - calling resumeDriving()');
     this.carMechanics.resumeDriving();
     this.stopMenuOpen = false;
+    console.log('🔄 GameScene: Driving resumed:', !this.carMechanics.isDrivingPaused());
   }
 
   private onSpeedUpdate(speed: number) {
@@ -2554,7 +3069,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private onSteeringInput(value: number) {
+  private onSteeringInput(value: number, options?: { isReturnToCenter?: boolean }) {
     // Debug log disabled to avoid console flooding during interaction
     
     // Mark steering as used if there's any steering input
@@ -2578,7 +3093,10 @@ export class GameScene extends Phaser.Scene {
     this.gravityXTarget = -(Phaser.Math.Clamp(value, -150, 150) / 150) * maxGx; // Updated to match new range
     
     // Send steering directly to car mechanics for immediate response
-    this.carMechanics.handleSteering(value);
+    // but only if it's not a return-to-center event
+    if (!options?.isReturnToCenter) {
+      this.carMechanics.handleSteering(value);
+    }
   }
 
   private onStoryCompleted(storyData: { storyline: string; outcome: string; choices: string[] }) {
@@ -2865,7 +3383,7 @@ export class GameScene extends Phaser.Scene {
     
     if (newWindow) {
       // Set very high depth so it appears above all other UI elements
-      newWindow.setDepth(5000);  // Increased from 2000 to 5000
+      newWindow.setDepth(120000);  // Above pets (70001+), items (60001), and physics objects (60000)
       console.log('Story dialog created and displayed immediately');
     } else {
       console.log('Story dialog queued (another dialog is active)');

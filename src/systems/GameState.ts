@@ -699,7 +699,7 @@ export class GameState {
   /**
    * Get how many times a region has been visited
    */
-  private getRegionVisitCount(region: string): number {
+  public getRegionVisitCount(region: string): number {
     return this.state.regionHistory.filter(r => r === region).length;
   }
 

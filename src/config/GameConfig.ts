@@ -188,9 +188,9 @@ export const UI_LAYOUT = {
   // Background colors - using greyscale palette
   gameLayerBackgroundColor: GREYSCALE_PALETTE.black,
   managerValuesBackgroundColor: GREYSCALE_PALETTE.black,
-  rearviewBackgroundColor: GREYSCALE_PALETTE.darkerGray,
-  rearviewBackgroundAlpha: 0.9,
-  rearviewStrokeColor: GREYSCALE_PALETTE.white,
+  rearviewBackgroundColor: GREYSCALE_PALETTE.white,
+  rearviewBackgroundAlpha: 1.0,
+  rearviewStrokeColor: GREYSCALE_PALETTE.black,
   
   // Manager values colors - using greyscale palette
   managerValuesSkillColor: GREYSCALE_PALETTE.lightGray,

@@ -24,6 +24,7 @@
 
 import Phaser from 'phaser';
 import { PET_CONFIG } from '../config/GameConfig';
+import { BandMember, getBandMemberByIndex, calculateMood } from '../config/game-data-types';
 
 /**
  * Configuration interface for virtual pet creation
@@ -49,6 +50,7 @@ export interface VirtualPetConfig {
 export class VirtualPet {
 	private scene: Phaser.Scene;
 	private config: VirtualPetConfig;
+	private bandMember?: BandMember;
 	private container!: Phaser.GameObjects.Container;
 	private baseRect!: Phaser.GameObjects.Rectangle;
 	private pet!: Phaser.GameObjects.Ellipse;
@@ -56,6 +58,7 @@ export class VirtualPet {
 	private foodValue: number = 0; // 0..10 (10 = well fed, counts down)
 	private bathroomValue: number = 10; // 0..10 (10 = empty bladder, counts down)
 	private boredValue: number = 0; // 0..10 (10 = entertained, counts down)
+	private currentMood: string = 'content';
 	private foodBarBG!: Phaser.GameObjects.Rectangle;
 	private foodBarFill!: Phaser.GameObjects.Rectangle;
 	private foodLabel!: Phaser.GameObjects.Text;
@@ -91,8 +94,14 @@ export class VirtualPet {
 	private steeringListenerBound?: (value: number) => void;
 
 	constructor(scene: Phaser.Scene, config: VirtualPetConfig = {}) {
+		console.log('🔍 VirtualPet constructor called with config:', config);
 		this.scene = scene;
 		this.config = config;
+		
+		// Load band member data based on pet index
+		if (config.petIndex !== undefined) {
+			this.bandMember = getBandMemberByIndex(config.petIndex);
+		}
 		
 		// Initialize all meters to 100% (10.0)
 		this.foodValue = 10.0;
@@ -131,13 +140,18 @@ export class VirtualPet {
 	}
 
 	public initialize() {
+		console.log('🔍 VirtualPet initialize() called');
 		const cam = this.scene.cameras.main;
 		const width = this.config.width ?? Math.floor(cam.width * 0.85);
 		const height = this.config.height ?? Math.floor(cam.height * 0.20);
 		const x = Math.floor((this.config.xPercent ?? 0.5) * cam.width);
 		const y = Math.max(0, (this.config.yOffset ?? 6)) + Math.floor(height / 2);
 
-		this.container = this.scene.add.container(0, 0);
+		// Position container at final coordinates
+		const containerX = Math.floor((this.config.xPercent ?? 0.5) * cam.width);
+		const containerY = Math.max(0, (this.config.yOffset ?? 6)) + Math.floor(height / 2);
+		
+		this.container = this.scene.add.container(containerX, containerY);
 		if (this.config.depth !== undefined) this.container.setDepth(this.config.depth);
 		this.container.setScrollFactor(0);
 		
@@ -160,16 +174,29 @@ export class VirtualPet {
 		const petRadius = width > 0 ? Math.floor(height * 0.27) : 25;
 		this.petBaseColor = this.config.petColor ?? 0xffcc66;
 		const leftShift = width > 0 ? Math.floor((this.baseRect?.width as number) * 0.30) : 0;
-		const petStartX = x - leftShift;
-		const petStartY = y - Math.floor(height * 0.35);
+		// Move entire pet 15px down and 15px left RELATIVE TO CONTAINER
+		const petStartX = -leftShift - 15;
+		const petStartY = -Math.floor(height * 0.35) + 15;
 		this.pet = this.scene.add.ellipse(petStartX, petStartY, petRadius * 2, petRadius * 2, this.petBaseColor, 1);
 		this.pet.setStrokeStyle(2, 0x000000, 1);
 		this.pet.setScrollFactor(0);
+		
+		// Add pet ellipse to the container
+		this.container.add(this.pet);
+		console.log('🔍 VirtualPet: Pet ellipse added to container, pet properties:', {
+			visible: this.pet.visible,
+			alpha: this.pet.alpha,
+			x: this.pet.x,
+			y: this.pet.y,
+			width: this.pet.width,
+			height: this.pet.height
+		});
 
 		// Bobbing animation removed - pets now stay in fixed positions
 
 		// Create face SVG overlay (will be added to container after pet ellipse)
-		this.faceSVG = this.scene.add.sprite(this.pet.x, this.pet.y, 'face-neutral');
+		// Face positioned at pet center (pet already moved 15px down and left)
+		this.faceSVG = this.scene.add.sprite(petStartX, petStartY, 'face-neutral');
 		this.faceSVG.setScale(0.075); // 1/4 of previous size: was 0.3, now 0.075
 		this.faceSVG.setOrigin(0.5, 0.5);
 		this.faceSVG.setAlpha(0.9);
@@ -178,6 +205,17 @@ export class VirtualPet {
 		
 		// Apply white fill and black stroke styling
 		this.faceSVG.setTint(0xffffff); // White fill
+		
+		// Add face to the container
+		this.container.add(this.faceSVG);
+		console.log('🔍 VirtualPet: Face SVG added to container, face properties:', {
+			visible: this.faceSVG.visible,
+			alpha: this.faceSVG.alpha,
+			x: this.faceSVG.x,
+			y: this.faceSVG.y,
+			scaleX: this.faceSVG.scaleX,
+			scaleY: this.faceSVG.scaleY
+		});
 		
 		// Face SVG bobbing animation removed - face now stays in fixed position
 		
@@ -202,7 +240,7 @@ export class VirtualPet {
 			if (pointerDownOnThisPet) {
 				// Emit on MenuScene so the handler runs there
 				const menuScene = this.scene.scene.get('MenuScene');
-				menuScene?.events.emit('showVirtualPetMenu', this.pet);
+				menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
 			}
 			pointerDownOnThisPet = false; // Reset for next interaction
 		});
@@ -215,10 +253,13 @@ export class VirtualPet {
 		this.container.add(this.faceSVG);
 		
 		// Create a separate invisible interactive circle over the pet
-		const clickArea = this.scene.add.circle(x - leftShift, y - Math.floor(height * 0.35), petRadius, 0x000000, 0);
+		const clickArea = this.scene.add.circle(petStartX, petStartY, petRadius, 0x000000, 0);
 		clickArea.setInteractive();
 		clickArea.setScrollFactor(0);
-		clickArea.setDepth(40001); // Above rearview mirror but below steering dial
+		clickArea.setDepth(70001); // Above rearview mirror but below menus
+		
+		// Add click area to container so it moves with the pet
+		this.container.add(clickArea);
 		
 		// Track if pointerdown occurred on this click area to prevent accidental menu opening
 		let pointerDownOnThisClickArea = false;
@@ -233,7 +274,7 @@ export class VirtualPet {
 			if (pointerDownOnThisClickArea) {
 				// Emit on MenuScene so the handler runs there
 				const menuScene = this.scene.scene.get('MenuScene');
-				menuScene?.events.emit('showVirtualPetMenu', this.pet);
+				menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
 			}
 			pointerDownOnThisClickArea = false; // Reset for next interaction
 		});
@@ -246,7 +287,7 @@ export class VirtualPet {
 			console.log('Container pointerup detected!');
 			// Emit on MenuScene so the handler runs there
 			const menuScene = this.scene.scene.get('MenuScene');
-			menuScene?.events.emit('showVirtualPetMenu', this.pet);
+			menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
 		});
 
 		// Food/Bathroom/Bored meters (labels + bars) alongside the pet (track their positions)
@@ -255,8 +296,8 @@ export class VirtualPet {
 		// Use the same pet radius as the ellipse above
 		const barHeight = 10;
 		const barWidth = Math.max(6, Math.floor(camWidth * 0.03));
-		const barX = (x - leftShift) + petRadius + 12;
-		const barY = y - Math.floor((height > 0 ? height : 80) * 0.35);
+		const barX = petStartX + petRadius + 12;
+		const barY = petStartY;
 
 		this.foodLabel = this.scene.add.text(barX - 46, barY - 9, 'FOOD', {
 			fontSize: '12px',
@@ -440,6 +481,7 @@ export class VirtualPet {
 			const px = (this.petBody.position as any).x;
 			const py = (this.petBody.position as any).y;
 			this.pet.setPosition(px, py);
+			// Face positioned at pet center (pet already moved 15px down and left)
 			this.faceSVG.setPosition(px, py);
 		}
 
@@ -468,8 +510,8 @@ export class VirtualPet {
 					this.boredBarFill.width = Math.max(0, Math.floor(newBarWidth * (xclamped / 10)) - 2);
 				}
 			}
-			const barX = this.pet.x + petRadius + 12;
-			const barY = this.pet.y;
+			const barX = petRadius + 12;
+			const barY = 0;
 			this.foodBarBG.setPosition(barX, barY);
 			this.foodBarFill.setPosition(barX - Math.floor(this.foodBarBG.width / 2), barY);
 			this.foodLabel.setPosition(barX - 46, barY - 9);
@@ -695,6 +737,11 @@ export class VirtualPet {
 	 * Check if any meter has crossed a message threshold and show message if needed
 	 */
 	private checkAndShowMessage() {
+		// Cora sleeps through 75% of messages when sleeping
+		if (this.isSleeping() && Math.random() < 0.75) {
+			return;
+		}
+
 		const lowestMeter = Math.min(this.foodValue, this.bathroomValue, this.boredValue);
 		
 		// Determine which meter is the lowest
@@ -744,6 +791,7 @@ export class VirtualPet {
 		this.foodValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshFoodBar();
 		this.updateFaceEmotion(); // Update face based on new food value
+		this.updateMood(); // Update mood based on new values
 		this.checkAndShowMessage(); // Check if we need to show a message
 	}
 
@@ -751,6 +799,7 @@ export class VirtualPet {
 		this.bathroomValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshBathroomBar();
 		this.updateFaceEmotion(); // Update face based on new bathroom value
+		this.updateMood(); // Update mood based on new values
 		this.checkAndShowMessage(); // Check if we need to show a message
 	}
 
@@ -758,13 +807,17 @@ export class VirtualPet {
 		this.boredValue = Phaser.Math.Clamp(value, 0, 10);
 		this.refreshBoredBar();
 		this.updateFaceEmotion(); // Update face based on new boredom value
+		this.updateMood(); // Update mood based on new values
 		this.checkAndShowMessage(); // Check if we need to show a message
 	}
 
 	/** Gradually add food over a short duration */
-	public feedOverTime(amount: number, ms: number, onTick?: (pct: number) => void, onDone?: () => void) {
+	public feedOverTime(amount: number, ms: number, itemType?: string, onTick?: (pct: number) => void, onDone?: () => void) {
+		// Apply preference multiplier if item type is provided
+		const adjustedAmount = itemType ? this.applyFoodPreference(itemType, amount) : amount;
+		
 		const start = this.foodValue;
-		const target = Phaser.Math.Clamp(start + amount, 0, 10);
+		const target = Phaser.Math.Clamp(start + adjustedAmount, 0, 10);
 		const duration = Math.max(50, ms);
 		const startTime = this.scene.time.now;
 		const timer = this.scene.time.addEvent({
@@ -777,7 +830,7 @@ export class VirtualPet {
 				this.setFood(value);
 				
 				// Also reduce bathroom value (feeding helps with bathroom needs)
-				const bathroomReduction = amount * 0.5; // Half the food amount
+				const bathroomReduction = adjustedAmount * 0.5; // Half the adjusted food amount
 				const bathroomStart = this.bathroomValue;
 				const bathroomTarget = Phaser.Math.Clamp(bathroomStart - bathroomReduction, 0, 10);
 				const bathroomValue = Phaser.Math.Linear(bathroomStart, bathroomTarget, eased);
@@ -824,6 +877,152 @@ export class VirtualPet {
 	 */
 	public getFoodValue(): number {
 		return this.foodValue;
+	}
+
+	/**
+	 * Get band member data
+	 */
+	public getBandMember(): BandMember | undefined {
+		return this.bandMember;
+	}
+
+	/**
+	 * Apply food preference multiplier
+	 */
+	public applyFoodPreference(itemType: string, baseValue: number): number {
+		if (!this.bandMember) return baseValue;
+		
+		const preference = this.bandMember.preferences.food[itemType as keyof typeof this.bandMember.preferences.food];
+		return baseValue * (preference || 1.0);
+	}
+
+	/**
+	 * Apply weed preference multiplier
+	 */
+	public applyWeedPreference(itemType: string, baseValue: number): number {
+		if (!this.bandMember) return baseValue;
+		
+		const preference = this.bandMember.preferences.weed[itemType as keyof typeof this.bandMember.preferences.weed];
+		return baseValue * (preference || 1.0);
+	}
+
+	/**
+	 * Apply energy drink preference multiplier
+	 */
+	public applyEnergyDrinkPreference(itemType: string, baseValue: number): number {
+		if (!this.bandMember) return baseValue;
+		
+		const preference = this.bandMember.preferences.energyDrink[itemType as keyof typeof this.bandMember.preferences.energyDrink];
+		return baseValue * (preference || 1.0);
+	}
+
+	/**
+	 * Apply phone preference multiplier
+	 */
+	public applyPhonePreference(itemType: string, baseValue: number): number {
+		if (!this.bandMember) return baseValue;
+		
+		const preference = this.bandMember.preferences.phone[itemType as keyof typeof this.bandMember.preferences.phone];
+		return baseValue * (preference || 1.0);
+	}
+
+	/**
+	 * Apply decoration preference multiplier
+	 */
+	public applyDecorationPreference(itemType: string, baseValue: number): number {
+		if (!this.bandMember) return baseValue;
+		
+		const preference = this.bandMember.preferences.decoration[itemType as keyof typeof this.bandMember.preferences.decoration];
+		return baseValue * (preference || 1.0);
+	}
+
+	/**
+	 * Check if band member is sleeping (Cora's special trait)
+	 */
+	public isSleeping(): boolean {
+		if (!this.bandMember || !this.bandMember.specialTraits.sleepProbability) return false;
+		return Math.random() < this.bandMember.specialTraits.sleepProbability;
+	}
+
+	/**
+	 * Get reaction frequency multiplier (Cora's special trait)
+	 */
+	public getReactionFrequency(): number {
+		if (!this.bandMember || !this.bandMember.specialTraits.awakeReactionFrequency) return 1.0;
+		return this.isSleeping() ? 0.0 : this.bandMember.specialTraits.awakeReactionFrequency;
+	}
+
+	/**
+	 * Update mood based on current bar values
+	 */
+	public updateMood(): void {
+		if (!this.bandMember) return;
+		
+		const newMood = calculateMood(this.bandMember, this.foodValue, this.bathroomValue, this.boredValue);
+		if (newMood !== this.currentMood) {
+			this.currentMood = newMood;
+			console.log(`${this.bandMember.name} mood changed to: ${newMood}`);
+		}
+	}
+
+	/**
+	 * Get current mood
+	 */
+	public getCurrentMood(): string {
+		return this.currentMood;
+	}
+
+	/**
+	 * Apply weed effect with preference multiplier
+	 */
+	public applyWeedEffect(amount: number, itemType?: string): number {
+		const adjustedAmount = itemType ? this.applyWeedPreference(itemType, amount) : amount;
+		this.setBored(Math.min(10, this.boredValue + adjustedAmount));
+		return adjustedAmount;
+	}
+
+	/**
+	 * Apply energy drink effect with preference multiplier
+	 */
+	public applyEnergyDrinkEffect(amount: number, itemType?: string): number {
+		const adjustedAmount = itemType ? this.applyEnergyDrinkPreference(itemType, amount) : amount;
+		this.setBored(Math.min(10, this.boredValue + adjustedAmount));
+		return adjustedAmount;
+	}
+
+	/**
+	 * Apply phone effect with preference multiplier and special traits
+	 */
+	public applyPhoneEffect(amount: number, itemType?: string): { adjustedAmount: number; effect: string } {
+		const adjustedAmount = itemType ? this.applyPhonePreference(itemType, amount) : amount;
+		
+		if (!this.bandMember) {
+			return { adjustedAmount, effect: 'normal' };
+		}
+
+		const phoneEffect = this.bandMember.specialTraits.phoneEffect;
+		switch (phoneEffect) {
+			case 'relieveBoredom':
+				this.setBored(Math.min(10, this.boredValue + adjustedAmount));
+				return { adjustedAmount, effect: 'relieveBoredom' };
+			case 'addBuzz':
+				// This would need to be connected to the buzz system
+				return { adjustedAmount, effect: 'addBuzz' };
+			case 'callWife':
+				this.setBored(Math.min(10, this.boredValue + adjustedAmount));
+				return { adjustedAmount, effect: 'callWife' };
+			default:
+				return { adjustedAmount, effect: 'normal' };
+		}
+	}
+
+	/**
+	 * Apply decoration effect with preference multiplier
+	 */
+	public applyDecorationEffect(amount: number, itemType?: string): number {
+		const adjustedAmount = itemType ? this.applyDecorationPreference(itemType, amount) : amount;
+		this.setBored(Math.min(10, this.boredValue + adjustedAmount));
+		return adjustedAmount;
 	}
 
 	/**

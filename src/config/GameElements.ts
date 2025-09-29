@@ -66,7 +66,7 @@ export interface GameElementsConfig {
 const DEFAULT_CONFIG: GameElementsConfig = {
   ui: {
     rearviewMirror: {
-      position: { x: 0.55, y: -0.1 },
+      position: { x: 0.55, y: -0.03 }, // Moved down by 5% (-0.08 to -0.03)
       size: { width: 0.92, height: 0.4 }
     },
     steeringWheel: {
@@ -80,11 +80,11 @@ const DEFAULT_CONFIG: GameElementsConfig = {
   },
   virtualPets: {
     positions: [
-      { x: 0.15, y: 0.93, scale: 0.8 },
-      { x: 0.35, y: 0.88, scale: 0.8 },
-      { x: 0.55, y: 0.98, scale: 0.8 },
-      { x: 0.75, y: 0.90, scale: 0.8 },
-      { x: 0.95, y: 0.85, scale: 0.8 } // Moved pet 5 up to prevent overlap with pet 4
+      { x: 0.15, y: 0.73, scale: 0.8 }, // Moved up 10% more (0.83 to 0.73)
+      { x: 0.35, y: 0.68, scale: 0.8 }, // Moved up 10% more (0.78 to 0.68)
+      { x: 0.55, y: 0.78, scale: 0.8 }, // Moved up 10% more (0.88 to 0.78)
+      { x: 0.75, y: 0.70, scale: 0.8 }, // Moved up 10% more (0.80 to 0.70)
+      { x: 0.95, y: 0.65, scale: 0.8 }  // Moved up 10% more (0.75 to 0.65)
     ]
   },
   itemSizes: {

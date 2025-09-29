@@ -1,0 +1,204 @@
+{
+  "foodItems": [
+    {
+      "id": "hotdog_basic",
+      "name": "Basic Hot Dog",
+      "type": "Hot Dog",
+      "subtypes": ["Hot Dog"],
+      "size": "small",
+      "price": 5,
+      "uses": 1,
+      "value": 3,
+      "description": "A simple hot dog from a street vendor"
+    },
+    {
+      "id": "hotdog_deluxe",
+      "name": "Deluxe Hot Dog",
+      "type": "Hot Dog",
+      "subtypes": ["Hot Dog", "Salty"],
+      "size": "medium",
+      "price": 12,
+      "uses": 2,
+      "value": 8,
+      "description": "Premium hot dog with all the fixings"
+    },
+    {
+      "id": "hotdog_mega",
+      "name": "Mega Dog",
+      "type": "Hot Dog",
+      "subtypes": ["Hot Dog", "Spicy"],
+      "size": "large",
+      "price": 18,
+      "uses": 3,
+      "value": 15,
+      "description": "Oversized hot dog with jalapeños and hot sauce"
+    },
+    {
+      "id": "pretzel_salted",
+      "name": "Salted Pretzel",
+      "type": "Salty",
+      "subtypes": ["Salty"],
+      "size": "small",
+      "price": 4,
+      "uses": 1,
+      "value": 2,
+      "description": "Classic soft pretzel with coarse salt"
+    },
+    {
+      "id": "pretzel_mustard",
+      "name": "Mustard Pretzel",
+      "type": "Salty",
+      "subtypes": ["Salty"],
+      "size": "medium",
+      "price": 7,
+      "uses": 2,
+      "value": 5,
+      "description": "Soft pretzel served with tangy mustard"
+    },
+    {
+      "id": "fries_regular",
+      "name": "Regular Fries",
+      "type": "Salty",
+      "subtypes": ["Salty"],
+      "size": "small",
+      "price": 6,
+      "uses": 1,
+      "value": 4,
+      "description": "Crispy golden french fries"
+    },
+    {
+      "id": "fries_loaded",
+      "name": "Loaded Fries",
+      "type": "Salty",
+      "subtypes": ["Salty"],
+      "size": "large",
+      "price": 15,
+      "uses": 3,
+      "value": 12,
+      "description": "Fries topped with cheese, bacon, and sour cream"
+    },
+    {
+      "id": "donut_glazed",
+      "name": "Glazed Donut",
+      "type": "Sweet",
+      "subtypes": ["Sweet"],
+      "size": "small",
+      "price": 3,
+      "uses": 1,
+      "value": 3,
+      "description": "Classic glazed donut, perfect for a quick sugar rush"
+    },
+    {
+      "id": "donut_chocolate",
+      "name": "Chocolate Donut",
+      "type": "Sweet",
+      "subtypes": ["Sweet"],
+      "size": "medium",
+      "price": 5,
+      "uses": 1,
+      "value": 5,
+      "description": "Rich chocolate donut with sprinkles"
+    },
+    {
+      "id": "ice_cream_cone",
+      "name": "Ice Cream Cone",
+      "type": "Sweet",
+      "subtypes": ["Sweet"],
+      "size": "medium",
+      "price": 8,
+      "uses": 2,
+      "value": 6,
+      "description": "Vanilla ice cream in a crispy cone"
+    },
+    {
+      "id": "sundae_deluxe",
+      "name": "Deluxe Sundae",
+      "type": "Sweet",
+      "subtypes": ["Sweet"],
+      "size": "large",
+      "price": 14,
+      "uses": 3,
+      "value": 12,
+      "description": "Ice cream sundae with hot fudge, nuts, and cherry"
+    },
+    {
+      "id": "chili_dog",
+      "name": "Chili Dog",
+      "type": "Spicy",
+      "subtypes": ["Hot Dog", "Spicy"],
+      "size": "medium",
+      "price": 10,
+      "uses": 2,
+      "value": 7,
+      "description": "Hot dog smothered in spicy chili"
+    },
+    {
+      "id": "wings_mild",
+      "name": "Mild Wings",
+      "type": "Spicy",
+      "subtypes": ["Spicy"],
+      "size": "small",
+      "price": 9,
+      "uses": 2,
+      "value": 6,
+      "description": "Buffalo wings with mild sauce"
+    },
+    {
+      "id": "wings_hot",
+      "name": "Hot Wings",
+      "type": "Spicy",
+      "subtypes": ["Spicy"],
+      "size": "medium",
+      "price": 11,
+      "uses": 2,
+      "value": 8,
+      "description": "Buffalo wings with hot sauce - not for the faint of heart"
+    },
+    {
+      "id": "burrito_spicy",
+      "name": "Spicy Burrito",
+      "type": "Spicy",
+      "subtypes": ["Spicy"],
+      "size": "large",
+      "price": 16,
+      "uses": 3,
+      "value": 14,
+      "description": "Large burrito packed with spicy ingredients"
+    },
+    {
+      "id": "combo_meal",
+      "name": "Combo Meal",
+      "type": "Mixed",
+      "subtypes": ["Hot Dog", "Salty", "Sweet"],
+      "size": "large",
+      "price": 20,
+      "uses": 4,
+      "value": 18,
+      "description": "Complete meal: hot dog, fries, and dessert"
+    }
+  ],
+  "sizeDefinitions": {
+    "small": {
+      "radius": 15,
+      "mass": 0.5,
+      "restitution": 0.3
+    },
+    "medium": {
+      "radius": 20,
+      "mass": 1.0,
+      "restitution": 0.4
+    },
+    "large": {
+      "radius": 25,
+      "mass": 1.5,
+      "restitution": 0.5
+    }
+  },
+  "typeColors": {
+    "Hot Dog": 0xff5555,
+    "Salty": 0xffaa00,
+    "Sweet": 0xff69b4,
+    "Spicy": 0xff4500,
+    "Mixed": 0x9370db
+  }
+}

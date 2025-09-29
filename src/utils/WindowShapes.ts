@@ -335,7 +335,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
       // Set position to absolute coordinates - EXACT H menu approach  
       buttonGraphics.setPosition(absoluteButtonX, absoluteButtonY);
       buttonGraphics.setVisible(true); // CRITICAL: Make button visible like H menu
-      buttonGraphics.setDepth(40000); // Higher than story container (35000) to ensure visibility
+      buttonGraphics.setDepth(120001); // Above story container (120000) and all game elements
       
       // Add text label at ABSOLUTE world position - NOT in container
       const labelText = buttonConfig.text || buttonLabels[index] || `Option ${index + 1}`;
@@ -350,7 +350,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
         { fontSize: '14px', color: '#000000', fontFamily: 'Arial, sans-serif' }
       );
       buttonLabel.setOrigin(0.5, 0.5);
-      buttonLabel.setDepth(40001); // Higher than buttons - ensure visibility above story container
+      buttonLabel.setDepth(120002); // Above buttons and all game elements
       buttonLabel.setRotation(buttonRotationVariation); // Apply jaunty rotation to button labels!
       
       // Make button interactive with EXPLICIT HIT BOUNDS - EXACT H menu approach
@@ -581,7 +581,7 @@ class CYOANarrativeWindow extends BaseNarrativeWindow {
   private createDitheredOverlay(container?: Phaser.GameObjects.Container): void {
     const targetContainer = container || this.container;
     const overlayId = `cyoa_dither_${targetContainer.name || 'default'}`;
-    const overlay = this.windowShapes.overlayManager.createDitherOverlay(overlayId, 1, 0.3);
+    const overlay = this.windowShapes.overlayManager.createDitherOverlay(overlayId, 60000, 0.3);
     
     // Apply pattern override if requested
     try {
@@ -615,6 +615,7 @@ export class WindowShapes {
   private activeAnimatedShapes = new Map<string, { graphics: Phaser.GameObjects.Graphics, shapeType: string, x: number, y: number, width: number, height: number }>();
   private activeSteeringWheels = new Map<string, { graphics: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, currentRotation: number }>();
   private activeSubtitleAnimations = new Map<string, { element: Phaser.GameObjects.Text, animationData: any }>();
+  private activeAnimatedSVGs = new Map<string, { graphics: Phaser.GameObjects.Graphics, originalPoints: Array<{x: number, y: number}>, x: number, y: number, fillColor: number, strokeColor: number, strokeWidth: number }>();
   
   // Narrative window management
   private activeNarrativeWindow: Phaser.GameObjects.Container | null = null;
@@ -883,11 +884,12 @@ export class WindowShapes {
     const fillAlpha = config.fillAlpha !== undefined ? config.fillAlpha : 1.0; // Fully opaque by default
     
     // Create polygon points with extra random points along edges
-    const offset = 5; // Make polygon 5 pixels larger on each side
+    // Use smaller offset for buttons to keep them close to boundaries
+    const offset = shapeType === 'button' ? 1 : 5; // Much smaller offset for buttons
     const polygonPoints = [];
     
-    // Add random extra points (increased jaggedness for s windows)
-    const extraPointCount = Phaser.Math.Between(4, 8);
+    // Add random extra points (reduced for buttons, increased for windows)
+    const extraPointCount = shapeType === 'button' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(4, 8);
     
     // Create arrays for points along each edge
     const topEdgePoints = [];
@@ -896,21 +898,25 @@ export class WindowShapes {
     const leftEdgePoints = [];
     
     // Always include corners with random movement (ensuring they stay outside rectangle)
+    // Use smaller movement range for buttons
+    const movementRange = shapeType === 'button' ? 2 : 8;
+    const minMovement = shapeType === 'button' ? 1 : 3;
+    
     topEdgePoints.push({ 
-      x: config.x - offset + Phaser.Math.Between(-8, -3), // Increased movement range
-      y: config.y - offset + Phaser.Math.Between(-8, -3)  // Increased movement range
+      x: config.x - offset + Phaser.Math.Between(-movementRange, -minMovement),
+      y: config.y - offset + Phaser.Math.Between(-movementRange, -minMovement)
     }); // Top-left corner
     rightEdgePoints.push({ 
-      x: config.x + config.width + offset + Phaser.Math.Between(3, 8), // Increased movement range
-      y: config.y - offset + Phaser.Math.Between(-8, -3)  // Increased movement range
+      x: config.x + config.width + offset + Phaser.Math.Between(minMovement, movementRange),
+      y: config.y - offset + Phaser.Math.Between(-movementRange, -minMovement)
     }); // Top-right corner
     bottomEdgePoints.push({ 
-      x: config.x + config.width + offset + Phaser.Math.Between(3, 8), // Increased movement range
-      y: config.y + config.height + offset + Phaser.Math.Between(3, 8) // Increased movement range
+      x: config.x + config.width + offset + Phaser.Math.Between(minMovement, movementRange),
+      y: config.y + config.height + offset + Phaser.Math.Between(minMovement, movementRange)
     }); // Bottom-right corner
     leftEdgePoints.push({ 
-      x: config.x - offset + Phaser.Math.Between(-8, -3), // Increased movement range
-      y: config.y + config.height + offset + Phaser.Math.Between(3, 8) // Increased movement range
+      x: config.x - offset + Phaser.Math.Between(-movementRange, -minMovement),
+      y: config.y + config.height + offset + Phaser.Math.Between(minMovement, movementRange)
     }); // Bottom-left corner
     
     // Add random extra points to edges
@@ -957,16 +963,19 @@ export class WindowShapes {
     polygonPoints.push(...bottomEdgePoints);
     polygonPoints.push(...leftEdgePoints);
     
-    // First, draw the drop shadow (offset down and to the right)
-    const shadowOffset = 6; // Increased offset for more visibility
-    graphics.fillStyle(0x222222, 1.0); // Darker shadow for better contrast
-    graphics.beginPath();
-    graphics.moveTo(polygonPoints[0].x + shadowOffset, polygonPoints[0].y + shadowOffset);
-    for (let i = 1; i < polygonPoints.length; i++) {
-      graphics.lineTo(polygonPoints[i].x + shadowOffset, polygonPoints[i].y + shadowOffset);
+    // Skip drop shadow for buttons
+    if (shapeType !== 'button') {
+      // First, draw the drop shadow (offset down and to the right)
+      const shadowOffset = 6; // Increased offset for more visibility
+      graphics.fillStyle(0x222222, 1.0); // Darker shadow for better contrast
+      graphics.beginPath();
+      graphics.moveTo(polygonPoints[0].x + shadowOffset, polygonPoints[0].y + shadowOffset);
+      for (let i = 1; i < polygonPoints.length; i++) {
+        graphics.lineTo(polygonPoints[i].x + shadowOffset, polygonPoints[i].y + shadowOffset);
+      }
+      graphics.closePath();
+      graphics.fillPath(); // Fill the shadow
     }
-    graphics.closePath();
-    graphics.fillPath(); // Fill the shadow
     
     // Then draw the main polygon border
     if (shapeType === 'window') {
@@ -1489,7 +1498,7 @@ export class WindowShapes {
     // Create NEW polygon points with different random values
     const offset = 5;
     const polygonPoints = [];
-    const extraPointCount = Phaser.Math.Between(2, 5);
+    const extraPointCount = Phaser.Math.Between(4, 8); // Keep original for speech bubbles
     
     // Create arrays for points along each edge
     const topEdgePoints = [];
@@ -1692,9 +1701,16 @@ export class WindowShapes {
       }
     });
     
+    // Update animated SVGs on half-steps
+    this.activeAnimatedSVGs.forEach(({ graphics, originalPoints, x, y, fillColor, strokeColor, strokeWidth }) => {
+      if (graphics && graphics.scene) {
+        this.regenerateSVGWithJitter(graphics, originalPoints, x, y, fillColor, strokeColor, strokeWidth);
+      }
+    });
+    
     // Debug: Log active animated shapes count
-    if (this.activeAnimatedShapes.size > 0) {
-      console.log(`🎬 Animating ${this.activeAnimatedShapes.size} shapes on half-step ${halfStep}`);
+    if (this.activeAnimatedShapes.size > 0 || this.activeAnimatedSVGs.size > 0) {
+      console.log(`🎬 Animating ${this.activeAnimatedShapes.size} shapes and ${this.activeAnimatedSVGs.size} SVGs on half-step ${halfStep}`);
     } else {
       // Only log this occasionally to avoid spam
       if (halfStep % 10 === 0) {
@@ -1861,7 +1877,7 @@ export class WindowShapes {
     
     // Create polygon points - different approach for narrative backgrounds vs others
     const polygonPoints = [];
-    const extraPointCount = Phaser.Math.Between(2, 5);
+    const extraPointCount = shapeType === 'button' ? Phaser.Math.Between(1, 3) : Phaser.Math.Between(4, 8); // Reduced for buttons
     const topEdgePoints = [];
     const rightEdgePoints = [];
     const bottomEdgePoints = [];
@@ -1893,24 +1909,28 @@ export class WindowShapes {
       polygonPoints.push(bottomLeftCorner);
     } else {
       // ORGANIC EXTENDING POLYGONS for other collage elements (original behavior)
-      const offset = 5; // Make polygon 5 pixels larger on each side
+      const offset = shapeType === 'button' ? 1 : 5; // Use same offset as initial generation
       
       // Always include corners with random movement - SAME LOGIC as original
+      // Use smaller movement range for buttons
+      const movementRange = shapeType === 'button' ? 2 : 8;
+      const minMovement = shapeType === 'button' ? 1 : 3;
+      
       topEdgePoints.push({ 
-        x: x - offset + Phaser.Math.Between(-5, -2),
-        y: y - offset + Phaser.Math.Between(-5, -2)
+        x: x - offset + Phaser.Math.Between(-movementRange, -minMovement),
+        y: y - offset + Phaser.Math.Between(-movementRange, -minMovement)
       }); // Top-left corner
       rightEdgePoints.push({ 
-        x: x + width + offset + Phaser.Math.Between(2, 5),
-        y: y - offset + Phaser.Math.Between(-5, -2)
+        x: x + width + offset + Phaser.Math.Between(minMovement, movementRange),
+        y: y - offset + Phaser.Math.Between(-movementRange, -minMovement)
       }); // Top-right corner
       bottomEdgePoints.push({ 
-        x: x + width + offset + Phaser.Math.Between(2, 5),
-        y: y + height + offset + Phaser.Math.Between(2, 5)
+        x: x + width + offset + Phaser.Math.Between(minMovement, movementRange),
+        y: y + height + offset + Phaser.Math.Between(minMovement, movementRange)
       }); // Bottom-right corner
       leftEdgePoints.push({ 
-        x: x - offset + Phaser.Math.Between(-5, -2),
-        y: y + height + offset + Phaser.Math.Between(2, 5)
+        x: x - offset + Phaser.Math.Between(-movementRange, -minMovement),
+        y: y + height + offset + Phaser.Math.Between(minMovement, movementRange)
       }); // Bottom-left corner
       
       // Add random extra points to edges - SAME LOGIC as original
@@ -2374,11 +2394,11 @@ export class WindowShapes {
     // Set alpha to 1 and scale to 0.01 IMMEDIATELY after creation
     mainWindow.setAlpha(1); // Start visible
     mainWindow.setScale(0.01); // Start tiny
-    mainWindow.setDepth(10);  // Changed from -1 to 10
+    mainWindow.setDepth(120000);  // Above all game elements including pets and items
     mainWindow.setPosition(centerX, centerY); // Position so center of Graphics object is at center
     container.add(mainWindow);
     console.log('✅ Main window added to container');
-    console.log('📦 Main window depth set to 10');
+    console.log('📦 Main window depth set to 120000');
     
     // Create 1-bit dithered grey overlay below the menu
     this.createDitheredOverlay(container);
@@ -2743,7 +2763,7 @@ export class WindowShapes {
       // Recreate the polygon with new styling (using same logic as createCollageRect)
       const offset = 5;
       const polygonPoints = [];
-      const extraPointCount = Phaser.Math.Between(2, 5);
+      const extraPointCount = Phaser.Math.Between(4, 8); // Keep original for story windows
       
       const topEdgePoints = [];
       const rightEdgePoints = [];
@@ -2872,9 +2892,9 @@ export class WindowShapes {
     yesButton.setVisible(true);
     maybeButton.setVisible(true);
     noButton.setVisible(true);
-    yesButton.setDepth(5000);    // Much higher than container (depth 2000)
-    maybeButton.setDepth(5000);
-    noButton.setDepth(5000);
+    yesButton.setDepth(120001);    // Above story container (120000) and all game elements
+    maybeButton.setDepth(120001);
+    noButton.setDepth(120001);
     
     // Debug logging
     console.log(`🎨 Scene name: ${this.scene.scene.key}`);
@@ -2885,13 +2905,13 @@ export class WindowShapes {
     // Add button labels at absolute positions (NOT added to container)
     const yesLabel = this.scene.add.text(buttonX + buttonWidth/2, yesButtonY + buttonHeight/2, 'Yes', { fontSize: '14px', color: '#000000' });
     yesLabel.setOrigin(0.5, 0.5);
-    yesLabel.setDepth(5001);    // Higher than everything
+    yesLabel.setDepth(120002);    // Above buttons and all game elements
     const maybeLabel = this.scene.add.text(buttonX + buttonWidth/2, maybeButtonY + buttonHeight/2, 'Maybe', { fontSize: '14px', color: '#000000' });
     maybeLabel.setOrigin(0.5, 0.5);
-    maybeLabel.setDepth(5001);
+    maybeLabel.setDepth(120002);
     const noLabel = this.scene.add.text(buttonX + buttonWidth/2, noButtonY + buttonHeight/2, 'No', { fontSize: '14px', color: '#000000' });
     noLabel.setOrigin(0.5, 0.5);
-    noLabel.setDepth(5001);
+    noLabel.setDepth(120002);
     
     // Store button references on container for cleanup (no debug overlays needed)
     (container as any).storyButtons = [yesButton, maybeButton, noButton, yesLabel, maybeLabel, noLabel];
@@ -3035,17 +3055,23 @@ export class WindowShapes {
    */
   createDitheredOverlay(container: Phaser.GameObjects.Container): void {
     const overlayId = `dither_${container.name || 'default'}`;
-    const overlay = this.overlayManager.createDitherOverlay(overlayId, 1, 0.3);
+    const overlay = this.overlayManager.createDitherOverlay(overlayId, 60000, 0.3);
     // If a specific pattern is requested on the container, swap it now
     try {
       const requested = (container as any).__overlayPattern as string | undefined;
       if (requested && overlay && (overlay as any).container) {
+        console.log(`🎨 WindowShapes: Applying pattern override: ${requested}`);
         const ts = (overlay as any).container.list?.find((o: any) => o instanceof Phaser.GameObjects.TileSprite) as Phaser.GameObjects.TileSprite | undefined;
         if (ts && this.scene.textures.exists(requested)) {
           ts.setTexture(requested);
+          console.log(`🎨 WindowShapes: Successfully applied pattern ${requested}`);
+        } else {
+          console.log(`🎨 WindowShapes: Pattern ${requested} not found or TileSprite not found`);
         }
       }
-    } catch {}
+    } catch (error) {
+      console.error(`🎨 WindowShapes: Error applying pattern override:`, error);
+    }
     
     // Store reference for cleanup
     (container as any).ditheredOverlay = overlay;
@@ -3056,4 +3082,127 @@ export class WindowShapes {
       containerName: container.name
     });
   }
+
+  // ============================================================================
+  // SVG JITTER ANIMATION SYSTEM
+  // ============================================================================
+
+  /**
+   * Create an animated SVG with jitter animation (like collage menus)
+   */
+  public createAnimatedSVG(svgPath: string, x: number, y: number, fillColor: number = 0xffffff, strokeColor: number = 0x000000, strokeWidth: number = 2): Phaser.GameObjects.Graphics {
+    const graphics = this.scene.add.graphics();
+    const points = this.parseSVGPathToPoints(svgPath);
+    
+    // Register for half-step animation
+    const svgId = `svg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    this.registerAnimatedSVG(svgId, graphics, points, x, y, fillColor, strokeColor, strokeWidth);
+    
+    // Initial draw
+    this.regenerateSVGWithJitter(graphics, points, x, y, fillColor, strokeColor, strokeWidth);
+    
+    // Store the ID for cleanup
+    (graphics as any).svgAnimationId = svgId;
+    
+    // Add cleanup when graphics is destroyed
+    graphics.on('destroy', () => {
+      this.unregisterAnimatedSVG(svgId);
+    });
+    
+    console.log(`🎨 Created animated SVG with ${points.length} points, ID: ${svgId}`);
+    return graphics;
+  }
+
+  /**
+   * Parse SVG path data into point array
+   */
+  private parseSVGPathToPoints(svgPath: string): Array<{x: number, y: number}> {
+    const points: Array<{x: number, y: number}> = [];
+    
+    // Simple SVG path parser - handles basic M, L, Z commands
+    const commands = svgPath.match(/[MLZ][^MLZ]*/g) || [];
+    
+    for (const command of commands) {
+      const type = command[0];
+      const coords = command.slice(1).trim().split(/[\s,]+/).filter(s => s).map(Number);
+      
+      if (type === 'M' && coords.length >= 2) {
+        // Move to - start new path
+        points.push({ x: coords[0], y: coords[1] });
+      } else if (type === 'L' && coords.length >= 2) {
+        // Line to - add point
+        points.push({ x: coords[0], y: coords[1] });
+      } else if (type === 'Z') {
+        // Close path - connect back to start
+        if (points.length > 0) {
+          points.push({ x: points[0].x, y: points[0].y });
+        }
+      }
+    }
+    
+    return points;
+  }
+
+  /**
+   * Register an animated SVG for ongoing updates
+   */
+  private registerAnimatedSVG(svgId: string, graphics: Phaser.GameObjects.Graphics, originalPoints: Array<{x: number, y: number}>, x: number, y: number, fillColor: number, strokeColor: number, strokeWidth: number): void {
+    this.activeAnimatedSVGs.set(svgId, { 
+      graphics, 
+      originalPoints, 
+      x, 
+      y, 
+      fillColor, 
+      strokeColor, 
+      strokeWidth 
+    });
+    console.log(`🎬 Registered animated SVG: ${svgId} with ${originalPoints.length} points`);
+  }
+
+  /**
+   * Unregister an animated SVG
+   */
+  private unregisterAnimatedSVG(svgId: string): void {
+    this.activeAnimatedSVGs.delete(svgId);
+    console.log(`🎬 Unregistered animated SVG: ${svgId}`);
+  }
+
+  /**
+   * Regenerate SVG with jitter animation (like collage system)
+   */
+  private regenerateSVGWithJitter(graphics: Phaser.GameObjects.Graphics, originalPoints: Array<{x: number, y: number}>, x: number, y: number, fillColor: number, strokeColor: number, strokeWidth: number): void {
+    graphics.clear();
+    
+    if (originalPoints.length === 0) return;
+    
+    // Apply jitter to points (same approach as collage system)
+    const jitteredPoints = originalPoints.map(point => ({
+      x: point.x + Phaser.Math.Between(-3, 3), // ±3px jitter
+      y: point.y + Phaser.Math.Between(-3, 3)
+    }));
+    
+    // Draw the jittered polygon
+    this.drawPolygonFromPoints(graphics, jitteredPoints, x, y);
+    
+    // Apply fill and stroke
+    if (strokeWidth > 0) {
+      graphics.lineStyle(strokeWidth, strokeColor);
+    }
+    graphics.fillStyle(fillColor);
+    graphics.fill();
+    
+    if (strokeWidth > 0) {
+      graphics.strokePath();
+    }
+  }
+
+  /**
+   * Create a simple test SVG (hot dog shape) for testing
+   */
+  public createTestAnimatedSVG(x: number, y: number): Phaser.GameObjects.Graphics {
+    // Simple hot dog shape SVG path
+    const hotDogPath = "M 0 0 L 20 0 L 25 5 L 20 10 L 0 10 L -5 5 Z";
+    return this.createAnimatedSVG(hotDogPath, x, y, 0xff6b35, 0x000000, 2);
+  }
 }
+

@@ -389,9 +389,10 @@ export class OverlayManager {
    */
   private cycleDitherPatterns(direction: 'next' | 'prev'): void {
     const patterns = [
-      { key: 'ditherPattern25', percentage: 25, name: 'Light' },
-      { key: 'ditherPattern50', percentage: 50, name: 'Medium' },
-      { key: 'ditherPattern75', percentage: 75, name: 'Dark' }
+    { key: 'ditherPattern25', percentage: 25, name: 'Light' },
+    { key: 'ditherPattern50', percentage: 50, name: 'Medium' },
+    { key: 'ditherPattern75', percentage: 75, name: 'Dark' },
+    { key: 'dither_diamonds', percentage: 50, name: 'Diamonds' }
     ];
 
     console.log(`🎨 Cycling dither patterns (${direction}) - Found ${this.activeOverlays.size} active overlays`);
@@ -445,12 +446,14 @@ export class OverlayManager {
     this.createDitherPattern('ditherPattern25', patternSize, 25); // Light grey
     this.createDitherPattern('ditherPattern50', patternSize, 50); // Medium grey (current)
     this.createDitherPattern('ditherPattern75', patternSize, 75); // Dark grey
+    this.createDitherDiamondsPattern('dither_diamonds', patternSize); // Diamond pattern
     
     // Verify textures were created
     console.log('🎨 Texture verification:');
     console.log(`🎨 ditherPattern25 exists: ${this.scene.textures.exists('ditherPattern25')}`);
     console.log(`🎨 ditherPattern50 exists: ${this.scene.textures.exists('ditherPattern50')}`);
     console.log(`🎨 ditherPattern75 exists: ${this.scene.textures.exists('ditherPattern75')}`);
+    console.log(`🎨 dither_diamonds exists: ${this.scene.textures.exists('dither_diamonds')}`);
   }
 
   /**
@@ -549,6 +552,51 @@ export class OverlayManager {
     const testSprite = this.scene.add.sprite(0, 0, textureKey);
     console.log(`🎨 Test sprite texture key: ${testSprite.texture.key}`);
     testSprite.destroy();
+  }
+
+  /**
+   * Create a diamond dither pattern texture
+   */
+  private createDitherDiamondsPattern(textureKey: string, patternSize: number): void {
+    if (this.scene.textures.exists(textureKey)) {
+      return; // Texture already exists
+    }
+
+    // Ensure exact pixel dimensions - no fractional scaling
+    const exactPatternSize = Math.floor(patternSize);
+    const patternTexture = this.scene.textures.createCanvas(textureKey, exactPatternSize, exactPatternSize);
+    
+    if (!patternTexture) return;
+
+    const ctx = patternTexture.getContext();
+    
+    // Bulletproof pixel rendering settings
+    ctx.imageSmoothingEnabled = false; // Disable anti-aliasing for crisp pixels
+    ctx.fillStyle = '#000000';
+    
+    // Diamond pattern - creates diamond shapes
+    const pattern = [
+      [0, 0, 1, 0, 0, 0, 1, 0],
+      [0, 1, 1, 1, 0, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1],
+      [0, 1, 1, 1, 0, 1, 1, 1],
+      [0, 0, 1, 0, 0, 0, 1, 0],
+      [0, 1, 1, 1, 0, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1],
+      [0, 1, 1, 1, 0, 1, 1, 1]
+    ];
+    
+    // Draw the diamond pattern
+    for (let y = 0; y < patternSize; y++) {
+      for (let x = 0; x < patternSize; x++) {
+        if (pattern[y][x] === 1) {
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    
+    patternTexture.refresh();
+    console.log(`🎨 Created diamond dither texture: ${textureKey}`);
   }
 
   /**
@@ -803,7 +851,7 @@ export class OverlayManager {
   /**
    * Convenience method for creating dither overlays
    */
-  createDitherOverlay(id: string, depth: number = 1, opacity: number = 0.3): OverlayInstance {
+  createDitherOverlay(id: string, depth: number = 90000, opacity: number = 0.3): OverlayInstance {
     return this.createOverlay(id, {
       type: 'dither',
       color: 0x808080,
@@ -838,7 +886,7 @@ export class OverlayManager {
       color: 0x808080,
       opacity: 0.3,
       cutouts,
-      depth: 50000
+      depth: 120001 // Above menu depth (120000)
     });
   }
 }

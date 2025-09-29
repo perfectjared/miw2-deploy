@@ -193,6 +193,7 @@ export class GameUI {
   private encumbranceText!: Phaser.GameObjects.Text;
   
   // Speed Crank Elements
+  private dashBackground!: Phaser.GameObjects.Rectangle;
   private speedCrankTrack!: Phaser.GameObjects.Graphics;
   private speedCrankHandle!: Phaser.GameObjects.Graphics;
   private speedCrankValueIndicator!: Phaser.GameObjects.Graphics;
@@ -241,6 +242,7 @@ export class GameUI {
    * Initialize all UI elements
    */
   public initialize() {
+    this.createDashBackground();
     this.createGameLayerText();
     this.createCountdownTimer();
     this.createProgressText(); // Updated method name
@@ -267,7 +269,7 @@ export class GameUI {
     // updateStopsCounter removed - stopsCounterText now shows sequence fraction
     this.updateMonthlyListeners(state.monthlyListeners);
     this.updateBuzz(state.buzz);
-    this.updateEncumbrance(2); // Default to 2 items (keys and hotdog)
+    // Encumbrance is set explicitly by GameScene via setEncumbrance
     // Speed crank removed - using automatic speed progression
   }
 
@@ -434,6 +436,25 @@ export class GameUI {
   }
 
   /**
+   * Create dash background
+   */
+  private createDashBackground() {
+    const cam = this.scene.cameras.main;
+    const dashWidth = Math.floor(cam.width * 0.95);
+    const dashHeight = Math.floor(cam.height * 0.15);
+    const dashX = Math.floor(cam.width * 0.5);
+    const dashY = Math.floor(cam.height * 0.85);
+    
+    const dashBackground = this.scene.add.rectangle(dashX, dashY, dashWidth, dashHeight, GREYSCALE_PALETTE.white, 1.0);
+    dashBackground.setStrokeStyle(2, GREYSCALE_PALETTE.black, 1);
+    dashBackground.setScrollFactor(0);
+    dashBackground.setDepth(15000); // Below virtual pets and menus but above game content
+    
+    // Store reference for camera management
+    this.dashBackground = dashBackground;
+  }
+
+  /**
    * Create game layer text - removed
    */
   private createGameLayerText() {
@@ -448,7 +469,7 @@ export class GameUI {
     const gameHeight = this.scene.cameras.main.height;
     
     const countdownX = gameWidth * this.config.countdownPositionX;
-    const countdownY = gameHeight * this.config.countdownPositionY + 60; // Moved down by 60px (was 40px)
+    const countdownY = gameHeight * this.config.countdownPositionY + 92; // Moved down by 92px (60px + 32px for 5% of 640px screen)
      
     this.countdownText = this.scene.add.text(countdownX, countdownY, '0', {
       fontSize: this.config.countdownFontSize,
@@ -508,7 +529,7 @@ export class GameUI {
     const countdownX = gameWidth2 * this.config.countdownPositionX;
     const countdownY = gameHeight2 * this.config.countdownPositionY;
     const barX = countdownX - barWidth / 2;
-    const barY = countdownY - 16 + 40; // Moved down by 40px
+    const barY = countdownY - 16 + 72; // Moved down by 72px (40px + 32px for 5% of 640px screen)
 
     // Create region header above progress meter
     const regionX = barX; // Align with progress bar
@@ -565,7 +586,7 @@ export class GameUI {
     const steeringConfig = gameElements.getSteeringWheel();
     const steeringX = gameWidth * steeringConfig.position.x;
     const moneyX = steeringX + 250; // Same X as monthly listeners (aligned with other texts)
-    const moneyY = gameHeight * 0.7 - 60; // Above monthly listeners
+    const moneyY = gameHeight * 0.7 - 28; // Moved down 5% (32px) from above monthly listeners
     
     this.moneyText = this.scene.add.text(moneyX, moneyY, '$0', {
       fontSize: this.config.moneyHealthFontSize,
@@ -577,6 +598,7 @@ export class GameUI {
     
     this.moneyText.setScrollFactor(0);
     this.moneyText.setDepth(10000);
+    this.moneyText.setAlpha(0); // Start invisible for fade-in animation
     
     // Health text removed - no longer needed
   }
@@ -962,7 +984,7 @@ export class GameUI {
     // Remove extraneous square; indicator line will represent value
     
     knob.setPosition(dialX, dialY);
-    knob.setDepth(50000); // Above rearview mirror and virtual pets
+    knob.setDepth(60000); // Above dash background and rearview mirror
     knob.setInteractive(new Phaser.Geom.Circle(0, 0, knobRadius), Phaser.Geom.Circle.Contains);
     
     // Create SVG overlay for visual appeal
@@ -970,7 +992,7 @@ export class GameUI {
     this.steeringWheelSVG.setScale(UI_TUNABLES.steering.svgScale * steeringConfig.scale);
     this.steeringWheelSVG.setOrigin(0.5, 0.5);
     this.steeringWheelSVG.setAlpha(UI_TUNABLES.steering.svgAlpha); // Semi-transparent overlay
-    this.steeringWheelSVG.setDepth(50001); // Above the knob
+    this.steeringWheelSVG.setDepth(60001); // Above the knob
     
     // Apply white fill and black stroke styling
     this.steeringWheelSVG.setTint(GREYSCALE_PALETTE.white); // White fill
@@ -983,11 +1005,11 @@ export class GameUI {
     
     // Visual feedback overlay: an indicator line and angle text
     this.steeringDialIndicator = this.scene.add.graphics();
-    this.steeringDialIndicator.setDepth(50002); // Above SVG
+    this.steeringDialIndicator.setDepth(60002); // Above SVG
     this.steeringAngleText = this.scene.add.text(dialX, dialY + knobRadius + UI_TUNABLES.steering.angleTextOffset, '0%', {
       fontSize: '14px',
       color: '#ffffff'
-    }).setOrigin(0.5).setDepth(50003); // Above indicator
+    }).setOrigin(0.5).setDepth(60003); // Above indicator
     
     // Add drag functionality (fixed version)
     let isDragging = false;
@@ -1077,9 +1099,9 @@ export class GameUI {
       this.isDragging = false;
       
       // Restore both knob and SVG depths when dragging ends
-      knob.setDepth(50000); // Back to normal depth
+      knob.setDepth(60000); // Back to normal depth
       if (this.steeringWheelSVG) {
-        this.steeringWheelSVG.setDepth(50001); // Back to normal depth
+        this.steeringWheelSVG.setDepth(60001); // Back to normal depth
       }
       
       // Redraw knob with original color
@@ -1118,9 +1140,9 @@ export class GameUI {
         this.currentSteeringPosition = Math.min(0, this.currentSteeringPosition + returnSpeed * delta);
       }
       
-      // During return-to-center, don't emit any steering input
-      // This allows the car to maintain its current position while wheel returns visually
-      // The car mechanics system will use its existing turn value and let it decay naturally
+      // Emit steering input during return-to-center so physics forces update
+      // but mark it as a return-to-center event so car mechanics can ignore it
+      this.scene.events.emit('steeringInput', this.currentSteeringPosition, { isReturnToCenter: true });
       
       // Update visual indicator
       this.updateSteeringIndicator(this.currentSteeringPosition);
@@ -1388,7 +1410,11 @@ export class GameUI {
       this.countdownText,
       this.minutesText,
       this.progressBarBG,
-      this.progressBarFill
+      this.progressBarFill,
+      this.moneyText,
+      this.buzzText,
+      this.monthlyListenersText,
+      this.encumbranceText
     ];
 
     regionalElements.forEach((element, index) => {
@@ -1407,6 +1433,87 @@ export class GameUI {
     // Fade in triangles separately since they might be created later
     console.log('🔺 fadeInRegionalUI calling fadeInTriangles');
     this.fadeInTriangles();
+  }
+
+  /**
+   * Fade out regional UI elements when menus are open
+   */
+  public fadeOutRegionalUI() {
+    console.log('🔺 fadeOutRegionalUI called');
+    
+    const regionalElements = [
+      this.regionText,
+      this.stopsCounterText,
+      this.countdownText,
+      this.minutesText,
+      this.progressBarBG,
+      this.progressBarFill,
+      this.moneyText,
+      this.buzzText,
+      this.monthlyListenersText,
+      this.encumbranceText
+    ];
+
+    regionalElements.forEach((element, index) => {
+      if (element && element.alpha > 0) {
+        console.log(`🔺 Fading out regional element ${index} from alpha ${element.alpha} to 0.3`);
+        this.scene.tweens.add({
+          targets: element,
+          alpha: 0.3,
+          duration: 300, // 0.3 seconds fade-out
+          ease: 'Cubic.easeIn',
+          delay: index * 20 // Stagger each element by 20ms
+        });
+      }
+    });
+
+    // Fade out triangles
+    this.fadeOutTriangles();
+  }
+
+  /**
+   * Fade in regional UI elements when menus are closed
+   */
+  public fadeInRegionalUIOnMenuClose() {
+    console.log('🔺 fadeInRegionalUIOnMenuClose called');
+    
+    // Check if car has started (ignition is on) before fading in UI
+    const gameScene = this.scene.scene.get('GameScene');
+    const carStarted = gameScene ? (gameScene as any).carStarted : false;
+    
+    if (!carStarted) {
+      console.log('🔺 Not fading in regional UI - car not started yet');
+      return;
+    }
+    
+    const regionalElements = [
+      this.regionText,
+      this.stopsCounterText,
+      this.countdownText,
+      this.minutesText,
+      this.progressBarBG,
+      this.progressBarFill,
+      this.moneyText,
+      this.buzzText,
+      this.monthlyListenersText,
+      this.encumbranceText
+    ];
+
+    regionalElements.forEach((element, index) => {
+      if (element && element.alpha < 1) {
+        console.log(`🔺 Fading in regional element ${index} from alpha ${element.alpha} to 1`);
+        this.scene.tweens.add({
+          targets: element,
+          alpha: 1,
+          duration: 400, // 0.4 seconds fade-in
+          ease: 'Cubic.easeOut',
+          delay: index * 30 // Stagger each element by 30ms
+        });
+      }
+    });
+
+    // Fade in triangles
+    this.fadeInTrianglesOnMenuClose();
   }
 
   /**
@@ -1430,6 +1537,49 @@ export class GameUI {
   }
 
   /**
+   * Fade out progress threshold indicators (triangles)
+   */
+  private fadeOutTriangles() {
+    this.progressThresholdIndicators.forEach((indicator, index) => {
+      if (indicator && indicator.alpha > 0) {
+        this.scene.tweens.add({
+          targets: indicator,
+          alpha: 0.3,
+          duration: 300,
+          ease: 'Cubic.easeIn',
+          delay: index * 20, // Stagger each triangle by 20ms
+        });
+      }
+    });
+  }
+
+  /**
+   * Fade in progress threshold indicators (triangles) when menus are closed
+   */
+  private fadeInTrianglesOnMenuClose() {
+    // Check if car has started (ignition is on) before fading in triangles
+    const gameScene = this.scene.scene.get('GameScene');
+    const carStarted = gameScene ? (gameScene as any).carStarted : false;
+    
+    if (!carStarted) {
+      console.log('🔺 Not fading in triangles - car not started yet');
+      return;
+    }
+    
+    this.progressThresholdIndicators.forEach((indicator, index) => {
+      if (indicator && indicator.alpha < 1) {
+        this.scene.tweens.add({
+          targets: indicator,
+          alpha: 1,
+          duration: 400,
+          ease: 'Cubic.easeOut',
+          delay: index * 30, // Stagger each triangle by 30ms
+        });
+      }
+    });
+  }
+
+  /**
    * Public method to ensure triangles fade in (can be called from GameScene)
    */
   public ensureTrianglesFadeIn() {
@@ -1447,9 +1597,12 @@ export class GameUI {
    * Get how many times a region has been visited (for display)
    */
   private getRegionVisitCount(regionName: string, showsInRegion: number): number {
-    // For now, we'll use a simple calculation
-    // In a real implementation, this would get the actual visit count from GameState
-    // For the first visit, showsInRegion starts at 0, so visit count is 1
+    // Get the actual visit count from GameState
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene && (gameScene as any).gameState) {
+      return (gameScene as any).gameState.getRegionVisitCount(regionName);
+    }
+    // Fallback: For the first visit, showsInRegion starts at 0, so visit count is 1
     return showsInRegion + 1;
   }
 
@@ -1475,7 +1628,7 @@ export class GameUI {
     const steeringConfig = gameElements.getSteeringWheel();
     const steeringX = gameWidth * steeringConfig.position.x;
     const listenersX = steeringX + 250; // 250px to the right of steering wheel (moved further right)
-    const listenersY = gameHeight * 0.7; // Same Y as steering wheel
+    const listenersY = gameHeight * 0.75; // Moved down 5% (0.7 to 0.75)
     
     // Buzz text (closer to listeners)
     this.buzzText = this.scene.add.text(listenersX - 80, listenersY, 'BUZZ\n0', {
@@ -1489,6 +1642,7 @@ export class GameUI {
     
     this.buzzText.setScrollFactor(0);
     this.buzzText.setDepth(10000);
+    this.buzzText.setAlpha(0); // Start invisible for fade-in animation
     
     // Monthly listeners text
     this.monthlyListenersText = this.scene.add.text(listenersX, listenersY, 'LISTENERS\n2,000', {
@@ -1502,6 +1656,7 @@ export class GameUI {
     
     this.monthlyListenersText.setScrollFactor(0);
     this.monthlyListenersText.setDepth(10000);
+    this.monthlyListenersText.setAlpha(0); // Start invisible for fade-in animation
     
     // Encumbrance text (below Buzz and Listeners)
     const encumbranceY = listenersY + 40; // Below the Buzz/Listeners text
@@ -1515,7 +1670,8 @@ export class GameUI {
     }).setOrigin(1, 0.5); // Right-justified (origin at right edge, center vertically)
     
     this.encumbranceText.setScrollFactor(0);
-    this.encumbranceText.setDepth(10000);
+    this.encumbranceText.setDepth(25000); // Above dash background
+    this.encumbranceText.setAlpha(0); // Start invisible for fade-in animation
   }
 
   /**
@@ -1545,6 +1701,13 @@ export class GameUI {
   private updateEncumbrance(itemCount: number) {
     if (this.encumbranceText) {
       this.encumbranceText.setText(`ENCUMBRANCE\n${itemCount}/10`);
+    }
+  }
+
+  /** Public: allow GameScene to set encumbrance count and capacity */
+  public setEncumbrance(itemCount: number, capacity: number) {
+    if (this.encumbranceText) {
+      this.encumbranceText.setText(`ENCUMBRANCE\n${itemCount}/${capacity}`);
     }
   }
 

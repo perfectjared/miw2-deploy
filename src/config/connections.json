@@ -1,0 +1,136 @@
+{
+  "connections": {
+    "description": "This file describes the interfacial connections between band members, items, destinations, and game systems",
+    "bandMemberItemInteractions": {
+      "description": "How band members interact with different item types",
+      "food": {
+        "description": "Food items affect hunger (food bar) with preference multipliers",
+        "interaction": "feedOverTime",
+        "affectedBar": "food",
+        "secondaryEffect": "bathroom reduction (50% of food amount)"
+      },
+      "weed": {
+        "description": "Weed items affect boredom with preference multipliers",
+        "interaction": "applyWeedEffect",
+        "affectedBar": "bored",
+        "secondaryEffect": "chill/relaxation"
+      },
+      "energyDrink": {
+        "description": "Energy drinks affect boredom with preference multipliers",
+        "interaction": "applyEnergyDrinkEffect",
+        "affectedBar": "bored",
+        "secondaryEffect": "energy boost"
+      },
+      "phone": {
+        "description": "Phone items have special effects based on band member traits",
+        "interaction": "applyPhoneEffect",
+        "affectedBar": "varies by member",
+        "specialEffects": {
+          "mike": "relieveBoredom",
+          "stanli": "addBuzz",
+          "john": "callWife",
+          "cora": "normal",
+          "mitch": "normal"
+        }
+      },
+      "decoration": {
+        "description": "Decoration items affect boredom with preference multipliers",
+        "interaction": "applyDecorationEffect",
+        "affectedBar": "bored",
+        "secondaryEffect": "spectacle/atmosphere"
+      }
+    },
+    "bandMemberDestinationInteractions": {
+      "description": "How band members interact with destination activities",
+      "mike": {
+        "availableActivities": ["callWife"],
+        "preferredActivity": "callWife",
+        "effects": "bored relief"
+      },
+      "stanli": {
+        "availableActivities": ["playFortnite"],
+        "preferredActivity": "playFortnite",
+        "requiresPartner": "john",
+        "effects": "bored relief, partner bonus"
+      },
+      "john": {
+        "availableActivities": ["playFortnite", "callWife"],
+        "preferredActivity": "playFortnite",
+        "requiresPartner": "stanli",
+        "effects": "bored relief, partner bonus"
+      },
+      "cora": {
+        "availableActivities": ["nap"],
+        "preferredActivity": "nap",
+        "effects": "bored relief"
+      },
+      "mitch": {
+        "availableActivities": ["bigHike", "bigCityWalk"],
+        "preferredActivity": "bigHike",
+        "aloneBonus": "100% bored relief",
+        "withOthersPenalty": "20% bored relief",
+        "effects": "bored relief (varies by group size)"
+      }
+    },
+    "moodSystem": {
+      "description": "Mood state machine based on bar priorities",
+      "priority": ["bathroom", "food", "bored"],
+      "thresholds": {
+        "bathroom": 0.3,
+        "food": 0.5,
+        "bored": 0.5
+      },
+      "states": {
+        "bathroom": "Need to go to bathroom (bathroom < 30%)",
+        "hungry": "Hungry (food < 50%)",
+        "bored": "Bored (bored < 50%)",
+        "content": "All needs met"
+      }
+    },
+    "storyProgression": {
+      "description": "Story progression system for band members",
+      "totalStories": 15,
+      "storiesPerMember": 3,
+      "unlockThresholds": {
+        "mike": [1, 5, 10],
+        "stanli": [2, 7, 12],
+        "john": [3, 8, 13],
+        "cora": [4, 9, 14],
+        "mitch": [5, 11, 15]
+      },
+      "trigger": "show number thresholds",
+      "format": "story windows (like fauxchella-1)"
+    },
+    "levelSystem": {
+      "description": "Level system based on monthly listeners",
+      "thresholds": [3000, 5000, 10000, 20000, 50000],
+      "unlockEvents": "happen at next show",
+      "trigger": "after destination choice, before show",
+      "menuType": "20k threshold menu"
+    },
+    "sideEffects": {
+      "description": "Item side effects that trigger interrupt windows",
+      "jittery": "Energy drink side effect - causes jittery behavior",
+      "crash": "Energy drink side effect - causes energy crash",
+      "malfunction": "Cracked phone side effect - causes phone malfunctions",
+      "spectacle": "Fireworks side effect - creates spectacular display",
+      "interruptWindow": {
+        "description": "Shows virtual pet representation saying 'this happened!!'",
+        "trigger": "when side effect occurs",
+        "display": "pet sprite + text description"
+      }
+    },
+    "regionalSystem": {
+      "description": "Regional availability of items",
+      "regions": ["midwest", "south", "west", "northeast"],
+      "itemAvailability": "items only available in their regional areas",
+      "shopGeneration": "shops generate items based on current region"
+    },
+    "raritySystem": {
+      "description": "Item rarity affects availability and price",
+      "rarities": ["common", "uncommon", "rare", "epic", "legendary"],
+      "availability": "rarer items appear less frequently in shops",
+      "pricing": "rarer items cost more"
+    }
+  }
+}

@@ -1,0 +1,314 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Game Data Schema",
+  "description": "Schema for validating game data with default value fallbacks",
+  "type": "object",
+  "properties": {
+    "bandMembers": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z]+$": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "role": { "type": "string", "minLength": 1 },
+            "index": { "type": "integer", "minimum": 0, "maximum": 4 },
+            "sprite": { "type": "string", "default": "x.png" },
+            "description": { "type": "string", "default": "" },
+            "mood": {
+              "type": "object",
+              "properties": {
+                "current": { "type": "string", "default": "content" },
+                "priority": { 
+                  "type": "array", 
+                  "items": { "type": "string" },
+                  "default": ["bathroom", "food", "bored"]
+                },
+                "thresholds": {
+                  "type": "object",
+                  "properties": {
+                    "bathroom": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.3 },
+                    "food": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 },
+                    "bored": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 }
+                  },
+                  "required": ["bathroom", "food", "bored"]
+                }
+              },
+              "required": ["current", "priority", "thresholds"]
+            },
+            "storyProgression": {
+              "type": "object",
+              "properties": {
+                "current": { "type": "integer", "minimum": 1, "default": 1 },
+                "max": { "type": "integer", "minimum": 1, "default": 3 },
+                "unlockThresholds": { 
+                  "type": "array", 
+                  "items": { "type": "integer", "minimum": 1 },
+                  "minItems": 1,
+                  "maxItems": 5
+                }
+              },
+              "required": ["current", "max", "unlockThresholds"]
+            },
+            "preferences": {
+              "type": "object",
+              "properties": {
+                "food": {
+                  "type": "object",
+                  "properties": {
+                    "hotDog": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "salty": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "sweet": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "spicy": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "mixed": { "type": "number", "minimum": 0, "default": 1.0 }
+                  },
+                  "required": ["hotDog", "salty", "sweet", "spicy", "mixed"]
+                },
+                "weed": {
+                  "type": "object",
+                  "properties": {
+                    "joint": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "blunt": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "bowl": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "bong": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "vape": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "edible": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "dab": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "pipe": { "type": "number", "minimum": 0, "default": 1.0 }
+                  },
+                  "required": ["joint", "blunt", "bowl", "bong", "vape", "edible", "dab", "pipe"]
+                },
+                "energyDrink": {
+                  "type": "object",
+                  "properties": {
+                    "basic": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "premium": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "sugarFree": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "natural": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "vitamin": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "herbal": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "protein": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "focus": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "recovery": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "thermogenic": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "electrolyte": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "organic": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "keto": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "coldBrew": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "ultra": { "type": "number", "minimum": 0, "default": 1.0 }
+                  },
+                  "required": ["basic", "premium", "sugarFree", "natural", "vitamin", "herbal", "protein", "focus", "recovery", "thermogenic", "electrolyte", "organic", "keto", "coldBrew", "ultra"]
+                },
+                "phone": {
+                  "type": "object",
+                  "properties": {
+                    "basic": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "smartphone": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "cracked": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "vintage": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "broken": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "gaming": { "type": "number", "minimum": 0, "default": 1.0 }
+                  },
+                  "required": ["basic", "smartphone", "cracked", "vintage", "broken", "gaming"]
+                },
+                "decoration": {
+                  "type": "object",
+                  "properties": {
+                    "banner": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "lighting": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "atmosphere": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "celebration": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "fireworks": { "type": "number", "minimum": 0, "default": 1.0 },
+                    "visual": { "type": "number", "minimum": 0, "default": 1.0 }
+                  },
+                  "required": ["banner", "lighting", "atmosphere", "celebration", "fireworks", "visual"]
+                }
+              },
+              "required": ["food", "weed", "energyDrink", "phone", "decoration"]
+            },
+            "specialTraits": {
+              "type": "object",
+              "properties": {
+                "boredomDecayRate": { "type": "number", "minimum": 0, "default": 1.0 },
+                "bathroomDecayRate": { "type": "number", "minimum": 0, "default": 1.0 },
+                "canCallWife": { "type": "boolean", "default": false },
+                "phoneEffect": { "type": "string", "enum": ["relieveBoredom", "addBuzz", "callWife"], "default": "normal" },
+                "sleepProbability": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.0 },
+                "awakeReactionFrequency": { "type": "number", "minimum": 0, "default": 1.0 },
+                "lovesAllSnacks": { "type": "boolean", "default": false }
+              }
+            }
+          },
+          "required": ["name", "role", "index", "sprite", "description", "mood", "storyProgression", "preferences", "specialTraits"]
+        }
+      }
+    },
+    "items": {
+      "type": "object",
+      "properties": {
+        "food": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "type": { "type": "string", "minLength": 1 },
+                "subtypes": { "type": "array", "items": { "type": "string" } },
+                "size": { "type": "string", "enum": ["small", "medium", "large"], "default": "medium" },
+                "price": { "type": "integer", "minimum": 0, "default": 0 },
+                "uses": { "type": "integer", "minimum": 1, "default": 1 },
+                "value": { "type": "number", "minimum": 0, "default": 0 },
+                "rarity": { "type": "string", "enum": ["common", "uncommon", "rare", "epic", "legendary"], "default": "common" },
+                "regional": { "type": "string", "enum": ["midwest", "south", "west", "northeast"], "default": "midwest" },
+                "description": { "type": "string", "default": "" },
+                "sideEffects": { "type": "array", "items": { "type": "string" }, "default": [] }
+              },
+              "required": ["name", "type", "subtypes", "size", "price", "uses", "value", "rarity", "regional", "description"]
+            }
+          }
+        },
+        "weed": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "type": { "type": "string", "minLength": 1 },
+                "subtypes": { "type": "array", "items": { "type": "string" } },
+                "size": { "type": "string", "enum": ["small", "medium", "large"], "default": "medium" },
+                "price": { "type": "integer", "minimum": 0, "default": 0 },
+                "uses": { "type": "integer", "minimum": 1, "default": 1 },
+                "value": { "type": "number", "minimum": 0, "default": 0 },
+                "rarity": { "type": "string", "enum": ["common", "uncommon", "rare", "epic", "legendary"], "default": "common" },
+                "regional": { "type": "string", "enum": ["midwest", "south", "west", "northeast"], "default": "midwest" },
+                "canBreak": { "type": "boolean", "default": false },
+                "breakChance": { "type": "number", "minimum": 0, "maximum": 1, "default": 0 },
+                "description": { "type": "string", "default": "" },
+                "sideEffects": { "type": "array", "items": { "type": "string" }, "default": [] }
+              },
+              "required": ["name", "type", "subtypes", "size", "price", "uses", "value", "rarity", "regional", "canBreak", "breakChance", "description"]
+            }
+          }
+        },
+        "energyDrink": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "type": { "type": "string", "minLength": 1 },
+                "subtypes": { "type": "array", "items": { "type": "string" } },
+                "size": { "type": "string", "enum": ["small", "medium", "large"], "default": "medium" },
+                "price": { "type": "integer", "minimum": 0, "default": 0 },
+                "uses": { "type": "integer", "minimum": 1, "default": 1 },
+                "power": { "type": "number", "minimum": 0, "default": 0 },
+                "powerRange": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                "rarity": { "type": "string", "enum": ["common", "uncommon", "rare", "epic", "legendary"], "default": "common" },
+                "regional": { "type": "string", "enum": ["midwest", "south", "west", "northeast"], "default": "midwest" },
+                "description": { "type": "string", "default": "" },
+                "sideEffects": { "type": "array", "items": { "type": "string" }, "default": [] }
+              },
+              "required": ["name", "type", "subtypes", "size", "price", "uses", "power", "powerRange", "rarity", "regional", "description"]
+            }
+          }
+        },
+        "phone": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "type": { "type": "string", "minLength": 1 },
+                "size": { "type": "string", "enum": ["small", "medium", "large"], "default": "small" },
+                "price": { "type": "integer", "minimum": 0, "default": 0 },
+                "batteryCapacity": { "type": "integer", "minimum": 0, "default": 100 },
+                "batteryDrainRate": { "type": "integer", "minimum": 0, "default": 10 },
+                "rechargeRate": { "type": "integer", "minimum": 0, "default": 2 },
+                "brokenPercent": { "type": "number", "minimum": 0, "maximum": 100, "default": 0 },
+                "holdTimeRange": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
+                "rarity": { "type": "string", "enum": ["common", "uncommon", "rare", "epic", "legendary"], "default": "common" },
+                "regional": { "type": "string", "enum": ["midwest", "south", "west", "northeast"], "default": "midwest" },
+                "description": { "type": "string", "default": "" },
+                "sideEffects": { "type": "array", "items": { "type": "string" }, "default": [] }
+              },
+              "required": ["name", "type", "size", "price", "batteryCapacity", "batteryDrainRate", "rechargeRate", "brokenPercent", "holdTimeRange", "rarity", "regional", "description"]
+            }
+          }
+        },
+        "decoration": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "type": { "type": "string", "minLength": 1 },
+                "subtypes": { "type": "array", "items": { "type": "string" } },
+                "size": { "type": "string", "enum": ["small", "medium", "large"], "default": "medium" },
+                "price": { "type": "integer", "minimum": 0, "default": 0 },
+                "uses": { "type": "integer", "minimum": 1, "default": 1 },
+                "value": { "type": "number", "minimum": 0, "default": 0 },
+                "rechargeTime": { "type": "integer", "minimum": 0, "default": 300 },
+                "rarity": { "type": "string", "enum": ["common", "uncommon", "rare", "epic", "legendary"], "default": "common" },
+                "regional": { "type": "string", "enum": ["midwest", "south", "west", "northeast"], "default": "midwest" },
+                "description": { "type": "string", "default": "" },
+                "sideEffects": { "type": "array", "items": { "type": "string" }, "default": [] }
+              },
+              "required": ["name", "type", "subtypes", "size", "price", "uses", "value", "rechargeTime", "rarity", "regional", "description"]
+            }
+          }
+        }
+      },
+      "required": ["food", "weed", "energyDrink", "phone", "decoration"]
+    },
+    "destinationActivities": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z]+$": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "description": { "type": "string", "default": "" },
+            "availableTo": { "type": "array", "items": { "type": "string" } },
+            "effects": {
+              "type": "object",
+              "properties": {
+                "bored": { "type": "number", "default": 0 },
+                "food": { "type": "number", "default": 0 }
+              },
+              "required": ["bored", "food"]
+            },
+            "partnerRequired": { "type": "boolean", "default": false },
+            "bothDoItBonus": {
+              "type": "object",
+              "properties": {
+                "bored": { "type": "number", "default": 0 },
+                "food": { "type": "number", "default": 0 }
+              }
+            },
+            "aloneBonus": {
+              "type": "object",
+              "properties": {
+                "bored": { "type": "number", "default": 0 },
+                "food": { "type": "number", "default": 0 }
+              }
+            },
+            "withOthersPenalty": {
+              "type": "object",
+              "properties": {
+                "bored": { "type": "number", "default": 0 },
+                "food": { "type": "number", "default": 0 }
+              }
+            }
+          },
+          "required": ["name", "description", "availableTo", "effects"]
+        }
+      }
+    }
+  },
+  "required": ["bandMembers", "items", "destinationActivities"]
+}

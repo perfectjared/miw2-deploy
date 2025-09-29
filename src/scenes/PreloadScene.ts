@@ -108,6 +108,18 @@ export class PreloadScene extends Phaser.Scene {
     // Load x.png for window backgrounds
     this.load.image('x', 'assets/image/x.png');
     
+    // Load sound icons
+    this.load.image('sound-off', 'assets/image/sound-off-svgrepo-com.svg');
+    this.load.image('sound-mute', 'assets/image/sound-mute-svgrepo-com.svg');
+    this.load.image('sound-loud', 'assets/image/sound-loud-svgrepo-com.svg');
+    
+    // Load play/pause icons
+    this.load.image('pause-1010-svgrepo-com', 'assets/image/pause-1010-svgrepo-com.svg');
+    this.load.image('play-1001-svgrepo-com', 'assets/image/play-1001-svgrepo-com.svg');
+    
+    // Load save icon
+    this.load.image('save-svgrepo-com', 'assets/image/save-svgrepo-com.svg');
+    
     // For now, we'll just add a small delay to simulate loading
     this.time.delayedCall(2000, () => {
       this.scene.start('AppScene');

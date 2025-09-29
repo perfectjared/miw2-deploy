@@ -34,6 +34,9 @@ export class MenuScene extends Phaser.Scene {
     // Initialize menu manager
     this.menuManager = new MenuManager(this);
     
+    // Initialize audio system with 166 BPM metronome
+    this.menuManager.initializeAudioSystem();
+    
     // Listen for different menu events
     this.events.on('showObstacleMenu', this.showObstacleMenu, this);
     this.events.on('showPauseMenu', this.showPauseMenu, this);
@@ -154,9 +157,9 @@ export class MenuScene extends Phaser.Scene {
     console.log('MenuScene: showNovelStory completed');
   }
 
-  private showVirtualPetMenu(petSprite?: Phaser.GameObjects.Ellipse) {
-    console.log('MenuScene: showVirtualPetMenu called with petSprite:', petSprite);
-    this.menuManager.showVirtualPetMenu(petSprite);
+  private showVirtualPetMenu(petIndex?: number) {
+    console.log('MenuScene: showVirtualPetMenu called with petIndex:', petIndex);
+    this.menuManager.showVirtualPetMenu(petIndex);
   }
 
   private showMoralDecision(cfg?: { petIndex?: number; text?: string; optionA?: string; optionB?: string; followA?: string; followB?: string; }) {

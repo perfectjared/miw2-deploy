@@ -1,0 +1,156 @@
+{
+  "phoneItems": [
+    {
+      "id": "phone_basic",
+      "name": "Basic Phone",
+      "type": "Phone",
+      "size": "small",
+      "price": 25,
+      "batteryCapacity": 100,
+      "batteryDrainRate": 10,
+      "rechargeRate": 2,
+      "brokenPercent": 0,
+      "holdTimeMin": 3,
+      "holdTimeMax": 8,
+      "description": "A simple flip phone with basic functionality"
+    },
+    {
+      "id": "phone_smart",
+      "name": "Smartphone",
+      "type": "Phone",
+      "size": "medium",
+      "price": 150,
+      "batteryCapacity": 200,
+      "batteryDrainRate": 15,
+      "rechargeRate": 5,
+      "brokenPercent": 0,
+      "holdTimeMin": 5,
+      "holdTimeMax": 12,
+      "description": "Modern smartphone with apps and internet"
+    },
+    {
+      "id": "phone_cracked",
+      "name": "Cracked Phone",
+      "type": "Phone",
+      "size": "medium",
+      "price": 8,
+      "batteryCapacity": 80,
+      "batteryDrainRate": 12,
+      "rechargeRate": 1,
+      "brokenPercent": 30,
+      "holdTimeMin": 2,
+      "holdTimeMax": 6,
+      "description": "A damaged phone with a cracked screen"
+    },
+    {
+      "id": "phone_old",
+      "name": "Vintage Phone",
+      "type": "Phone",
+      "size": "large",
+      "price": 45,
+      "batteryCapacity": 150,
+      "batteryDrainRate": 5,
+      "rechargeRate": 8,
+      "brokenPercent": 10,
+      "holdTimeMin": 4,
+      "holdTimeMax": 10,
+      "description": "An old but reliable phone with great battery life"
+    },
+    {
+      "id": "phone_broken",
+      "name": "Broken Phone",
+      "type": "Phone",
+      "size": "medium",
+      "price": 3,
+      "batteryCapacity": 50,
+      "batteryDrainRate": 20,
+      "rechargeRate": 0.5,
+      "brokenPercent": 75,
+      "holdTimeMin": 1,
+      "holdTimeMax": 3,
+      "description": "Heavily damaged phone that barely works"
+    },
+    {
+      "id": "phone_gaming",
+      "name": "Gaming Phone",
+      "type": "Phone",
+      "size": "large",
+      "price": 300,
+      "batteryCapacity": 300,
+      "batteryDrainRate": 25,
+      "rechargeRate": 10,
+      "brokenPercent": 0,
+      "holdTimeMin": 8,
+      "holdTimeMax": 15,
+      "description": "High-end gaming phone with powerful specs"
+    }
+  ],
+  "phoneEffects": [
+    {
+      "id": "social_media",
+      "name": "Social Media Scrolling",
+      "description": "Band member gets distracted by social media",
+      "effect": "distraction",
+      "duration": 2
+    },
+    {
+      "id": "texting",
+      "name": "Texting Spree",
+      "description": "Band member sends a flurry of texts",
+      "effect": "communication",
+      "duration": 3
+    },
+    {
+      "id": "photo_selfie",
+      "name": "Selfie Session",
+      "description": "Band member takes multiple selfies",
+      "effect": "vanity",
+      "duration": 4
+    },
+    {
+      "id": "music_streaming",
+      "name": "Music Streaming",
+      "description": "Band member listens to music",
+      "effect": "inspiration",
+      "duration": 5
+    },
+    {
+      "id": "game_playing",
+      "name": "Mobile Gaming",
+      "description": "Band member plays a mobile game",
+      "effect": "entertainment",
+      "duration": 6
+    },
+    {
+      "id": "news_checking",
+      "name": "News Browsing",
+      "description": "Band member checks the latest news",
+      "effect": "information",
+      "duration": 3
+    }
+  ],
+  "sizeDefinitions": {
+    "small": {
+      "radius": 12,
+      "mass": 0.3,
+      "restitution": 0.2
+    },
+    "medium": {
+      "radius": 16,
+      "mass": 0.5,
+      "restitution": 0.3
+    },
+    "large": {
+      "radius": 20,
+      "mass": 0.8,
+      "restitution": 0.4
+    }
+  },
+  "typeColor": 0x00aaff,
+  "batteryColors": {
+    "full": 0x00ff00,
+    "medium": 0xffff00,
+    "low": 0xff6600,
+    "critical": 0xff0000
+  }
+}

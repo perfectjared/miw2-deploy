@@ -132,8 +132,9 @@ export class CarMechanics {
   // Exit Planning System - clean numbered planned exits
   private plannedExits: Array<{
     number: number; // Exit number (1, 2, 3, etc.)
-    exitName: string; // Display name (e.g., "EXIT 1", "EXIT 2-3", "EXIT 1-A")
+    exitName: string; // Display name (e.g., "Exit 1", "Exit 2-3", "Exit 1-A")
     shopCount: number; // Number of shops (1-4, with 1 and 4 being rare)
+    shopNames: string[]; // Names of shops at this exit
     previewThreshold: number; // When to spawn preview (0-100)
     exitThreshold: number; // When to spawn actual exit (0-100)
     laneIndex: number;
@@ -241,10 +242,7 @@ export class CarMechanics {
     this.scene.events.on('step', this.onStepChanged, this);
     // Registered step event listener
 
-    // Add 'E' key handler for testing exit spawning
-    this.scene.input.keyboard?.on('keydown-E', () => {
-      // E key pressed - test exit spawning disabled
-    });
+    // E key handler removed - was testing exit spawning
   }
 
   /**
@@ -340,10 +338,21 @@ export class CarMechanics {
     }
     
     // Separate exits and CYOA
-    const exits = allPositions
+    let exits = allPositions
       .filter(p => p.type === 'exit')
       .map(p => p.value)
       .sort((a, b) => a - b);
+    
+    // Ensure exit thresholds are unique (fallback for edge cases)
+    if (exits.length > 1) {
+      for (let i = 1; i < exits.length; i++) {
+        if (exits[i] === exits[i - 1]) {
+          // Force a minimum spacing of 1% between identical thresholds
+          exits[i] = exits[i] + 1;
+          console.log(`Forced exit ${i + 1} threshold to ${exits[i]}% to avoid collision`);
+        }
+      }
+    }
     
     const cyoa = allPositions
       .filter(p => p.type === 'cyoa')
@@ -356,7 +365,6 @@ export class CarMechanics {
     }
     
     // Generated exits and CYOA with improved spacing
-    
     return { exits, cyoa };
   }
 
@@ -420,6 +428,34 @@ export class CarMechanics {
   }
 
   /**
+   * Generate shop names for an exit
+   */
+  private generateShopNames(count: number): string[] {
+    const shopTypes = [
+      'regional gas station', 'gas station', 'motel', 'restaurant',
+      'weed store', 'car store', 'car doctor', 'psychic'
+    ];
+    
+    const names: string[] = [];
+    const usedNames = new Set<string>();
+    
+    for (let i = 0; i < count; i++) {
+      let name: string;
+      let attempts = 0;
+      
+      do {
+        name = shopTypes[Math.floor(Math.random() * shopTypes.length)];
+        attempts++;
+      } while (usedNames.has(name) && attempts < 20);
+      
+      usedNames.add(name);
+      names.push(name);
+    }
+    
+    return names;
+  }
+
+  /**
    * Generate unique exit names for a driving sequence
    */
   private generateExitNames(count: number): string[] {
@@ -432,14 +468,15 @@ export class CarMechanics {
       
       do {
         // Randomize among: single (# or ##) or range (#-# or ##-#), no letters/parentheses
+        // Only allow Exit ##-#, Exit #-#, Exit #, or Exit ## formats
         const pattern = Phaser.Math.Between(1, 2); // 1 = single, 2 = range
         if (pattern === 1) {
           const n = Phaser.Math.Between(1, 99);
-          name = `EXIT ${n}`;
+          name = `Exit ${n}`;
         } else {
           const a = Phaser.Math.Between(1, 98);
           const b = Phaser.Math.Between(a + 1, 99);
-          name = `EXIT ${a}-${b}`;
+          name = `Exit ${a}-${b}`;
         }
         
         attempts++;
@@ -447,7 +484,7 @@ export class CarMechanics {
       
       // Fallback to simple numbering if we can't generate unique name
       if (usedNames.has(name)) {
-        name = `EXIT ${i + 1}`;
+        name = `Exit ${i + 1}`;
       }
       
       names.push(name);
@@ -606,10 +643,14 @@ export class CarMechanics {
       // Generate shop count (1-4 shops, with 1 and 4 being rare)
       const shopCount = this.generateShopCount();
       
+      // Generate shop names for this exit
+      const shopNames = this.generateShopNames(shopCount);
+      
       this.plannedExits.push({
         number: exitNumber,
         exitName: exitName,
         shopCount: shopCount,
+        shopNames: shopNames,
         previewThreshold: previewThreshold,
         exitThreshold: exitThreshold,
         laneIndex: this.laneIndices[this.laneIndices.length - 1], // Rightmost lane
@@ -979,13 +1020,13 @@ export class CarMechanics {
     );
     visual.setDepth(this.config.roadDepth + 0.5);
     
-    // Create exit name text label with shop count
-    const shopText = plannedExit.shopCount === 1 ? '1 Shop' : `${plannedExit.shopCount} Shops`;
+    // Create exit name text label with shop names as vertical list
+    const shopText = plannedExit.shopNames.join('\n');
     const exitText = this.scene.add.text(
       obstacle.x, obstacle.y,
       `${plannedExit.exitName}\n${shopText}`,
       {
-        fontSize: '12px',
+        fontSize: '10px',
         color: '#ffffff',
         fontStyle: 'bold',
         stroke: '#000000',
@@ -1645,6 +1686,14 @@ export class CarMechanics {
   public update(currentStep: number = 0) {
     if (!this.drivingMode || this.drivingPaused) return;
     
+    // Check if CYOA is open - if so, stop movement to prevent exit collisions
+    const menuScene = this.scene.scene.get('MenuScene');
+    const menuManager = menuScene ? (menuScene as any).menuManager : null;
+    if (menuManager && menuManager.currentDisplayedMenuType === 'CYOA') {
+      // CYOA is open - stop movement to prevent exit collisions
+      return;
+    }
+    
     this.updateForwardMovement(currentStep);
     this.updateCarPosition();
     this.updateRoadLines();
@@ -2121,6 +2170,19 @@ export class CarMechanics {
     // Collision response
     const isExit = !!obstacle.getData('isExit');
     const isPothole = !!obstacle.getData('isPothole');
+    
+    // Check if CYOA is currently open - if so, queue the exit collision
+    if (isExit) {
+      const menuScene = this.scene.scene.get('MenuScene');
+      const menuManager = menuScene ? (menuScene as any).menuManager : null;
+      if (menuManager && menuManager.currentDisplayedMenuType === 'CYOA') {
+        console.log('🎭 Exit collision detected but CYOA is open - movement should stop and exit will queue');
+        // Don't pause driving here - let the CYOA system handle it
+        // The exit will be queued by the menu system when CYOA closes
+        return;
+      }
+    }
+    
     console.log('handleCollisionWithObstacle: pausing driving. isExit=', isExit, 'isPothole=', isPothole);
     this.pauseDriving();
     this.scene.events.emit('carCollision');
