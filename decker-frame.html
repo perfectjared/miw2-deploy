@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Decker Game Frame</title>
+</head>
+<body><script language="decker">
+{deck}
+version:1
+name:"Game Window Frame"
+size:[800,600]
+card:0
+locked:1
+
+{card:Frame}
+{widgets}
+canvas1:{"type":"canvas","size":[800,600],"pos":[0,0],"locked":1}
+
+{script:0}
+on view do
+ # Fill background with classic Mac gray
+ canvas1.pattern:2   # Light gray pattern
+ canvas1.fill[canvas1.pattern rect(0 0 800 600)]
+ 
+ # Draw classic Mac window frame with double border
+ canvas1.pattern:1   # Black for window frame
+ 
+ # Outer frame border
+ canvas1.line[10 10 790 10]    # Top
+ canvas1.line[790 10 790 590]  # Right  
+ canvas1.line[790 590 10 590]  # Bottom
+ canvas1.line[10 590 10 10]    # Left
+ 
+ # Inner frame border
+ canvas1.line[12 12 788 12]    # Top
+ canvas1.line[788 12 788 588]  # Right
+ canvas1.line[788 588 12 588]  # Bottom
+ canvas1.line[12 588 12 12]    # Left
+ 
+ # Title bar area with classic Mac styling
+ canvas1.pattern:2   # Light gray pattern for title bar
+ canvas1.fill[canvas1.pattern rect(12 12 776 25)]
+ 
+ # Title bar border
+ canvas1.pattern:1   # Black
+ canvas1.line[12 37 788 37]    # Bottom of title bar
+ 
+ # Window controls (close box)
+ canvas1.pattern:0   # White background for close box
+ canvas1.fill[canvas1.pattern rect(16 16 17 17)]
+ canvas1.pattern:1   # Black border for close box
+ canvas1.line[16 16 32 16]     # Top
+ canvas1.line[32 16 32 32]     # Right
+ canvas1.line[32 32 16 32]     # Bottom
+ canvas1.line[16 32 16 16]     # Left
+ 
+ # Add subtle dither pattern in corners for authentic Mac look
+ canvas1.pattern:3   # Light dither
+ canvas1.fill[canvas1.pattern rect(15 40 20 20)]    # Top left corner
+ canvas1.fill[canvas1.pattern rect(765 40 20 20)]   # Top right corner
+ canvas1.fill[canvas1.pattern rect(15 565 20 20)]   # Bottom left corner
+ canvas1.fill[canvas1.pattern rect(765 565 20 20)]  # Bottom right corner
+end
+{end}
+</script>
+
+<a id='target' style='display:none'></a>
+<img id='loader' style='display:none'/>
+<input id='source' type='file' style='display:none'>
+<canvas id='render' style='display:none'></canvas>
+<canvas id='lrender' style='display:none'></canvas>
+<canvas id='rrender' style='display:none'></canvas>
+<canvas width='0' height='0' id='ltools'></canvas>
+<canvas id='display'></canvas>
+<canvas width='0' height='0' id='rtools'></canvas>
+
+<style>
+html,body{height:100%;}
+body{background:transparent;margin:0;display:flex;align-items:center;justify-content:space-between;-webkit-user-select:none;user-select:none;}
+body{touch-action:none;overflow:hidden;}
+</style>
+
+<script>
+VERSION="1.0"
+DANGEROUS=0
+</script>
+<script src="lil.js"></script>
+<script src="danger.js"></script>
+<script src="decker.js"></script>
+</body>

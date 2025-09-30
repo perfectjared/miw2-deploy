@@ -1,0 +1,86 @@
+{
+  "ui": {
+    "rearviewMirror": {
+      "position": {
+        "x": 0.55,
+        "y": -0.03
+      },
+      "size": {
+        "width": 0.92,
+        "height": 0.4
+      }
+    },
+    "steeringWheel": {
+      "position": {
+        "x": 0.25,
+        "y": 0.8
+      },
+      "scale": 1.0
+    },
+    "magneticTarget": {
+      "position": {
+        "x": 213,
+        "y": 550
+      },
+      "radius": 25
+    }
+  },
+  "virtualPets": {
+    "positions": [
+      {
+        "x": 0.15,
+        "y": 0.73,
+        "scale": 0.8
+      },
+      {
+        "x": 0.35,
+        "y": 0.68,
+        "scale": 0.8
+      },
+      {
+        "x": 0.55,
+        "y": 0.78,
+        "scale": 0.8
+      },
+      {
+        "x": 0.75,
+        "y": 0.70,
+        "scale": 0.8
+      },
+      {
+        "x": 0.95,
+        "y": 0.65,
+        "scale": 0.8
+      }
+    ]
+  },
+  "itemSizes": {
+    "small": {
+      "width": 20,
+      "height": 20,
+      "scale": 1.0,
+      "description": "Keys, small items"
+    },
+    "medium": {
+      "width": 30,
+      "height": 30,
+      "scale": 1.5,
+      "description": "Food, medium items"
+    },
+    "large": {
+      "width": 40,
+      "height": 40,
+      "scale": 2.0,
+      "description": "Large items"
+    }
+  },
+  "physics": {
+    "gravity": {
+      "baseY": 0.5,
+      "maxLateralGx": 0.8
+    },
+    "magnetic": {
+      "attractionWindowMs": 900
+    }
+  }
+}
