@@ -47,7 +47,6 @@ export class MenuScene extends Phaser.Scene {
     this.events.on('showTutorialInterrupt', this.showTutorialInterrupt, this);
     this.events.on('showDestinationMenu', this.showDestinationMenu, this);
     this.events.on('showRegionChoiceMenu', this.showRegionChoiceMenu, this);
-    // this.events.on('showCYOA', this.showCYOA, this); // REMOVED: Old event listener causing double-triggering
     this.events.on('showCyoaMenu', this.showCyoaMenu, this);
     this.events.on('showStoryMenu', this.showStoryMenu, this);
     this.events.on('showNovelStory', this.showNovelStory, this);
@@ -168,7 +167,6 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private showPetStoryUI(arg: any) {
-    // arg can be string (legacy) or { petIndex: number }
     if (typeof arg === 'string') {
       console.log('MenuScene: showPetStoryUI called (legacy) with content:', arg);
       this.menuManager.showPetStoryUI(arg);

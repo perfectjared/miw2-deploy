@@ -89,6 +89,20 @@ export class AudioManager {
       return this.initializationPromise;
     }
 
+    // If the document is hidden, defer initialization until visible to avoid Tone.start() timeout
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      this.initializationPromise = new Promise<void>((resolve) => {
+        const onVisible = () => {
+          document.removeEventListener('visibilitychange', onVisible);
+          setTimeout(() => {
+            this.initializeAudioContext().then(() => resolve());
+          }, 0);
+        };
+        document.addEventListener('visibilitychange', onVisible);
+      });
+      return this.initializationPromise;
+    }
+
     this.initializationPromise = this._doInitialize();
     return this.initializationPromise;
   }
@@ -108,6 +122,35 @@ export class AudioManager {
         return true;
       }
       
+      // If hidden, wait for visibility or a direct user gesture before starting
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        await new Promise<void>((resolve) => {
+          const onVisible = () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            resolve();
+          };
+          document.addEventListener('visibilitychange', onVisible);
+        });
+      }
+
+      // Try resuming existing context first
+      try {
+        if (Tone.context.state === 'suspended') {
+          await (Tone.context as any).resume();
+        }
+      } catch {}
+
+      // If resume didn't work, replace the context to recover from HMR-stuck states
+      if (Tone.context.state !== 'running') {
+        try {
+          const FreshCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+          if (FreshCtx) {
+            const newCtx = new FreshCtx();
+            (Tone as any).setContext?.(newCtx);
+          }
+        } catch {}
+      }
+
       // Try to start the audio context without timeout
       await Tone.start();
       
@@ -152,6 +195,35 @@ export class AudioManager {
         return;
       }
       
+      // If hidden, wait for visibility first, otherwise Tone.start can hang under HMR
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        await new Promise<void>((resolve) => {
+          const onVisible = () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            resolve();
+          };
+          document.addEventListener('visibilitychange', onVisible);
+        });
+      }
+
+      // Try resuming existing context first
+      try {
+        if (Tone.context.state === 'suspended') {
+          await (Tone.context as any).resume();
+        }
+      } catch {}
+
+      // If resume didn't work, replace the context to recover from HMR-stuck states
+      if (Tone.context.state !== 'running') {
+        try {
+          const FreshCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+          if (FreshCtx) {
+            const newCtx = new FreshCtx();
+            (Tone as any).setContext?.(newCtx);
+          }
+        } catch {}
+      }
+
       // Try to start the audio context with a shorter timeout for faster failure
       const startPromise = Tone.start();
       const timeoutPromise = new Promise((_, reject) => {
@@ -916,4 +988,19 @@ export class AudioManager {
   public getAppMeasureCount(): number { return this.appMeasureCount; }
   public getAppBeatInMeasure(): number { return this.appBeatCount % this.beatsPerMeasure; }
   public isAppMetronomeRunning(): boolean { return this._isAppMetronomeRunning; }
+}
+
+// Vite HMR support: ensure clean state on hot reload
+if (typeof import.meta !== 'undefined' && (import.meta as any).hot) {
+  (import.meta as any).hot.dispose(() => {
+    const mgr = (AudioManager as any).instance as AudioManager | null;
+    if (mgr) {
+      try {
+        (mgr as any).stopMetronome?.();
+        (mgr as any).stopAppMetronome?.();
+        (mgr as any).dispose?.();
+      } catch {}
+    }
+    (AudioManager as any).instance = null;
+  });
 }

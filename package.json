@@ -23,6 +23,7 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "@playwright/test": "^1.55.1",
     "noveljs": "^1.1.0",
     "phaser": "^3.70.0",
     "phaser3-rex-plugins": "^1.80.16",

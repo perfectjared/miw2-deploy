@@ -259,21 +259,6 @@ export class GameScene extends Phaser.Scene {
         }
       });
       // REMOVED: Debug keyboard shortcut for old showCYOA event (was causing double-triggering)
-      // const keyC = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.C, true, false);
-      // keyC?.on('down', () => {
-      //   const menuScene = this.scene.get('MenuScene');
-      //   if (menuScene) {
-      //     menuScene.events.emit('showCYOA', {
-      //       imageKey: undefined,
-      //       text: 'You approach a fork in the road.',
-      //       optionA: 'Take the left path',
-      //       optionB: 'Take the right path',
-      //       followA: 'The left path was serene and quiet.',
-      //       followB: 'The right path was lively and bustling.'
-      //     });
-      //     this.scene.bringToTop('MenuScene');
-      //   }
-      // });
       // P -> Set progress to 99% (was Shift+P)
       const keyP = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.P, true, false);
       keyP?.on('down', () => {
@@ -651,7 +636,6 @@ export class GameScene extends Phaser.Scene {
             item._overSince = now; // re-arm for next dwell cycle
             item._feedCount = (item._feedCount ?? 0) + 1;
             pet.setFood?.(10);
-            // shrink item by 20%
             const s = item.scaleX ?? 1;
             item.setScale(Math.max(0.1, s * 0.8));
 
@@ -1123,7 +1107,10 @@ export class GameScene extends Phaser.Scene {
     // Reset driving state and restart driving
     this.stopMenuOpen = false;
     this.carStarted = true; // Ensure car is started
-    this.gameState.updateState({ carStarted: true });
+    this.gameState.updateState({ 
+      carStarted: true,
+      progress: 0  // Reset progress to 0 for new driving sequence
+    });
     
     // Restart driving mechanics
     const currentStep = this.gameState.getState().step || 0;
@@ -1143,7 +1130,7 @@ export class GameScene extends Phaser.Scene {
       this.disableNightTimeMode();
     }
     
-    console.log(`✅ Region changed to ${regionId} - driving restarted`);
+    console.log(`✅ Region changed to ${regionId} - driving restarted with progress reset to 0`);
   }
 
   /**
@@ -1533,7 +1520,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Treat tutorial overlays as blocking menus for interruption gating,
-    // but do not override when a real menu dialog is open.
     try {
       const menuScene = this.scene.get('MenuScene');
       const realMenuOpen = !!(menuScene && (menuScene as any).menuManager && (menuScene as any).menuManager.currentDialog);
@@ -1877,7 +1863,6 @@ export class GameScene extends Phaser.Scene {
           category: 0x0001,
           mask: 0x0000      // collide with nothing
         };
-        // console.log('Key collision disabled while constrained');
       }
       
     // Update tutorial overlay (debounced)
@@ -2113,16 +2098,9 @@ export class GameScene extends Phaser.Scene {
     
     // Keep magnetic target and rearview rectangle upright (no rotation)
     // These elements should stay fixed relative to the screen, not rotate with camera
-    // if (this.magneticTarget) {
-    //   this.magneticTarget.setAngle(angle);
-    // }
     
     // Keep rearview mirror container fixed (no rotation with camera)
     // The rearview mirror should stay upright and not move with physics
-    // const rearviewContainer = this.children.getByName('rearviewContainer');
-    // if (rearviewContainer) {
-    //   (rearviewContainer as any).setAngle(angle);
-    // }
   }
 
   /**
@@ -2827,7 +2805,7 @@ export class GameScene extends Phaser.Scene {
       this.tutorialSystem.hideTutorial();
       
       // Fade out UI elements when menus are open
-      this.fadeOutUIElements();
+      // this.fadeOutUIElements(); // Commented out for now
     } else {
       // Show tutorial overlay when no menus are open (if tutorial is active)
       const tutorialState = this.tutorialSystem.getCurrentTutorialState();
@@ -2845,7 +2823,7 @@ export class GameScene extends Phaser.Scene {
       }
       
       // Fade in UI elements when menus are closed
-      this.fadeInUIElements();
+      // this.fadeInUIElements(); // Commented out for now
     }
   }
 
@@ -3057,7 +3035,20 @@ export class GameScene extends Phaser.Scene {
 
   private onGameResumed() {
     console.log('🔄 GameScene: Game resumed - calling resumeDriving()');
-    this.carMechanics.resumeDriving();
+    
+    // Check if we need to restart driving for a new segment
+    const gameState = this.gameState.getState();
+    const isNewSegment = gameState.progress === 0 && gameState.carStarted;
+    
+    if (isNewSegment) {
+      console.log('🔄 Starting new driving segment - calling startDriving()');
+      const currentStep = gameState.step || 0;
+      this.carMechanics.startDriving(currentStep);
+    } else {
+      console.log('🔄 Resuming existing driving segment - calling resumeDriving()');
+      this.carMechanics.resumeDriving();
+    }
+    
     this.stopMenuOpen = false;
     console.log('🔄 GameScene: Driving resumed:', !this.carMechanics.isDrivingPaused());
   }
@@ -3093,7 +3084,6 @@ export class GameScene extends Phaser.Scene {
     this.gravityXTarget = -(Phaser.Math.Clamp(value, -150, 150) / 150) * maxGx; // Updated to match new range
     
     // Send steering directly to car mechanics for immediate response
-    // but only if it's not a return-to-center event
     if (!options?.isReturnToCenter) {
       this.carMechanics.handleSteering(value);
     }
@@ -3186,12 +3176,10 @@ export class GameScene extends Phaser.Scene {
     const inPath = exits.some((exit: any) => {
       const visual = exit.getData('visual');
       if (!visual) {
-        // console.log('Exit has no visual');
         return false;
       }
       
       const exitBounds = visual.getBounds();
-      // console.log('Exit bounds:', exitBounds);
       
       // Check if exit is on screen vertically (below horizon)
       const exitOnScreenVertically = exitBounds.bottom > this.cameras.main.height * 0.3; // Assuming horizon at 30%
@@ -3222,7 +3210,6 @@ export class GameScene extends Phaser.Scene {
       // Car is aligned if there's any horizontal overlap with the exit
       const horizontallyAligned = carLeftEdge < exitRightEdge && carRightEdge > exitLeftEdge;
       
-      // console.log('Car lane position:', carLanePosition, 'Threshold:', rightmostLaneThreshold, 'In rightmost lane:', carInRightmostLane);
       
       // Exit warning should only show if exit is on screen, car is in rightmost lane, AND horizontally aligned
       return exitOnScreenVertically && carInRightmostArea && horizontallyAligned;
@@ -3232,7 +3219,6 @@ export class GameScene extends Phaser.Scene {
     if (exits.length > 0 && inPath) {
       // Exit collision path detected
     }
-    // console.log('In exit collision path:', inPath);
     return inPath;
   }
 

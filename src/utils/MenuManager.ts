@@ -30,7 +30,6 @@ import { WindowShapes } from './WindowShapes';
 import { AudioDebugMenu } from './AudioDebugMenu';
 import { AudioManager } from './AudioManager';
 import { SaveManager } from './SaveManager';
-import { FadeManager } from './FadeManager';
 import { MENU_CONFIG, UI_CONFIG } from '../config/GameConfig';
 import { REGION_CONFIG } from '../config/GameConfig';
 
@@ -95,11 +94,9 @@ export class MenuManager {
   private postShopSequenceActive: boolean = false
   private postShopSequenceStage: 'idle' | 'afterShop' | 'afterLaterOn' | 'afterBandSlide' = 'idle'
 
-  // Destination click sequence state (you went → show → next day → ignition)
-  private destinationSequenceActive: boolean = false
-  private destinationSequenceStage: 'idle' | 'afterWent' | 'afterShow' = 'idle'
+  // Destination sequence state (using same pattern as story sequences)
+  private destinationSequenceInProgress: boolean = false
   private destinationSelectedName: string | null = null
-  private destinationBeginOnClose: boolean = false
   private destinationTransitioning: boolean = false
   // When chaining DESTINATION -> DESTINATION_INFO/SHOW, suppress generic close side-effects once
   private suppressPostCloseProcessingOnce: boolean = false
@@ -204,7 +201,6 @@ export class MenuManager {
   private currentDialog: any = null;
   private audioDebugMenu?: AudioDebugMenu;
   private audioManager: AudioManager;
-  private fadeManager: FadeManager;
   private menuStack: Array<{type: string, priority: number, config?: any}> = []; // Track menu hierarchy
   private currentDisplayedMenuType: string | null = null; // Track what menu is actually being displayed
   private queuedMenus: Array<{ type: string, payload?: any }> = [];
@@ -385,7 +381,9 @@ export class MenuManager {
       this.scene.time.delayedCall(30, () => this.processQueuedMenus());
       return;
     }
-    if (this.isExitOrShopOpen()) return;
+    if (this.isExitOrShopOpen()) {
+      return;
+    }
     if (this.currentDialog) {
       // Try again shortly after the dialog finishes its close animation
       this.scene.time.delayedCall(60, () => this.processQueuedMenus());
@@ -393,6 +391,7 @@ export class MenuManager {
     }
     
     // Don't process queued menus if a story sequence is in progress
+    // BUT allow destination sequence menus to process (they're part of the sequence)
     if (this.storySequenceInProgress) {
       console.log('⏳ Story sequence in progress - waiting for completion before processing queue');
       console.log('⏳ Current displayed menu type:', this.currentDisplayedMenuType);
@@ -400,15 +399,39 @@ export class MenuManager {
       return;
     }
     
-    if (this.queuedMenus.length === 0) return;
+    // For destination sequences, only block if we're not processing destination-related menus
+    if (this.destinationSequenceInProgress) {
+      const nextMenu = this.queuedMenus[0];
+      const destinationSequenceMenus = ['DESTINATION_INFO', 'SHOW', 'STORY_OVERLAY', 'TURN_KEY'];
+      
+      if (nextMenu && !destinationSequenceMenus.includes(nextMenu.type)) {
+        console.log('⏳ Destination sequence in progress - waiting for completion before processing non-destination queue');
+        this.scene.time.delayedCall(100, () => this.processQueuedMenus());
+        return;
+      }
+    }
+    
+    if (this.queuedMenus.length === 0) {
+      return;
+    }
     const next = this.queuedMenus.shift();
-    if (!next) return;
+    if (!next) {
+      return;
+    }
     // Defer slightly to let prior close complete
     this.scene.time.delayedCall(50, () => {
       try {
         switch (next.type) {
           case 'CYOA':
             this.showCyoaMenu(next.payload);
+            break;
+          case 'DESTINATION_INFO':
+            if (next.payload) {
+              this.showDestinationInfoMenu(next.payload.name);
+            }
+            break;
+          case 'SHOW':
+            this.showShowMenu();
             break;
           case 'EXIT':
             if (next.payload) {
@@ -434,6 +457,14 @@ export class MenuManager {
             if (next.payload && typeof next.payload.title === 'string' && typeof next.payload.content === 'string') {
               this.showStoryOverlay(next.payload.title, next.payload.content);
             }
+            break;
+          case 'DESTINATION_INFO':
+            if (next.payload) {
+              this.showDestinationInfoMenu(next.payload.name);
+            }
+            break;
+          case 'SHOW':
+            this.showShowMenu();
             break;
           case 'DESTINATION':
             this.showDestinationMenu(next.payload?.includeFinalShowStep);
@@ -503,7 +534,6 @@ export class MenuManager {
     this.scene = scene;
     this.saveManager = SaveManager.getInstance();
     this.overlayManager = new OverlayManager(scene);
-    this.fadeManager = new FadeManager(scene);
     this.audioManager = AudioManager.getInstance();
     // Listen for global step events to auto-hide ephemeral overlays
     this.scene.events.on('step', this.onGlobalStep, this);
@@ -936,7 +966,7 @@ export class MenuManager {
     this.clearAllPotholeDialogs(true);
     // If EXIT/SHOP is open, queue with payload and bail
     if (this.isExitOrShopOpen()) { this.enqueueMenu('STORY_OVERLAY', { title, content }); return; }
-    // Non-blocking: don't use menu stack or overlay background
+    // Always clear current dialog before showing story overlay
     this.clearCurrentDialog();
     
     // Use H menu styling through WindowShapes instead of custom graphics
@@ -966,6 +996,7 @@ export class MenuManager {
         text: "Continue",
         callback: () => {
           console.log("Story overlay dismissed by user");
+          // Let closeDialog() handle all chaining logic, including destination sequence
           this.closeDialog();
         }
       }
@@ -978,9 +1009,12 @@ export class MenuManager {
       // Set proper depth for story overlays (above all game elements including pets and items)
       storyContainer.setDepth(120000);
       
+      // Push to menu stack like other story menus
+      this.pushMenu('STORY_OVERLAY');
+      
       // Track as current dialog for MenuManager
       this.currentDialog = storyContainer;
-      this.currentDisplayedMenuType = 'STORY';
+      this.currentDisplayedMenuType = 'STORY_OVERLAY';
       
       // Mark as ephemeral and set step countdown (same behavior as before)
       (this.currentDialog as any).isStory = true;
@@ -2297,7 +2331,7 @@ export class MenuManager {
   }
 
   /**
-   * Region choice menu (stub) to satisfy MenuScene usage
+   * Region choice menu - allows player to select next region
    */
   public showRegionChoiceMenu(config: { currentRegion: string; connectedRegions: string[] }) {
     // If EXIT/SHOP is open, queue with payload and bail
@@ -2347,7 +2381,14 @@ export class MenuManager {
     const regions = config?.connectedRegions || [];
     const buttons: MenuButton[] = regions.map((regionKey) => ({
       text: regionKey,
-      onClick: () => { this.closeDialog(); }
+      onClick: () => { 
+        // Call selectRegion in GameScene before closing dialog
+        const gameScene = this.scene.scene.get('GameScene');
+        if (gameScene) {
+          (gameScene as any).selectRegion(regionKey);
+        }
+        this.closeDialog(); 
+      }
     }));
     const menuConfig: MenuConfig = {
       title: 'Choose Next Region',
@@ -2554,7 +2595,7 @@ export class MenuManager {
       if (shopKey === 'car doctor') {
         const baseCosts: number[] = (shopDef.pricing?.base || [30,60,100,150]);
         const cost = baseCosts[Math.max(0, Math.min(baseCosts.length - 1, (priceTier as number) - 1))];
-        const menuConfig: MenuConfig = {
+    const menuConfig: MenuConfig = {
           title: 'car doctor',
           content: `they fixed this and this and that, $${cost}`,
           buttons: [
@@ -2755,14 +2796,110 @@ export class MenuManager {
 
   private destroyCurrentDialogOnly() {
     if (this.currentDialog) {
+      // Detach any pending destroy listeners on the collage window to prevent cleanup callbacks
+      try {
+        const cw = (this.currentDialog as any).collageWindow as Phaser.GameObjects.Graphics | undefined;
+        if (cw && cw.off) {
+          cw.off('destroy');
+          if ((cw as any).removeAllListeners) {
+            try { (cw as any).removeAllListeners('destroy'); } catch {}
+          }
+        }
+      } catch {}
+      // Perform a deep cleanup similar to finishDialogCleanup but without any post-close state updates
+      try {
+        const ws = (this.windowShapes || (this.scene.scene.get('GameScene') as any)?.windowShapes);
+        if (ws && (ws as any).unregisterAnimatedShape) {
+          const commonIds = ['hMenuAnimationId', 'cyoaAnimationId', 'animationId'];
+          commonIds.forEach(id => {
+            const shapeId = (this.currentDialog as any)[id];
+            if (shapeId) {
+              (ws as any).unregisterAnimatedShape(shapeId);
+            }
+          });
+          const collageWindow = (this.currentDialog as any).collageWindow;
+          if (collageWindow && (collageWindow as any).__shapeId) {
+            (ws as any).unregisterAnimatedShape((collageWindow as any).__shapeId);
+          }
+          const unregisterFromChildren = (container: any) => {
+            try {
+              const children: any[] = (container && container.list) ? container.list : [];
+              children.forEach((child: any) => {
+                if (child && child.type === 'Graphics') {
+                  const animId = (child as any).animationId;
+                  const cyoaId = (child as any).cyoaAnimationId;
+                  if (animId) { (ws as any).unregisterAnimatedShape(animId); }
+                  if (cyoaId) { (ws as any).unregisterAnimatedShape(cyoaId); }
+                }
+                if (child && child.list && Array.isArray(child.list)) {
+                  unregisterFromChildren(child);
+                }
+              });
+            } catch {}
+          };
+          unregisterFromChildren(this.currentDialog);
+        }
+      } catch {}
+
+      // Backgrounds and masks
       if ((this.currentDialog as any).background) {
         const background = (this.currentDialog as any).background;
-        if ((background as any).overlayInstance) {
-          (background as any).overlayInstance.destroy();
-        } else {
-          background.destroy();
-        }
+        if ((background as any).overlayInstance) { (background as any).overlayInstance.destroy(); }
+        else { background.destroy(); }
       }
+      const backgroundSprite = (this.currentDialog as any).backgroundSprite;
+      if (backgroundSprite && backgroundSprite.destroy) { backgroundSprite.destroy(); }
+      const geometryMask = (this.currentDialog as any).geometryMask;
+      if (geometryMask && geometryMask.destroy) { geometryMask.destroy(); }
+
+      // Subtitle pulse
+      const subtitleElement = (this.currentDialog as any).subtitleElement;
+      if (subtitleElement && (subtitleElement as any).pulseTween) {
+        (subtitleElement as any).pulseTween.stop();
+        (subtitleElement as any).pulseTween.destroy();
+      }
+
+      // Ad-hoc UI bits
+      if ((this.currentDialog as any).turnKeyDial) {
+        const slider = (this.currentDialog as any).turnKeyDial;
+        if (slider.sliderTrack) slider.sliderTrack.destroy();
+        if (slider.handle) slider.handle.destroy();
+      }
+      if ((this.currentDialog as any).dialLabel) {
+        const labels = (this.currentDialog as any).dialLabel;
+        if (labels.startLabel) labels.startLabel.destroy();
+        if (labels.turnKeyLabel) labels.turnKeyLabel.destroy();
+      }
+      if ((this.currentDialog as any).startMeter) {
+        const meter = (this.currentDialog as any).startMeter;
+        if (meter.meterBackground) meter.meterBackground.destroy();
+        if (meter.meterFill) meter.meterFill.destroy();
+        if (meter.meterText) meter.meterText.destroy();
+      }
+
+      // Event listeners
+      if ((this.currentDialog as any).pointerDownHandler) {
+        this.scene.input.off('pointerdown', (this.currentDialog as any).pointerDownHandler);
+      }
+      if ((this.currentDialog as any).pointerMoveHandler) {
+        this.scene.input.off('pointermove', (this.currentDialog as any).pointerMoveHandler);
+      }
+      if ((this.currentDialog as any).pointerUpHandler) {
+        this.scene.input.off('pointerup', (this.currentDialog as any).pointerUpHandler);
+      }
+
+      // Timers and text
+      if ((this.currentDialog as any).momentumTimer) { (this.currentDialog as any).momentumTimer.destroy(); }
+      if ((this.currentDialog as any).countdownText) {
+        (this.currentDialog as any).countdownText.destroy();
+        (this.currentDialog as any).countdownText = null;
+      }
+      this.textDisplayCallbacks.forEach(callback => {
+        if (callback && callback.destroy) { callback.destroy(); }
+      });
+      this.textDisplayCallbacks = [];
+
+      // Finally destroy container
       this.currentDialog.destroy();
       this.currentDialog = null;
     }
@@ -2840,7 +2977,6 @@ export class MenuManager {
     this.addTurnKeyDial();
     
     // Don't start auto-completion for ignition menu - it handles its own completion via slider
-    // this.startMenuAutoComplete('TURN_KEY');
     
     // Emit event to notify GameScene that ignition menu is shown
     console.log('MenuManager: Emitting ignitionMenuShown event');
@@ -3537,7 +3673,7 @@ export class MenuManager {
 
     // Ensure prior NOVEL_STORY does not linger on stack
     this.clearMenusFromStack('NOVEL_STORY');
-
+    
     this.clearCurrentDialog();
     this.pushMenu('STORY_OUTCOME');
     
@@ -3584,7 +3720,7 @@ export class MenuManager {
               // Remove STORY_OUTCOME from stack now that it's closing
               this.clearMenusFromStack('STORY_OUTCOME');
               this.currentDisplayedMenuType = null;
-
+              
               // Wait for the WindowShapes container to be fully cleared before completing story
               const gameScene = this.scene.scene.get('GameScene') as any;
               if (gameScene && gameScene.windowShapes) {
@@ -3907,8 +4043,17 @@ export class MenuManager {
       return;
     }
     
+    // Special handling for STORY_OUTCOME - clear it if it's lingering
+    if (this.currentDisplayedMenuType === 'STORY_OUTCOME') {
+      console.log('🧹 Clearing lingering STORY_OUTCOME from stack to allow VIRTUAL_PET');
+      this.clearMenusFromStack('STORY_OUTCOME');
+      this.currentDisplayedMenuType = null;
+      this.clearCurrentDialog();
+      this.resumeGame();
+    }
+    
     // Queue if STORY is open - let user finish reading
-    if (this.currentDisplayedMenuType === 'STORY' || this.currentDisplayedMenuType === 'NOVEL_STORY' || this.currentDisplayedMenuType === 'STORY_OUTCOME') {
+    if (this.currentDisplayedMenuType === 'STORY' || this.currentDisplayedMenuType === 'NOVEL_STORY') {
       console.log('⏳ Queueing VIRTUAL_PET until STORY closes');
       this.enqueueMenu('VIRTUAL_PET', { petIndex });
       return;
@@ -4142,7 +4287,6 @@ export class MenuManager {
     if (this.lastClosedMenuType && (this.lastClosedMenuType === 'CYOA' || this.lastClosedMenuType === 'STORY' || this.lastClosedMenuType === 'NOVEL_STORY')) {
       if (now - this.lastMenuCloseTime < 150) {
         this.enqueueMenu('DESTINATION', { includeFinalShowStep });
-        // process later (processQueuedMenus already delayed in closeDialog)
         return;
       }
     }
@@ -4220,34 +4364,96 @@ export class MenuManager {
   }
 
   private startDestinationFlow(name: string) {
-    // Start simple flow: went → show → next day → ignition
+    // Start destination sequence using same pattern as story sequences
     if (this.destinationTransitioning) { return; }
     this.destinationTransitioning = true;
-    this.destinationSequenceActive = true;
-    this.destinationSequenceStage = 'idle';
+    this.destinationSequenceInProgress = true;
     this.destinationSelectedName = name;
-    // Prevent generic post-close processing from fighting the chain
-    this.suppressPostCloseProcessingOnce = true;
-    // Close destination menu; chaining will continue in closeDialog()
-    this.destinationBeginOnClose = true;
+    
+    // Reset car state for new driving sequence
+    const gameScene = this.scene.scene.get('GameScene');
+    if (gameScene) {
+      (gameScene as any).carStarted = false;
+      (gameScene as any).gameState.updateState({ carStarted: false });
+      console.log('MenuManager: Car state reset for new driving sequence');
+    }
+    
+    // Pause the game when destination sequence starts (like story sequences)
+    const appScene = this.scene.scene.get('AppScene');
+    if (appScene) {
+      (appScene as any).isPaused = true;
+      console.log('MenuManager: Game paused for destination sequence');
+    }
+    
+    // Close destination menu to start the sequence
     this.closeDialog();
+    
+    // Process the sequence step by step with proper coordination
+    this.processDestinationSequenceStep(name, 0);
   }
 
-  private showWentToDestination(name: string) {
-    // Use an internal simple dialog instead of WindowShapes to avoid race conditions
+  private processDestinationSequenceStep(name: string, stepIndex: number) {
+    const steps = [
+      { menuType: 'DESTINATION_INFO', payload: { name }, delay: 0 },
+      { menuType: 'SHOW', delay: 0 },
+      { menuType: 'STORY_OVERLAY', payload: { title: 'the next day', content: '' }, delay: 0 },
+      { menuType: 'TURN_KEY', delay: 0 }
+    ];
+
+    if (stepIndex >= steps.length) {
+      // Sequence completed
+      this.destinationSequenceInProgress = false;
+      this.destinationSelectedName = null;
+      this.destinationTransitioning = false;
+      console.log('🎬 Destination sequence completed');
+      return;
+    }
+
+    const step = steps[stepIndex];
+    this.enqueueMenu(step.menuType, step.payload);
+    this.scene.time.delayedCall(10, () => this.processQueuedMenus());
+  }
+
+  // Called when a destination sequence menu closes to advance to next step
+  private advanceDestinationSequence(closingMenuType: string) {
+    if (!this.destinationSequenceInProgress || !this.destinationSelectedName) {
+      return;
+    }
+
+    // Find current step and advance to next
+    const steps = [
+      { menuType: 'DESTINATION_INFO' },
+      { menuType: 'SHOW' },
+      { menuType: 'STORY_OVERLAY' },
+      { menuType: 'TURN_KEY' }
+    ];
+
+    const currentIndex = steps.findIndex(step => step.menuType === closingMenuType);
+    
+    if (currentIndex >= 0 && currentIndex < steps.length - 1) {
+      // Advance to next step
+      this.scene.time.delayedCall(100, () => {
+        this.processDestinationSequenceStep(this.destinationSelectedName!, currentIndex + 1);
+      });
+    } else if (currentIndex === steps.length - 1) {
+      // Last step completed
+      this.destinationSequenceInProgress = false;
+      this.destinationSelectedName = null;
+      this.destinationTransitioning = false;
+      console.log('🎬 Destination sequence completed');
+    }
+  }
+
+  // Removed immediate replacement path in favor of queued sequencing
+
+  public showDestinationInfoMenu(name: string) {
+    // Show destination info using standard menu pattern
+    if (!this.canShowMenu('DESTINATION_INFO')) return;
+    
+    this.clearCurrentDialog();
+    this.pushMenu('DESTINATION_INFO', { name });
+    
     const title = `you went to the ${name}`;
-    // Ensure gameplay is paused while showing destination info (mirror DESTINATION open behavior)
-    try {
-      const appScene = this.scene.scene.get('AppScene');
-      const gameScene = this.scene.scene.get('GameScene');
-      if (appScene) { (appScene as any).isPaused = true; }
-      if (gameScene) { (gameScene as any).events.emit('gamePaused'); }
-    } catch {}
-    // Do NOT clear again; previous menu was already closed
-    this.pushMenu('DESTINATION_INFO');
-    this.currentDisplayedMenuType = 'DESTINATION_INFO';
-    this.lastMenuOpenedType = 'DESTINATION_INFO';
-    this.lastMenuOpenTime = this.scene.time.now || Date.now();
     const menuConfig: MenuConfig = {
       title,
       content: '',
@@ -4266,18 +4472,21 @@ export class MenuManager {
   }
 
   private showNextDayTransition() {
+    console.log('🎬 showNextDayTransition called');
     try {
       this.showStoryOverlay('the next day', '');
-    } catch {}
+    } catch (e) {
+      console.error('🎬 Error in showNextDayTransition:', e);
+    }
   }
 
-  private showSimpleShowWindow() {
-    // Minimal show window that the player can continue from
-    // Do not call clearCurrentDialog here; previous dialog was just closed
+  public showShowMenu() {
+    // Show menu using standard pattern
+    if (!this.canShowMenu('SHOW')) return;
+    
+    this.clearCurrentDialog();
     this.pushMenu('SHOW');
-    this.currentDisplayedMenuType = 'SHOW';
-    this.lastMenuOpenedType = 'SHOW';
-    this.lastMenuOpenTime = this.scene.time.now || Date.now();
+    
     const menuConfig: MenuConfig = {
       title: 'SHOW',
       content: 'the band plays a show',
@@ -4288,9 +4497,12 @@ export class MenuManager {
     this.createDialog(menuConfig, 'SHOW');
   }
 
+
+  // Removed immediate replacement path in favor of queued sequencing
+
   private showBandMembersSlowSlide() {
     // Create a large dialog window without buttons; reveal five tags in order
-    this.clearCurrentDialog();
+            this.clearCurrentDialog();
     this.pushMenu('BAND_SLIDE');
     const menuConfig: MenuConfig = {
       title: 'THE BAND',
@@ -4324,9 +4536,9 @@ export class MenuManager {
         container.isStory = true;
         container.stepsRemaining = 4;
         container.showContinueAfterSteps = true;
-        return;
-      }
-
+            return;
+          }
+          
       const totalTexts = container.storyTexts.length;
       const spacing = totalTexts > 1 ? (availableHeight / (totalTexts - 1)) : 0;
       const index = container.currentTextIndex;
@@ -4352,7 +4564,7 @@ export class MenuManager {
         } else {
           const t = this.scene.add.text(localX, localY, String(container.storyTexts[index]), { fontSize: '14px', color: '#ffffff' });
           t.setOrigin(0.5, 0);
-          container.add(t);
+            container.add(t);
         }
       } catch {}
 
@@ -4482,8 +4694,6 @@ export class MenuManager {
           console.log('🎨 Background sprite positioned at:', backgroundSprite.x, backgroundSprite.y);
           
           // Temporarily disable mask to test if TileSprite is visible
-          // const geometryMask = collageBackground.createGeometryMask();
-          // backgroundSprite.setMask(geometryMask);
           
           // Mask temporarily disabled for reliability
           
@@ -5216,14 +5426,18 @@ export class MenuManager {
       }
     }
 
-    // Clear the displayed menu type
+    // Clear the displayed menu type (but not during destination sequence transitions)
+    // Exception: always clear STORY menus, even during destination sequence
+    const closingTypeResolved = this.currentDisplayedMenuType || (this.menuStack[this.menuStack.length - 1]?.type ?? null);
+    if (!this.destinationSequenceInProgress || closingTypeResolved === 'STORY') {
     this.currentDisplayedMenuType = null;
+    }
 
     // Update game state to indicate no menu is open (skip once for destination chaining)
     if (!this.suppressPostCloseProcessingOnce) {
-      const gameSceneInstance2 = this.scene.scene.get('GameScene');
-      if (gameSceneInstance2 && (gameSceneInstance2 as any).gameState) {
-        (gameSceneInstance2 as any).gameState.updateState({ hasOpenMenu: false });
+    const gameSceneInstance2 = this.scene.scene.get('GameScene');
+    if (gameSceneInstance2 && (gameSceneInstance2 as any).gameState) {
+      (gameSceneInstance2 as any).gameState.updateState({ hasOpenMenu: false });
       }
     }
 
@@ -5232,11 +5446,11 @@ export class MenuManager {
 
     // Check if we should restore a previous menu (skip once for destination chaining)
     if (!this.suppressPostCloseProcessingOnce) {
-      if (this.shouldRestorePreviousMenu()) {
-        this.scene.time.delayedCall(100, () => {
-          this.restorePreviousMenu();
-          this.userDismissedMenuType = null;
-        });
+    if (this.shouldRestorePreviousMenu()) {
+      this.scene.time.delayedCall(100, () => {
+        this.restorePreviousMenu();
+        this.userDismissedMenuType = null;
+      });
       } else {
         this.userDismissedMenuType = null;
       }
@@ -5244,17 +5458,19 @@ export class MenuManager {
       this.userDismissedMenuType = null;
     }
 
-    // Notify GameScene that menu state has changed
+    // Notify GameScene that menu state has changed (skip once for destination chaining)
+    if (!this.suppressPostCloseProcessingOnce) {
     const gameSceneForRestore: any = this.scene.scene.get('GameScene');
     if (gameSceneForRestore && gameSceneForRestore.updateAllTutorialOverlays) {
       gameSceneForRestore.updateAllTutorialOverlays();
+      }
     }
 
     // Clear transition flag and then process any queued menus now that dialog is definitely gone
     (this as any).__dialogTransitioning = false;
     // Add a small delay to prevent race conditions when multiple menus are queued
     if (!this.suppressPostCloseProcessingOnce) {
-      this.scene.time.delayedCall(50, () => this.processQueuedMenus());
+    this.scene.time.delayedCall(50, () => this.processQueuedMenus());
     }
   }
 
@@ -5269,16 +5485,33 @@ export class MenuManager {
     if (this.lastMenuOpenedType && this.lastMenuOpenTime) {
       const now = this.scene.time.now || Date.now();
       const msSinceOpen = now - this.lastMenuOpenTime;
-      if (msSinceOpen < 250 && (this.lastMenuOpenedType === 'SHOW' || this.lastMenuOpenedType === 'DESTINATION_INFO')) {
+      // Slightly longer window to cover slow devices/animations
+      if (msSinceOpen < 350 && (this.lastMenuOpenedType === 'SHOW' || this.lastMenuOpenedType === 'DESTINATION_INFO')) {
         console.log(`⏱️ Debounced close for recently opened ${this.lastMenuOpenedType} (${msSinceOpen}ms)`);
         return;
       }
     }
+
+    // Removed destination chaining guard - allow immediate close for proper sequencing
     
     // If closing a story menu, clear the story sequence flag
     if (closingTypeResolved === 'STORY' || closingTypeResolved === 'STORY_OUTCOME' || closingTypeResolved === 'NOVEL_STORY') {
       this.storySequenceInProgress = false;
       console.log('📖 Story sequence flag cleared due to manual close');
+    }
+    
+    // Also clear story sequence flag when closing exit menu to prevent stuck state
+    if (closingTypeResolved === 'EXIT' && this.storySequenceInProgress) {
+      this.storySequenceInProgress = false;
+      console.log('📖 Story sequence flag cleared due to exit menu close');
+    }
+    
+    // Handle destination sequence menu closing
+    if (closingTypeResolved === 'DESTINATION_INFO' || closingTypeResolved === 'SHOW' || closingTypeResolved === 'STORY_OVERLAY') {
+      if (this.destinationSequenceInProgress) {
+        // Advance to next step in destination sequence instead of clearing
+        this.advanceDestinationSequence(closingTypeResolved);
+      }
     }
 
     // Stop universal menu auto-completion
@@ -5318,7 +5551,7 @@ export class MenuManager {
 
       // Only resume game for non-story menus.
       // Suppress resume during destination sequence windows to keep flow paused (match story sequencing)
-      const storyMenuTypes = ['STORY', 'NOVEL_STORY', 'STORY_OUTCOME', 'PET_STORY', 'DESTINATION', 'DESTINATION_INFO', 'SHOW'];
+      const storyMenuTypes = ['STORY', 'NOVEL_STORY', 'STORY_OUTCOME', 'PET_STORY', 'DESTINATION', 'DESTINATION_INFO', 'SHOW', 'STORY_OVERLAY', 'TURN_KEY'];
       if (!storyMenuTypes.includes(menuType)) {
         this.resumeGame();
       }
@@ -5369,34 +5602,21 @@ export class MenuManager {
       }
     }
 
-    // Destination click sequence chaining
-    if (this.destinationSequenceActive) {
-      if (closingTypeResolved === 'DESTINATION' && this.destinationBeginOnClose && this.destinationSelectedName) {
-        // Kick off the sequence right after DESTINATION closes
-        const name = this.destinationSelectedName;
-        this.destinationBeginOnClose = false;
-        // Wait for DESTINATION dialog close animation (~160ms) to finish before opening next
-        this.scene.time.delayedCall(200, () => this.showWentToDestination(name));
-      }
-      if (closingTypeResolved === 'DESTINATION_INFO' && this.destinationSequenceStage === 'idle') {
-        // After "you went to the ___" overlay, show the show window
-        this.destinationSequenceStage = 'afterWent';
-        this.scene.time.delayedCall(100, () => this.showSimpleShowWindow());
-      } else if (closingTypeResolved === 'SHOW' && this.destinationSequenceStage === 'afterWent') {
-        // After show window, show next day overlay
-        this.destinationSequenceStage = 'afterShow';
-        this.scene.time.delayedCall(100, () => this.showNextDayTransition());
-      } else if (closingTypeResolved === 'STORY' && this.destinationSequenceStage === 'afterShow') {
-        // After next day overlay, return to ignition
-        this.destinationSequenceActive = false;
-        this.destinationSequenceStage = 'idle';
-        this.destinationSelectedName = null;
-        this.destinationTransitioning = false;
-        this.scene.time.delayedCall(100, () => this.showTurnKeyMenu());
-      }
+    // Destination sequence completion
+    if (this.destinationSequenceInProgress && closingTypeResolved === 'TURN_KEY') {
+      // Destination sequence completed - clean up and resume game
+      this.destinationSequenceInProgress = false;
+      this.destinationSelectedName = null;
+      this.destinationTransitioning = false;
+      console.log('🎬 Destination sequence completed');
+      
+      // Resume game after destination sequence completes
+      this.resumeGame();
     }
 
     this.clearCurrentDialog();
+    // Capture whether chaining suppression was active for this close
+    const suppressedThisClose = this.suppressPostCloseProcessingOnce;
     // If we suppressed post-close processing for chaining, consume the flag now
     if (this.suppressPostCloseProcessingOnce) {
       this.suppressPostCloseProcessingOnce = false;
@@ -5425,8 +5645,10 @@ export class MenuManager {
     }
     // Menu already popped from stack earlier in this method
     // After any close, if no EXIT/SHOP open, process queued menus with a small delay
-    // This prevents race conditions when multiple menus are queued in sequence
+    // Skip processing when chaining suppression was requested for this close to avoid racing the chain
+    if (!suppressedThisClose) {
     this.scene.time.delayedCall(50, () => this.processQueuedMenus());
+    }
     console.log(`🚪 MenuManager: Menu stack after closeDialog:`, this.menuStack.map(m => `${m.type}:${m.priority}`));
   }
 
@@ -5580,7 +5802,6 @@ export class MenuManager {
     // X already references the visual edge. No half-width clamping needed, just basic bounds.
     const adjustedTextX = Math.max(-fullWidth/2 - overshoot, Math.min(fullWidth/2 + overshoot, textX));
     // Debug bounds to verify edge bands
-    // console.log({ fullWidth, sideMargin, bandWidth, adjustedTextX, isLeftSide });
     
     // Create narrative text
     try {

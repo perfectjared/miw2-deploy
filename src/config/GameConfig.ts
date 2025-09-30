@@ -111,9 +111,10 @@ export const TUTORIAL_CONFIG = {
   maskColor: GREYSCALE_PALETTE.white,
   keysHoleRadius: 30,
   targetHoleMultiplier: 1.5,
-  magneticTargetX: 200,        // DEPRECATED: use gameElements.getMagneticTarget()
-  magneticTargetY: 550,        // DEPRECATED: use gameElements.getMagneticTarget()
-  magneticTargetRadius: 25     // DEPRECATED: use gameElements.getMagneticTarget()
+  // Magnetic target configuration moved to GameElements.json
+  magneticTargetX: gameElements.getMagneticTarget().position.x,
+  magneticTargetY: gameElements.getMagneticTarget().position.y,
+  magneticTargetRadius: gameElements.getMagneticTarget().radius
 } as const;
 
 // ============================================================================
@@ -145,11 +146,11 @@ export const UI_LAYOUT = {
   progressX: 0.02,            // 2% from left edge
   progressY: 0.92,            // 92% from top edge (moved up from 95%)
   
-  // Rearview rectangle (virtual pets) - now managed by GameElements config
-  rearviewX: 0.55,             // 50% from left edge (centered) - DEPRECATED: use gameElements.getRearviewMirror()
-  rearviewY: 0.035,            // 3.5% from top edge (30% less low than 5%) - DEPRECATED: use gameElements.getRearviewMirror()
-  rearviewWidth: 0.92,        // 85% of screen width - DEPRECATED: use gameElements.getRearviewMirror()
-  rearviewHeight: 0.4,       // 20% of screen height - DEPRECATED: use gameElements.getRearviewMirror()
+  // Rearview rectangle (virtual pets) - managed by GameElements config
+  rearviewX: gameElements.getRearviewMirror().position.x,
+  rearviewY: gameElements.getRearviewMirror().position.y,
+  rearviewWidth: gameElements.getRearviewMirror().size.width,
+  rearviewHeight: gameElements.getRearviewMirror().size.height,
   
   // ============================================================================
   // SIZING (Font sizes, dimensions, etc.)
@@ -248,7 +249,7 @@ export const UI_LAYOUT = {
   speedCrankTextOffsetX: 10,
   speedCrankTextFontSize: '16px',
   speedCrankTextColor: GREYSCALE_PALETTE.white,
-  speedCrankSnapPositions: [0, 0.4, 0.7, 1.0],
+  speedCrankSnapPositions: [0, 0.2, 0.4, 0.6, 0.8, 1.0],
   speedCrankDepthTrack: 1000,
   speedCrankDepthHandle: 1001,
   speedCrankDepthIndicator: 1002,
@@ -442,7 +443,7 @@ export const PET_CONFIG = {
 export const GAME_STATE_CONFIG = {
   // Initial Values
   initialGameTime: 8,
-  initialMoney: 100,
+  initialMoney: 20,
   initialHealth: 100,
   initialPlayerSkill: 50,
   initialDifficulty: 50,
@@ -456,7 +457,7 @@ export const GAME_STATE_CONFIG = {
   
   // Monthly Listeners System
   initialMonthlyListeners: 2000,
-  initialBuzz: 0,
+  initialBuzz: 1,
   minBuzz: -3,
   maxBuzz: 3,
   minMonthlyListeners: 0,

@@ -21,7 +21,7 @@ import Phaser from 'phaser';
 // Tunable input handler constants
 const INPUT_TUNABLES = {
   swipe: {
-    requireInteractiveBypassNames: ['Button', 'Crank', 'Dial']
+    requireInteractiveBypassNames: ['Button', 'Crank', 'Dial', 'Pet']
   }
 } as const;
 

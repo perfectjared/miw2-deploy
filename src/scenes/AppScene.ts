@@ -67,16 +67,6 @@ export class AppScene extends Phaser.Scene {
     this.setupOverlayCamera();
 
 
-    // Add step counter (commented out for now)
-    // this.stepText = this.add.text(10, 10, '(app) step 0', {
-    //   fontSize: '16px',
-    //   color: '#00ff00',
-    //   fontStyle: 'bold',
-    //   backgroundColor: '#000000',
-    //   padding: { x: 8, y: 4 }
-    // });
-    // this.stepText.setScrollFactor(0);
-    // this.stepText.setDepth(25000);
 
     // Launch scenes in the correct layer order (bottom to top)
     // JARED'S NOTE: could this be simplified?
@@ -252,9 +242,10 @@ export class AppScene extends Phaser.Scene {
               if (this.pauseButtonIcon) this.pauseButtonIcon.disableInteractive();
               if (this.saveButtonIcon) this.saveButtonIcon.disableInteractive();
               if (this.muteButton) this.muteButton.disableInteractive();
-              if (this.pauseButtonIcon) this.pauseButtonIcon.setAlpha(0.5);
-              if (this.saveButtonIcon) this.saveButtonIcon.setAlpha(0.5);
-              if (this.muteButton) this.muteButton.setAlpha(0.5);
+              // Commented out fade behavior for now
+              // if (this.pauseButtonIcon) this.pauseButtonIcon.setAlpha(0.5);
+              // if (this.saveButtonIcon) this.saveButtonIcon.setAlpha(0.5);
+              // if (this.muteButton) this.muteButton.setAlpha(0.5);
               if (this.pauseButtonIcon) this.pauseButtonIcon.setVisible(false);
               if (this.saveButtonIcon) this.saveButtonIcon.setVisible(false);
               // Keep mute button visible when menus open
@@ -272,7 +263,6 @@ export class AppScene extends Phaser.Scene {
               if (this.saveButtonIcon) this.saveButtonIcon.setVisible(true);
               // Mute button stays visible (no need to restore visibility)
               // Don't bring AppScene to top - let MenuScene stay on top
-              // this.scene.bringToTop('AppScene');
             }
           }
         }
@@ -490,7 +480,7 @@ export class AppScene extends Phaser.Scene {
       this.muteButtonBG = this.add.tileSprite(ditherX, ditherY, ditherWidth, ditherHeight, 'hypercard_ltgray');
       this.muteButtonBG.setOrigin(0, 0);
       this.muteButtonBG.setScrollFactor(0);
-      this.muteButtonBG.setDepth(70009); // Behind polygon but above virtual pets
+      this.muteButtonBG.setDepth(15000); // Same depth as mute button polygon
       this.muteButtonBG.setVisible(false); // Hidden until tutorial completes
       
       // Create geometry mask from the polygon
@@ -513,14 +503,14 @@ export class AppScene extends Phaser.Scene {
     }
     if (this.muteButtonWhite) {
       this.muteButtonWhite.setScrollFactor(0);
-      this.muteButtonWhite.setDepth(50000); // Below story menus (120000) and regular menus (80000)
+      this.muteButtonWhite.setDepth(15000); // Below night overlay (20000) but above UI elements
       this.muteButtonWhite.setVisible(false); // Hidden until tutorial completes
     }
     
     // Create mute button icon (starts with sound-off)
     this.muteButtonIcon = this.add.image(muteButtonX + buttonWidth/2, muteButtonY + buttonHeight/2, 'sound-off');
     this.muteButtonIcon.setScrollFactor(0);
-    this.muteButtonIcon.setDepth(50001); // Above polygon but below story menus
+    this.muteButtonIcon.setDepth(15001); // Above polygon but below night overlay (20000)
     this.muteButtonIcon.setDisplaySize(iconSize, iconSize);
     this.muteButtonIcon.setVisible(false); // Hidden until tutorial completes
     this.muteButtonIcon.setInteractive();
@@ -593,7 +583,6 @@ export class AppScene extends Phaser.Scene {
    * Handle scene pause - stop timers to prevent accumulation
    */
   pause() {
-    //console.log('AppScene: Scene paused by Phaser');
     // Metronome handles pausing automatically
   }
 
@@ -601,7 +590,6 @@ export class AppScene extends Phaser.Scene {
    * Handle scene resume - restart timers properly
    */
   resume() {
-    //console.log('AppScene: Scene resumed by Phaser');
     // Metronome handles resuming automatically
   }
 
@@ -622,17 +610,14 @@ export class AppScene extends Phaser.Scene {
 
   public setStep(step: number): void {
     this.step = step;
-    // this.stepText.setText(`Step: ${this.step}`);
   }
 
   private togglePauseMenu() {
-    //console.log('togglePauseMenu called - gameStarted:', this.gameStarted, 'isPaused:', this.isPaused);
     // Allow pause menu even if game hasn't started yet
     
     if (this.isPaused) {
       // Resume game
       this.isPaused = false;
-      //console.log('Game resumed');
       
       // Update pause button icon to show pause symbol (game is now playing)
       this.updatePauseButtonIcon();
@@ -815,7 +800,6 @@ export class AppScene extends Phaser.Scene {
   public stopStepEvents() {
     this.gameStarted = false;
     this.step = 0; // Reset step counter
-    // this.stepText.setText('App Layer; Step: 0'); // Reset display
   }
 
   /**

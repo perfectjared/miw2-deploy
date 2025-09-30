@@ -117,8 +117,9 @@ export interface DestinationActivityConfig {
   };
 }
 
-export const BAND_MEMBERS: BandMember[] = bandMembersConfig.bandMembers;
-export const DESTINATION_ACTIVITIES: DestinationActivityConfig[] = bandMembersConfig.destinationActivities;
+export const BAND_MEMBERS: BandMember[] = Object.values(bandMembersConfig.bandMembers);
+// Note: destinationActivities moved to separate file
+export const DESTINATION_ACTIVITIES: DestinationActivityConfig[] = [];
 
 export function getBandMemberById(id: string): BandMember | undefined {
   return BAND_MEMBERS.find(member => member.id === id);

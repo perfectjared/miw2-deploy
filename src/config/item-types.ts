@@ -82,11 +82,11 @@ export const SIZE_DEFINITIONS: Record<string, SizeDefinition> = {
   large: { radius: 25, mass: 1.5, restitution: 0.5 }
 };
 
-export const FOOD_ITEMS: FoodItem[] = foodItemsConfig.foodItems;
-export const PHONE_ITEMS: PhoneItem[] = phoneItemsConfig.phoneItems;
-export const WEED_ITEMS: WeedItem[] = weedItemsConfig.weedItems;
-export const DRINK_ITEMS: DrinkItem[] = drinkItemsConfig.drinkItems;
-export const DECORATION_ITEMS: DecorationItem[] = decorationItemsConfig.decorationItems;
+export const FOOD_ITEMS: FoodItem[] = Object.values(foodItemsConfig.items.food);
+export const PHONE_ITEMS: PhoneItem[] = Object.values(phoneItemsConfig.items.phone);
+export const WEED_ITEMS: WeedItem[] = Object.values(weedItemsConfig.items.weed);
+export const DRINK_ITEMS: DrinkItem[] = Object.values(drinkItemsConfig.items.energyDrink);
+export const DECORATION_ITEMS: DecorationItem[] = Object.values(decorationItemsConfig.items.decoration);
 
 export const ALL_ITEMS: GameItem[] = [
   ...FOOD_ITEMS,

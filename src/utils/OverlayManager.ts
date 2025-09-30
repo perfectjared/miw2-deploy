@@ -172,6 +172,11 @@ export class OverlayManager {
 
     container.add(background);
 
+    // Disable interaction on tutorial overlays to allow clicks to pass through
+    if (depth >= 120000) {
+      container.disableInteractive();
+    }
+
     // Create cutouts if specified
     if (cutouts.length > 0) {
       const maskGraphics = this.scene.make.graphics();

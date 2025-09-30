@@ -227,22 +227,18 @@ export class VirtualPet {
 		// Set a specific hit area for the pet
 		this.pet.setInteractive(new Phaser.Geom.Circle(0, 0, petRadius), Phaser.Geom.Circle.Contains);
 		
-		// Track if pointerdown occurred on this pet to prevent accidental menu opening
-		let pointerDownOnThisPet = false;
-		
+		// Use click event instead of pointerdown/pointerup to prevent accidental menu opening
 		this.pet.on('pointerdown', () => {
 			console.log('Virtual pet pointerdown detected!');
-			pointerDownOnThisPet = true;
 		});
-		this.pet.on('pointerup', () => {
-			console.log('Virtual pet pointerup detected!');
-			// Only open menu if pointerdown also occurred on this pet
-			if (pointerDownOnThisPet) {
-				// Emit on MenuScene so the handler runs there
-				const menuScene = this.scene.scene.get('MenuScene');
-				menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
-			}
-			pointerDownOnThisPet = false; // Reset for next interaction
+		this.pet.on('click', () => {
+			console.log('🐾 Virtual pet click detected for pet', this.config.petIndex);
+			// Emit on MenuScene so the handler runs there
+			const menuScene = this.scene.scene.get('MenuScene');
+			menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
+		});
+		this.pet.on('pointerover', () => {
+			console.log('🐾 Virtual pet pointerover detected for pet', this.config.petIndex);
 		});
 
 		// Add elements to container (only add baseRect if it exists)
@@ -254,40 +250,67 @@ export class VirtualPet {
 		
 		// Create a separate invisible interactive circle over the pet
 		const clickArea = this.scene.add.circle(petStartX, petStartY, petRadius, 0x000000, 0);
+		clickArea.setName('Pet'); // Name for swipe detection bypass
 		clickArea.setInteractive();
 		clickArea.setScrollFactor(0);
 		clickArea.setDepth(70001); // Above rearview mirror but below menus
+		// Keep click area interactive even when pet is transparent
+		// clickArea.input.alwaysEnabled = true; // Removed - pets should only be clickable when visible
 		
 		// Add click area to container so it moves with the pet
 		this.container.add(clickArea);
 		
-		// Track if pointerdown occurred on this click area to prevent accidental menu opening
-		let pointerDownOnThisClickArea = false;
-		
-		clickArea.on('pointerdown', () => {
-			console.log('Click area pointerdown detected!');
-			pointerDownOnThisClickArea = true;
+		// Robust click detection using pointerdown + pointerup on the same target
+		let pressStartX = 0;
+		let pressStartY = 0;
+		let pressStartTime = 0;
+		let pressed = false;
+		const moveThreshold = 8; // pixels
+		const timeThresholdMs = 600; // max ms between down and up
+
+		clickArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+			pressed = true;
+			pressStartX = pointer.x;
+			pressStartY = pointer.y;
+			pressStartTime = performance.now();
+			console.log('🐾 Click area pointerdown detected for pet', this.config.petIndex);
 		});
-		clickArea.on('pointerup', () => {
-			console.log('Click area pointerup detected!');
-			// Only open menu if pointerdown also occurred on this click area
-			if (pointerDownOnThisClickArea) {
-				// Emit on MenuScene so the handler runs there
+		clickArea.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+			console.log('🐾 Click area pointerup detected for pet', this.config.petIndex);
+			if (!pressed) { return; }
+			pressed = false;
+			const dx = pointer.x - pressStartX;
+			const dy = pointer.y - pressStartY;
+			const dist = Math.hypot(dx, dy);
+			const elapsed = performance.now() - pressStartTime;
+			// Require small movement and short press
+			if (dist <= moveThreshold && elapsed <= timeThresholdMs) {
+				// Only allow after car/care started
+				const gameScene = this.scene.scene.get('GameScene');
+				const carStarted = !!(gameScene && (gameScene as any).carStarted);
+				if (!carStarted) {
+					console.log('🐾 Pet click ignored (car not started) for pet', this.config.petIndex);
+					return;
+				}
+				console.log('🐾 Pet click accepted for pet', this.config.petIndex);
 				const menuScene = this.scene.scene.get('MenuScene');
 				menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
 			}
-			pointerDownOnThisClickArea = false; // Reset for next interaction
+		});
+		clickArea.on('pointerout', () => { pressed = false; });
+		clickArea.on('pointerover', () => {
+			console.log('🐾 Click area pointerover detected for pet', this.config.petIndex);
 		});
 		
 		// Also make container handle clicks as backup
 		this.container.on('pointerdown', () => {
-			console.log('Container pointerdown detected!');
+			console.log('🐾 Container pointerdown detected for pet', this.config.petIndex);
 		});
 		this.container.on('pointerup', () => {
-			console.log('Container pointerup detected!');
-			// Emit on MenuScene so the handler runs there
-			const menuScene = this.scene.scene.get('MenuScene');
-			menuScene?.events.emit('showVirtualPetMenu', this.config.petIndex);
+			// Delegate to clickArea logic; container up alone should not trigger
+		});
+		this.container.on('pointerover', () => {
+			console.log('🐾 Container pointerover detected for pet', this.config.petIndex);
 		});
 
 		// Food/Bathroom/Bored meters (labels + bars) alongside the pet (track their positions)

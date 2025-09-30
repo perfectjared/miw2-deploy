@@ -566,6 +566,9 @@ export class CarMechanics {
     const gameState = gameScene?.gameState?.getState();
     const isFirstSequence = gameState?.showsInCurrentRegion === 0 && gameState?.regionHistory?.length <= 1;
     
+    // Check if this is the first sequence in a new region (after region change)
+    const isFirstSequenceInRegion = gameState?.showsInCurrentRegion === 0;
+    
     // Plan exits per sequence
     let numExits: number;
     if (isFirstSequence) {
@@ -773,6 +776,7 @@ export class CarMechanics {
     const gameScene = this.scene.scene.get('GameScene') as any;
     const gameState = gameScene?.gameState?.getState();
     const isFirstSequence = gameState?.showsInCurrentRegion === 0 && gameState?.regionHistory?.length <= 1;
+    const isFirstSequenceInRegion = gameState?.showsInCurrentRegion === 0;
     
     let storyThreshold: number;
     let isExitRelated: boolean = false;
@@ -783,6 +787,11 @@ export class CarMechanics {
       storyThreshold = 10;
       isExitRelated = false;
       console.log(`First sequence: Story scheduled at 10% (fauxchella-1)`);
+    } else if (isFirstSequenceInRegion) {
+      // First sequence in new region: schedule a regular story
+      storyThreshold = Phaser.Math.Between(15, 85);
+      isExitRelated = false;
+      console.log(`First sequence in new region: Story scheduled at ${storyThreshold}%`);
     } else {
       // Regular sequence: decide if story should be exit-related (30% chance)
       isExitRelated = Math.random() < 0.3;
@@ -1427,6 +1436,9 @@ export class CarMechanics {
     this.baseSpeed = 0; // Reset base speed to ensure speed multiplier returns 0
     // Mark progression to restart on next start
     this.speedProgressionStartStep = -1;
+    
+    // Stop obstacle spawning when driving stops
+    this.stopObstacleSpawning();
   }
 
   /**
@@ -1442,6 +1454,9 @@ export class CarMechanics {
   public resumeDriving() {
     this.drivingPaused = false;
     // this.shouldAutoResumeAfterCollision = false; // Removed unused property
+    
+    // Restart obstacle spawning when resuming driving
+    this.startObstacleSpawning();
   }
 
   /**
