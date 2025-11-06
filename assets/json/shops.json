@@ -1,0 +1,34 @@
+{
+  "convenience store": {
+    "type": "retail"
+  },
+  "regional convenience store": {
+    "type": "retail",
+    "notes": "Sells items with better value (higher uses for same price). Triggers region-specific CYOA after purchase."
+  },
+  "restaurant": {
+    "type": "service",
+    "pricing": { "base": [15, 25, 40, 60] },
+    "notes": "Fills everyone's food meter, random cost based on price tier, CYOA after service."
+  },
+  "smoke store": {
+    "type": "retail"
+  },
+  "car store": {
+    "type": "service",
+    "notes": "Heal car ($30) and upgrade shocks ($50, increases encumbrance capacity by 1)."
+  },
+  "mall": {
+    "type": "retail",
+    "notes": "Sells non-weed fun items."
+  },
+  "phone store": {
+    "type": "service",
+    "notes": "Can purchase additional phones ($100) and upgrade phone batteries for each phone."
+  },
+  "hike/walk": {
+    "type": "service",
+    "pricing": { "base": [0, 0, 0, 0] },
+    "notes": "Triggers CYOA event 'walk' that restores all of Mitch's fun."
+  }
+}
